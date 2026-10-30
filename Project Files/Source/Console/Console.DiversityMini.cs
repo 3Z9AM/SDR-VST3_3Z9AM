@@ -39,7 +39,7 @@ namespace Thetis
         private Control createDiversityModePanel()
         {
             // label + list in the style of the AF/RF labels and sliders above; the width follows the panel
-            var p = new Panel { Name = "ngDivMode", Size = new Size(150, 60), BackColor = Color.Transparent };
+            var p = new Panel { Name = "ngDivMode", Size = new Size(150, 38), BackColor = Color.Transparent };
             var l = new LabelTS { Text = "Diversity:", AutoSize = true, Location = new Point(1, 0), Font = lblRX2AF.Font, ForeColor = lblRX2AF.ForeColor, BackColor = Color.Transparent };
             var cb = new ComboBoxTS { Name = "ngDivModeList", DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(0, 16), Size = new Size(150, 21),
                 Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right };
@@ -51,45 +51,6 @@ namespace Thetis
                 DiversityForm f = diversityForm;
                 if (f != null && !f.IsDisposed) f.SectionMode = cb.SelectedIndex;
             };
-            // max-SINR clean share (DiversityForm.SectionClean): 0 = default weights, 100 = station direction only from its own cells
-            var cl = new LabelTS { Text = "Clean: 0%", AutoSize = true, Location = new Point(1, 40), Font = lblRX2AF.Font, ForeColor = lblRX2AF.ForeColor, BackColor = Color.Transparent };
-            var tb = new PrettyTrackBar { Name = "ngDivClean", Orientation = Orientation.Horizontal, Minimum = 0, Maximum = 100, Value = 0, SmallChange = 5, LargeChange = 25,
-                HeadImage = ptbRX2AF.HeadImage, BackColor = Color.Transparent, Location = new Point(72, 38), Size = new Size(150 - 72 - 52, ptbRX2AF.Height),
-                Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right };
-            toolTip1.SetToolTip(tb, "Sections max-SINR: share of the clean weight (station direction learned only where the station is).\n" +
-                "0% = default (more gain, part of it NR-like gating of the noise), 100% = pure diversity, station level kept.\n" +
-                "With AUTO: how readily a bin counts as station (middle = default; right = clean sooner, station better kept;\n" +
-                "left = clean only on a clear station, more background taken down); the label shows the clean share AUTO gives now");
-            // auto: clean per bin where the station has been lately, the default weights where only noise is
-            // a button like NR/ANF in the drawer - the modern look does not draw plain check boxes
-            var au = new CheckBoxTS { Name = "ngDivCleanAuto", Text = "AUTO", Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleCenter,
-                Font = ModernTheme.UiFont(7.5f, FontStyle.Bold), UseVisualStyleBackColor = false, TabStop = false, Location = new Point(150 - 46, 38), Size = new Size(46, 20),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            au.FlatAppearance.BorderSize = 0;
-            ModernButtonPainter.Attach(au);
-            toolTip1.SetToolTip(au, "Clean per frequency bin: clean where the station has been lately (its level kept),\n" +
-                "the default weights where only noise is (they lower the background)");
-            // the slider: manual share, or with AUTO its sensitivity; the label: the share, or with AUTO what it gives now
-            Action<DiversityForm> show = f =>
-            {
-                double sh = f != null ? f.SectionCleanShare : -1.0;
-                cl.Text = !au.Checked ? "Clean: " + tb.Value + "%" : sh >= 0.0 ? "Auto: " + (int)Math.Round(100.0 * sh) + "%" : "Auto";
-            };
-            tb.Scroll += (s, e) =>
-            {
-                DiversityForm f = diversityForm;
-                if (f == null || f.IsDisposed) return;
-                if (au.Checked) f.SectionCleanSens = tb.Value; else f.SectionClean = tb.Value;
-                show(f);
-            };
-            au.Click += (s, e) =>
-            {
-                DiversityForm f = diversityForm;
-                if (f == null || f.IsDisposed) return;
-                f.SectionClean = au.Checked ? -1 : f.SectionCleanPct;
-                tb.Value = au.Checked ? f.SectionCleanSens : f.SectionCleanPct;
-                show(f);
-            };
             var t = new Timer { Interval = 300 };
             t.Tick += (s, e) =>
             {
@@ -99,20 +60,10 @@ namespace Thetis
                 cb.Enabled = alive;
                 int m = alive ? f.SectionMode : 0;
                 if (cb.SelectedIndex != m) cb.SelectedIndex = m;
-                au.Enabled = tb.Enabled = alive && m == 4;
-                if (alive && !tb.Capture)
-                {
-                    au.Checked = f.SectionClean < 0;
-                    tb.Value = au.Checked ? f.SectionCleanSens : f.SectionCleanPct;
-                    show(f);
-                }
             };
             t.Start();
             p.Controls.Add(l);
             p.Controls.Add(cb);
-            p.Controls.Add(cl);
-            p.Controls.Add(tb);
-            p.Controls.Add(au);
             return p;
         }
 

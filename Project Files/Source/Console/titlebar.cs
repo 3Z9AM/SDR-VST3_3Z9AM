@@ -62,7 +62,7 @@ namespace Thetis
 
             string sBits = Common.Is64Bit ? " x64" : " x86";
 
-            s += " v" + version + "-faza" + sBits;   // diversity phase build (branch faza)
+            s += " v" + version + "-hl2" + sBits;   // Hermes Lite 2 build (branch hl2)
             s += " (" + VersionInfo.BuildDate + ")<FW>";  //[2.10.2.2]MW0LGE use the auto generated class from pre build event for the BuildDate
 
             // program name is BUILD_NAME itself, not appended again

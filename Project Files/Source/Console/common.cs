@@ -750,7 +750,7 @@ namespace Thetis
             try
             {
                 string dir = string.IsNullOrEmpty(m_sLogPath)
-                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"OpenHPSDR\SDR-VST3-x64")
+                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"OpenHPSDR\SDR-VST3-HL2")
                     : m_sLogPath;
                 dir = Path.Combine(dir, "crashes");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);

@@ -1978,6 +1978,12 @@ if (!DoesRadioExist(item.Key))
 
             switch (radio.DeviceType)
             {
+                case HPSDRHW.HermesLite:   // MI0BOT: HL2
+                    versionText = (radio.CodeVersion / 10.0f).ToString("F1", _nfi);
+                    if (radio.BetaVersion > 0)
+                        versionText += "." + radio.BetaVersion.ToString();
+                    break;
+
                 case HPSDRHW.Saturn:
                     versionText = "fpga=" + radio.CodeVersion.ToString();
                     if (radio.BetaVersion >= 39)

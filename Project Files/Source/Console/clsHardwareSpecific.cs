@@ -91,6 +91,13 @@ namespace Thetis
                         NetworkIO.LRAudioSwap(1);
                         HardwareSpecific.Hardware = HPSDRHW.Hermes;
                         break;
+                    case HPSDRModel.HERMESLITE:
+                        NetworkIO.SetRxADC(1);
+                        NetworkIO.SetMKIIBPF(0);
+                        cmaster.SetADCSupply(0, 33);
+                        NetworkIO.LRAudioSwap(1);
+                        HardwareSpecific.Hardware = HPSDRHW.HermesLite;
+                        break;
                     case HPSDRModel.ANAN10:
                         NetworkIO.SetRxADC(1);
                         NetworkIO.SetMKIIBPF(0);
@@ -249,7 +256,8 @@ namespace Thetis
                 return _model == HPSDRModel.ANAN7000D || _model == HPSDRModel.ANAN8000D ||
                        _model == HPSDRModel.ANVELINAPRO3 || _model == HPSDRModel.ANAN_G2E || //N1GP G2E added
                        _model == HPSDRModel.ANAN_G2 || _model == HPSDRModel.ANAN_G2_1K ||
-                       _model == HPSDRModel.REDPITAYA;
+                       _model == HPSDRModel.REDPITAYA ||
+                       _model == HPSDRModel.HERMESLITE; // MI0BOT: HL2
             }
         }
         public static bool HasAmps
@@ -259,7 +267,8 @@ namespace Thetis
                 return _model == HPSDRModel.ANAN7000D || _model == HPSDRModel.ANAN8000D ||
                        _model == HPSDRModel.ANVELINAPRO3 || _model == HPSDRModel.ANAN_G2E || //N1GP G2E added
                        _model == HPSDRModel.ANAN_G2 || _model == HPSDRModel.ANAN_G2_1K ||
-                       _model == HPSDRModel.REDPITAYA;
+                       _model == HPSDRModel.REDPITAYA ||
+                       _model == HPSDRModel.HERMESLITE; // MI0BOT: HL2
             }
         }
         public static (float, float) GetDefaultVoltCalibration()
@@ -302,6 +311,8 @@ namespace Thetis
                 { //protocol 1
                     switch (_hardware)
                     {
+                        case HPSDRHW.HermesLite:   // MI0BOT: HL2
+                            return 0.233;
                         default:
                             return 0.4072;
                     }
@@ -312,6 +323,8 @@ namespace Thetis
                     {
                         case HPSDRHW.Saturn:
                             return 0.6121;
+                        case HPSDRHW.HermesLite:   // MI0BOT: HL2
+                            return 0.233;
                         default:
                             return 0.2899;
                     }
@@ -405,6 +418,8 @@ namespace Thetis
                 case "ANVELINA-PRO3":
                     return HPSDRModel.ANVELINAPRO3;
                 case "HERMESLITE":
+                case "HERMES LITE":
+                case "HERMES-LITE":   // MI0BOT: string written by the model -> string mapping
                     return HPSDRModel.HERMESLITE;
                 case "RED-PITAYA":
                     return HPSDRModel.REDPITAYA;
@@ -810,6 +825,36 @@ namespace Thetis
                     gains[(int)Band.VHF11] = 63.1f;
                     gains[(int)Band.VHF12] = 63.1f;
                     gains[(int)Band.VHF13] = 63.1f;
+
+                    return gains;
+
+                case HPSDRModel.HERMESLITE:   // MI0BOT: HL2
+                    gains[(int)Band.B160M] = 100f;
+                    gains[(int)Band.B80M] = 100f;
+                    gains[(int)Band.B60M] = 100f;
+                    gains[(int)Band.B40M] = 100f;
+                    gains[(int)Band.B30M] = 100f;
+                    gains[(int)Band.B20M] = 100f;
+                    gains[(int)Band.B17M] = 100f;
+                    gains[(int)Band.B15M] = 100f;
+                    gains[(int)Band.B12M] = 100f;
+                    gains[(int)Band.B10M] = 100f;
+                    gains[(int)Band.B6M] = 38.8f;
+
+                    gains[(int)Band.VHF0] = 38.8f;
+                    gains[(int)Band.VHF1] = 38.8f;
+                    gains[(int)Band.VHF2] = 38.8f;
+                    gains[(int)Band.VHF3] = 38.8f;
+                    gains[(int)Band.VHF4] = 38.8f;
+                    gains[(int)Band.VHF5] = 38.8f;
+                    gains[(int)Band.VHF6] = 38.8f;
+                    gains[(int)Band.VHF7] = 38.8f;
+                    gains[(int)Band.VHF8] = 38.8f;
+                    gains[(int)Band.VHF9] = 38.8f;
+                    gains[(int)Band.VHF10] = 38.8f;
+                    gains[(int)Band.VHF11] = 38.8f;
+                    gains[(int)Band.VHF12] = 38.8f;
+                    gains[(int)Band.VHF13] = 38.8f;
 
                     return gains;
 

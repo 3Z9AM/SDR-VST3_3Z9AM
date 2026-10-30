@@ -107,6 +107,6 @@
       <Pattern>^(\d+.\d+.\d+.\d+)</Pattern>
       <AssemblyVersion>$([System.Text.RegularExpressions.Regex]::Match($(In), $(Pattern)))</AssemblyVersion>
     </PropertyGroup>
-    <Copy SourceFiles="..\..\bin\Installers\$(OutputName).msi" DestinationFiles="..\..\bin\Installers\SDR-VST3-v$(AssemblyVersion)-GUI.$(Platform).msi" />
+    <Copy SourceFiles="..\..\bin\Installers\$(OutputName).msi" DestinationFiles="..\..\bin\Installers\SDR-VST3-v$(AssemblyVersion)-hl2.$(Platform).msi" />
   </Target>
 </Project>

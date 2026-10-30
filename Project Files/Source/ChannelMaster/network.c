@@ -1430,7 +1430,19 @@ int IOThreadStop() {
 	}
 	io_keep_running = 0;  // flag to stop
 
-	WaitForSingleObject(prn->hReadThreadMain, INFINITE);
+	if (HPSDRModel == HPSDRModel_HERMESLITE)
+	{
+		// MI0BOT: Thread locking up, so timeout added.
+		if (WAIT_TIMEOUT == WaitForSingleObject(prn->hReadThreadMain, 1000))
+		{
+			// Thread has stopped, so let everybody know
+			IOThreadRunning = 0;
+		}
+	}
+	else
+	{
+		WaitForSingleObject(prn->hReadThreadMain, INFINITE);
+	}
 
 	CloseHandle(prn->hReadThreadMain);
 	CloseHandle(prn->hReadThreadInitSem);

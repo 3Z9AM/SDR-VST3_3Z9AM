@@ -40,6 +40,10 @@ mw0lge@grange-lane.co.uk
 // Richard Samphire can be reached by email at :  mw0lge@grange-lane.co.uk                    //
 //============================================================================================//
 
+//////////////
+// 2023-26 : modified by MI0BOT for HL2 support. Please see any code commented with my callsign for details
+//////////////
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -747,8 +751,9 @@ namespace Thetis
                     bool fullCal = puresignal.CalibrationAttemptsChanged;
                     bool fastFb = !fullCal && puresignal.FastFeedbackCount >= puresignal.FastFeedbackMinSamples;
                     int fb = fullCal ? puresignal.FeedbackLevel : puresignal.FastFeedbackLevel;
-                    if (_autoattenuate && (fullCal || fastFb)
-                        && puresignal.NeedToRecalibrate(fb, console.SetupForm.ATTOnTX))
+                    if (_autoattenuate && (fullCal || fastFb) &&
+                        ((HPSDRModel.HERMESLITE != HardwareSpecific.Model && puresignal.NeedToRecalibrate(fb, console.SetupForm.ATTOnTX)) ||
+                        (HPSDRModel.HERMESLITE == HardwareSpecific.Model && puresignal.NeedToRecalibrate_HL2(fb, console.SetupForm.ATTOnTX))))
                     {
                         if (!console.ATTOnTX) AutoAttenuate = true; //MW0LGE
 
@@ -758,12 +763,26 @@ namespace Thetis
                         if (fb <= 256)
                         {
                             ddB = 20.0 * Math.Log10((double)fb / (double)puresignal.TargetFeedbackLevel);
-                            if (Double.IsNaN(ddB)) ddB = 31.1;
-                            if (ddB < -100.0) ddB = -100.0;
-                            if (ddB > +100.0) ddB = +100.0;
+                            if (HPSDRModel.HERMESLITE != HardwareSpecific.Model)
+                            {
+                                if (Double.IsNaN(ddB)) ddB = 31.1;
+                                if (ddB < -100.0) ddB = -100.0;
+                                if (ddB > +100.0) ddB = +100.0;
+                            }
+                            else
+                            {
+                                if (Double.IsNaN(ddB)) ddB = 10.0;  // MI0BOT: Handle the Not A Number situation
+                                if (ddB < -100.0) ddB = -10.0;      // MI0BOT: Handle - infinity 
+                                if (ddB > +100.0) ddB = 10.0;       // MI0BOT: Handle + infinity 
+                            }
                         }
                         else
-                            ddB = 31.1;
+                        {
+                            if (HPSDRModel.HERMESLITE == HardwareSpecific.Model)
+                                ddB = 10.0;
+                            else
+                                ddB = 31.1;
+                        }
 
                         //_deltadB = Convert.ToInt32(ddB);
                         _deltadB = (int)Math.Round(ddB, MidpointRounding.AwayFromZero); //[2.10.3.12]MW0LGE use rounding, to fix Banker's rounding issue
@@ -780,11 +799,21 @@ namespace Thetis
                     _autoAttenuateState = eAAState.RestoreOperation;//2;
                     int newAtten;
                     int oldAtten = console.SetupForm.ATTOnTX;
-                    if ((oldAtten + _deltadB) > 0)
-                        newAtten = oldAtten + _deltadB;
+
+                    if (HPSDRModel.HERMESLITE == HardwareSpecific.Model)
+                    {
+                        newAtten = oldAtten + _deltadB;     //MI0BOT: HL2 can handle negative up to -28, just let it be handled in ATTOnTx section
+                    }
                     else
-                        newAtten = 0;
+                    {
+                        if ((oldAtten + _deltadB) > 0)
+                            newAtten = oldAtten + _deltadB;
+                        else
+                            newAtten = 0;
+                    }
+                    
                     if (oldAtten/*console.SetupForm.ATTOnTX*/ != newAtten)
+
                     {
                         console.SetupForm.ATTOnTX = newAtten;
                         LogAutoAttenuate($"SETATT  old={oldAtten} new={newAtten} delta={_deltadB} FB={puresignal.FeedbackLevel} {PSInfoBits()}");
@@ -1245,6 +1274,11 @@ namespace Thetis
             return (fb > (int)(_targetFeedbackLevel * 1.5) ||
                     (fb < (int)(_targetFeedbackLevel * 0.7) && nCurrentATTonTX > 0));
         }
+        
+        public static bool NeedToRecalibrate_HL2(int fb, int nCurrentATTonTX) {
+            //note: for reference (puresignal.Info[4] > 181 || (puresignal.Info[4] <= 128 && console.SetupForm.ATTOnTX > 0))
+            return (fb > 181 || (fb <= 128 && nCurrentATTonTX > -28));    // MI0BOT: Needed seperate function for HL2 as           
+        }                                                                 //         great range in attenuation           
         // fast feedback estimate from the envelope peaks (calcc.c LCOLLECT, info[9] level, info[10] samples)
         public static int FastFeedbackLevel {
             get { return _info[9]; }

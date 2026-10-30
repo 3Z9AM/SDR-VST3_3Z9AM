@@ -146,7 +146,6 @@
     <Compile Include="Setup.AGCAttack.cs" />
     <Compile Include="Console.DiversityMini.cs" />
     <Compile Include="DiversityCross.cs" />
-    <Compile Include="DiversityDecimator.cs" />
     <Compile Include="DiversityForm.Phase.cs" />
     <Compile Include="Display.Pan3DPhase.cs" />
     <Compile Include="DiversityPhaseWaterfall.cs">
@@ -451,6 +450,7 @@
     <Compile Include="hiperftimer.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="HPSDR\IoBoardHl2.cs" />
     <Compile Include="HPSDR\NetworkIOImports.cs" />
     <Compile Include="HPSDR\specHPSDR.cs" />
     <Compile Include="InputBox.cs">

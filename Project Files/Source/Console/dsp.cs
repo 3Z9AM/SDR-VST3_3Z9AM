@@ -658,24 +658,6 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSections", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetEXTDIVSections(int mode, int sections, double tau, int rate, int lo, int hi);
 
-        [DllImport("wdsp.dll", EntryPoint = "GetEXTDIVSectionsWeights", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int GetEXTDIVSectionsWeights(double[] output, int max);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsFine", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsFine(int fine);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsPass2", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsPass2(int on);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsClean", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsClean(int pct);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsCleanSens", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsCleanSens(int s);
-
-        [DllImport("wdsp.dll", EntryPoint = "GetEXTDIVSectionsCleanShare", CallingConvention = CallingConvention.Cdecl)]
-        public static extern double GetEXTDIVSectionsCleanShare();
-
         [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsFreeze", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetEXTDIVSectionsFreeze(int freeze);
 
