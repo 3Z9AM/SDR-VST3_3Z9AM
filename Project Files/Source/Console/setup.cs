@@ -9315,39 +9315,55 @@ namespace Thetis
             console.DSPBufDigTX = int.Parse(comboDSPDigTXBuf.Text);
         }
 
+        // Filter sizes belong to the TX profile and loadTXProfile re-applies them at every start, so a change made
+        // here without saving the profile came back as the profile's old value (4096) after a restart/reinstall
+        private void storeInTXProfile(string field, string value)
+        {
+            if (initializing || _loadingTXProfile || string.IsNullOrEmpty(_current_profile)) return;
+            DataRow dr = DB.ds.Tables["TXProfile"]?.Rows.Cast<DataRow>().FirstOrDefault(d => (string)d["Name"] == _current_profile);
+            if (dr != null) dr[field] = value;
+        }
+
         private void comboDSPPhoneRXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizePhoneRX = int.Parse(comboDSPPhoneRXFiltSize.Text);
+            storeInTXProfile("Phone_RX_DSP_Filter_Size", comboDSPPhoneRXFiltSize.Text);
         }
 
         private void comboDSPPhoneTXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizePhoneTX = int.Parse(comboDSPPhoneTXFiltSize.Text);
+            storeInTXProfile("Phone_TX_DSP_Filter_Size", comboDSPPhoneTXFiltSize.Text);
         }
 
         private void comboDSPFMRXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizeFMRX = int.Parse(comboDSPFMRXFiltSize.Text);
+            storeInTXProfile("FM_RX_DSP_Filter_Size", comboDSPFMRXFiltSize.Text);
         }
 
         private void comboDSPFMTXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizeFMTX = int.Parse(comboDSPFMTXFiltSize.Text);
+            storeInTXProfile("FM_TX_DSP_Filter_Size", comboDSPFMTXFiltSize.Text);
         }
 
         private void comboDSPCWRXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizeCWRX = int.Parse(comboDSPCWRXFiltSize.Text);
+            storeInTXProfile("CW_RX_DSP_Filter_Size", comboDSPCWRXFiltSize.Text);
         }
 
         private void comboDSPDigRXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizeDigRX = int.Parse(comboDSPDigRXFiltSize.Text);
+            storeInTXProfile("Digi_RX_DSP_Filter_Size", comboDSPDigRXFiltSize.Text);
         }
 
         private void comboDSPDigTXFiltSize_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             console.DSPFiltSizeDigTX = int.Parse(comboDSPDigTXFiltSize.Text);
+            storeInTXProfile("Digi_TX_DSP_Filter_Size", comboDSPDigTXFiltSize.Text);
         }
 
         private void comboDSPPhoneRXFiltType_SelectedIndexChanged(object sender, System.EventArgs e)
@@ -9960,7 +9976,16 @@ namespace Thetis
             return bitfield;
         }
 
+        private bool _loadingTXProfile;
         private bool loadTXProfile(String sProfileName)
+        {
+            // the profile's values fire the combo handlers while _current_profile still names the previous profile
+            _loadingTXProfile = true;
+            try { return loadTXProfileCore(sProfileName); }
+            finally { _loadingTXProfile = false; }
+        }
+
+        private bool loadTXProfileCore(String sProfileName)
         {
             //
             // NOTE: make sure you update checkTXProfileChanged2, if anything is added/removed
