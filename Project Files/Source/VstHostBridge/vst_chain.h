@@ -6,6 +6,7 @@ This code/file can be found on GitHub : https://github.com/nubbyless/Thetis-Plus
 
 Copyright (C) 2026 ChasingCoffee
 Copyright (C) 2026 nubbyless <nubbyless@yahoo.com>
+Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -33,7 +34,8 @@ typedef void (*VstChainStateDirtyCallback)(void* context);
 
 enum
 {
-	VST_MAX_CHAIN_PLUGINS = 16
+	VST_MAX_CHAIN_PLUGINS = 16,
+	VST_LANE_MAX_DELAY_FRAMES = 32768	/* latency compensation between the parallel paths */
 };
 
 struct VstPluginSlot
@@ -42,6 +44,7 @@ struct VstPluginSlot
 	volatile LONG bypass;
 	volatile LONG load_state;
 	volatile LONG format;
+	volatile LONG lane;
 	wchar_t path[VST_MAX_PLUGIN_PATH_CHARS];
 	wchar_t name[VST_MAX_PLUGIN_NAME_CHARS];
 	wchar_t cid[VST_MAX_PLUGIN_CID_CHARS];
@@ -52,6 +55,8 @@ struct VstProcessingPlugin
 	volatile LONG enabled;
 	volatile LONG bypass;
 	volatile LONG load_state;
+	volatile LONG lane;
+	int latency;	/* last latency the plugin reported, samples */
 	ThetisPluginRuntime* runtime;
 };
 
@@ -63,6 +68,9 @@ struct VstProcessingState
 	int num_channels;
 	int plugin_count;
 	VstProcessingPlugin plugins[VST_MAX_CHAIN_PLUGINS];
+	double* lane_buffer;			/* path B block, max_block_size * num_channels */
+	double* lane_delay[VST_CHAIN_LANES];	/* VST_LANE_MAX_DELAY_FRAMES * num_channels each */
+	int lane_delay_pos;
 };
 
 struct VstChainState
@@ -78,6 +86,7 @@ struct VstChainState
 	volatile LONG bypass;
 	volatile LONG plugin_count;
 	volatile LONG64 gain_bits;
+	volatile LONG64 lane_gain_bits[VST_CHAIN_LANES];
 	int sample_rate;
 	int max_block_size;
 	int num_channels;
@@ -121,6 +130,9 @@ int VstChain_GetPluginCount(const VstChainState& chain);
 int VstChain_GetPluginInfo(const VstChainState& chain, int index, VstPluginInfo* info);
 int VstChain_SetPluginBypass(VstChainState& chain, int index, int bypass);
 int VstChain_SetPluginEnabled(VstChainState& chain, int index, int enabled);
+int VstChain_SetPluginLane(VstChainState& chain, int index, int lane);
+void VstChain_SetLaneGain(VstChainState& chain, int lane, double gain);
+double VstChain_GetLaneGain(const VstChainState& chain, int lane);
 int VstChain_GetPluginStateSize(VstChainState& chain, int index);
 int VstChain_GetPluginState(VstChainState& chain, int index, void* buffer, int buffer_size, int* bytes_written);
 int VstChain_SetPluginState(VstChainState& chain, int index, const void* buffer, int buffer_size);

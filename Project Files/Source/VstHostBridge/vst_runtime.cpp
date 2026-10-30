@@ -6,6 +6,7 @@ This code/file can be found on GitHub : https://github.com/nubbyless/Thetis-Plus
 
 Copyright (C) 2026 ChasingCoffee
 Copyright (C) 2026 nubbyless <nubbyless@yahoo.com>
+Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -2341,6 +2342,16 @@ int VstRuntime_Reconfigure(VstPluginRuntime* runtime, int sample_rate, int max_b
 	sample_rate = send_host_command(*runtime);
 	LeaveCriticalSection(&runtime->command_lock);
 	return sample_rate;
+}
+
+// -1 when the runtime is busy or inactive
+int VstRuntime_GetLatencySamples(VstPluginRuntime* runtime)
+{
+	ScopedTryRuntimeApiLock api_lock(runtime);
+
+	if (!runtime || !runtime->processor || !runtime->active || !api_lock.is_locked())
+		return -1;
+	return static_cast<int>(runtime->processor->getLatencySamples());
 }
 
 int VstRuntime_Process(VstPluginRuntime* runtime, double* interleaved_buffer, int frames, int chain_channels)

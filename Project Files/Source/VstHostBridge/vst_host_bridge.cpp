@@ -105,6 +105,7 @@ namespace
 		int cached_ready = 0;
 		int cached_bypass = 0;
 		double cached_gain = 1.0;
+		double cached_lane_gain[VST_CHAIN_LANES] = { 0.5, 0.5 };
 		struct CachedPluginState
 		{
 			wchar_t path[VST_MAX_PLUGIN_PATH_CHARS] = {};
@@ -114,6 +115,7 @@ namespace
 			int bypass = 0;
 			int load_state = VST_PLUGIN_LOAD_DESCRIPTOR_ONLY;
 			int format = VST_PLUGIN_FORMAT_UNKNOWN;
+			int lane = 0;
 			std::vector<unsigned char> state_data;
 		};
 		std::vector<CachedPluginState> cached_plugins;
@@ -310,6 +312,7 @@ namespace
 		state.cached_ready = 0;
 		state.cached_bypass = 0;
 		state.cached_gain = 1.0;
+		state.cached_lane_gain[0] = state.cached_lane_gain[1] = 0.5;
 		state.cached_plugins.clear();
 		advance_cache_generation(state);
 		ReleaseSRWLockExclusive(&state.cache_lock);
@@ -336,6 +339,7 @@ namespace
 		plugin.bypass = 0;
 		plugin.load_state = VST_PLUGIN_LOAD_DESCRIPTOR_ONLY;
 		plugin.format = VST_PLUGIN_FORMAT_UNKNOWN;
+		plugin.lane = 0;
 		plugin.state_data.clear();
 		if (plugin_path)
 		{
@@ -375,6 +379,7 @@ namespace
 		info->bypass = plugin->bypass;
 		info->load_state = plugin->load_state;
 		info->format = plugin->format;
+		info->lane = plugin->lane;
 		wcsncpy_s(info->path, VST_MAX_PLUGIN_PATH_CHARS, plugin->path, _TRUNCATE);
 		wcsncpy_s(info->name, VST_MAX_PLUGIN_NAME_CHARS, plugin->name, _TRUNCATE);
 		if (plugin->cid[0])
@@ -1059,6 +1064,7 @@ namespace
 					cached_plugin.bypass = info.bypass;
 					cached_plugin.load_state = info.load_state;
 					cached_plugin.format = info.format;
+					cached_plugin.lane = info.lane;
 
 					state_size = host_get_plugin_state_size(kind, i, static_cast<int>(host_generation));
 					if (state_size == VST_HOST_IPC_RESULT_SNAPSHOT_CHANGED)
@@ -1122,6 +1128,7 @@ namespace
 		int cached_ready;
 		int cached_bypass;
 		double cached_gain;
+		double cached_lane_gain[VST_CHAIN_LANES];
 		std::vector<HostProcessState::CachedPluginState> cached_plugins;
 		/*
 		Replay is driven from the bridge cache, not from ad hoc host reads. The
@@ -1141,6 +1148,8 @@ namespace
 		cached_ready = host_state.cached_ready;
 		cached_bypass = host_state.cached_bypass;
 		cached_gain = host_state.cached_gain;
+		cached_lane_gain[0] = host_state.cached_lane_gain[0];
+		cached_lane_gain[1] = host_state.cached_lane_gain[1];
 		cached_plugins = host_state.cached_plugins;
 		ReleaseSRWLockShared(&host_state.cache_lock);
 
@@ -1164,6 +1173,11 @@ namespace
 			return false;
 		if (host_command_simple(kind, VST_HOST_IPC_SET_CHAIN_GAIN, 0, 0, 0, cached_gain) != 0)
 			return false;
+		for (int lane = 0; lane < VST_CHAIN_LANES; ++lane)
+		{
+			if (host_command_simple(kind, VST_HOST_IPC_SET_CHAIN_LANE_GAIN, lane, 0, 0, cached_lane_gain[lane]) != 0)
+				return false;
+		}
 		if (host_command_simple(kind, VST_HOST_IPC_CLEAR_CHAIN, 0, 0, 0, 0.0) != 0)
 			return false;
 
@@ -1203,6 +1217,8 @@ namespace
 			if (host_command_simple(kind, VST_HOST_IPC_SET_PLUGIN_ENABLED, host_index, cached_plugin.enabled, 0, 0.0) != 0)
 				return false;
 			if (host_command_simple(kind, VST_HOST_IPC_SET_PLUGIN_BYPASS, host_index, cached_plugin.bypass, 0, 0.0) != 0)
+				return false;
+			if (host_command_simple(kind, VST_HOST_IPC_SET_PLUGIN_LANE, host_index, cached_plugin.lane, 0, 0.0) != 0)
 				return false;
 		}
 
@@ -2002,6 +2018,41 @@ void VST_SetChainGain(VstChainKind kind, double gain)
 	ReleaseSRWLockExclusive(&host_state.cache_lock);
 }
 
+void VST_SetChainLaneGain(VstChainKind kind, int lane, double gain)
+{
+	ensure_initialized();
+
+	if (!is_valid_kind(kind) || lane < 0 || lane >= VST_CHAIN_LANES)
+		return;
+
+	HostProcessState& host_state = g_host_processes[kind];
+	ScopedExclusiveLock mutation_guard(&host_state.mutation_lock);
+
+	if (host_command_available(kind))
+		host_command_simple(kind, VST_HOST_IPC_SET_CHAIN_LANE_GAIN, lane, 0, 0, gain);
+	else
+		ensure_host_recovery(kind);
+	AcquireSRWLockExclusive(&host_state.cache_lock);
+	host_state.cached_lane_gain[lane] = gain;
+	advance_cache_generation(host_state);
+	ReleaseSRWLockExclusive(&host_state.cache_lock);
+}
+
+double VST_GetChainLaneGain(VstChainKind kind, int lane)
+{
+	double gain;
+
+	ensure_initialized();
+
+	if (!is_valid_kind(kind) || lane < 0 || lane >= VST_CHAIN_LANES)
+		return 0.0;
+
+	AcquireSRWLockShared(&g_host_processes[kind].cache_lock);
+	gain = g_host_processes[kind].cached_lane_gain[lane];
+	ReleaseSRWLockShared(&g_host_processes[kind].cache_lock);
+	return gain;
+}
+
 double VST_GetChainGain(VstChainKind kind)
 {
 	ensure_initialized();
@@ -2409,6 +2460,41 @@ int VST_SetPluginBypass(VstChainKind kind, int index, int bypass)
 	}
 	AcquireSRWLockExclusive(&host_state.cache_lock);
 	host_state.cached_plugins[index].bypass = bypass;
+	advance_cache_generation(host_state);
+	ReleaseSRWLockExclusive(&host_state.cache_lock);
+	return 0;
+}
+
+int VST_SetPluginLane(VstChainKind kind, int index, int lane)
+{
+	int host_result;
+
+	ensure_initialized();
+
+	if (!is_valid_kind(kind))
+		return -1;
+
+	lane = lane ? 1 : 0;
+	HostProcessState& host_state = g_host_processes[kind];
+	ScopedExclusiveLock mutation_guard(&host_state.mutation_lock);
+
+	AcquireSRWLockShared(&host_state.cache_lock);
+	bool index_valid = index >= 0 && index < static_cast<int>(host_state.cached_plugins.size());
+	ReleaseSRWLockShared(&host_state.cache_lock);
+	if (!index_valid)
+		return -1;
+	if (host_command_available(kind))
+	{
+		host_result = host_command_simple(kind, VST_HOST_IPC_SET_PLUGIN_LANE, index, lane, 0, 0.0);
+		if (host_result != 0)
+			return host_result;
+	}
+	else
+	{
+		ensure_host_recovery(kind);
+	}
+	AcquireSRWLockExclusive(&host_state.cache_lock);
+	host_state.cached_plugins[index].lane = lane;
 	advance_cache_generation(host_state);
 	ReleaseSRWLockExclusive(&host_state.cache_lock);
 	return 0;

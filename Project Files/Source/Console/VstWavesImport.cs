@@ -61,7 +61,7 @@ namespace Thetis
             HashSet<string> chains = new HashSet<string>();
             string firstChain = null;
 
-            foreach (string[] row in QuerySqlite(path, SessionQuery))
+            foreach (string[] row in QuerySessionCopy(path))
             {
                 chains.Add(row[0]);
                 if (firstChain == null)
@@ -92,6 +92,7 @@ namespace Thetis
             int otherChains;
             List<Entry> entries = ReadSession(sessionPath, out otherChains);
             List<VstCatalogPlugin> catalog = VstHost.LoadPluginCatalog().Plugins;
+            int wavesInCatalog = catalog.FindAll(p => p != null && p.Available && (p.Vendor ?? "").IndexOf("Waves", StringComparison.OrdinalIgnoreCase) >= 0).Count;
             string presetDir = Path.Combine(VstHost.GetVstDirectoryPath(), "WavesImport", Path.GetFileNameWithoutExtension(sessionPath));
 
             if (entries.Count == 0)
@@ -113,7 +114,7 @@ namespace Thetis
                 VstCatalogPlugin plugin = FindPlugin(catalog, e);
                 if (plugin == null)
                 {
-                    report.Add(label + ": no Waves VST3 with this name in the plugin catalog (install it or rescan plugins).");
+                    report.Add(label + string.Format(": no Waves VST3 with this name in the plugin catalog ({0} Waves plugins there - install it or rescan plugins).", wavesInCatalog));
                     continue;
                 }
 
@@ -345,7 +346,7 @@ namespace Thetis
         #region SQLite (winsqlite3.dll ships with Windows 10/11)
 
         private const string Sqlite = "winsqlite3.dll";
-        private const int SQLITE_OK = 0, SQLITE_ROW = 100, SQLITE_DONE = 101, SQLITE_OPEN_READONLY = 1;
+        private const int SQLITE_OK = 0, SQLITE_ROW = 100, SQLITE_DONE = 101, SQLITE_OPEN_READWRITE = 2;
 
         [DllImport(Sqlite)] private static extern int sqlite3_open_v2(byte[] filename, out IntPtr db, int flags, IntPtr vfs);
         [DllImport(Sqlite)] private static extern int sqlite3_close_v2(IntPtr db);
@@ -356,16 +357,66 @@ namespace Thetis
         [DllImport(Sqlite)] private static extern IntPtr sqlite3_column_text(IntPtr stmt, int col);
         [DllImport(Sqlite)] private static extern IntPtr sqlite3_errmsg(IntPtr db);
 
+        /// <summary>Reads a temp copy (with its -wal) - MultiRack/SuperRack keep the open session locked.</summary>
+        private static List<string[]> QuerySessionCopy(string path)
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "SDR-WavesImport-" + Guid.NewGuid().ToString("N"));
+            string copy = Path.Combine(dir, "session.db");
+
+            try
+            {
+                Directory.CreateDirectory(dir);
+                CopyShared(path, copy);
+                if (File.Exists(path + "-wal"))
+                    CopyShared(path + "-wal", copy + "-wal");
+            }
+            catch (IOException ex)
+            {
+                TryDeleteDirectory(dir);
+                throw new IOException("Cannot read the session file - close MultiRack/SuperRack and try again. " + ex.Message, ex);
+            }
+
+            try
+            {
+                return QuerySqlite(copy, SessionQuery);
+            }
+            finally
+            {
+                TryDeleteDirectory(dir);
+            }
+        }
+
+        private static void CopyShared(string source, string destination)
+        {
+            using (FileStream input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (FileStream output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write))
+                input.CopyTo(output);
+        }
+
+        private static void TryDeleteDirectory(string dir)
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
         private static List<string[]> QuerySqlite(string path, string sql)
         {
             List<string[]> rows = new List<string[]>();
             IntPtr db, stmt = IntPtr.Zero;
 
-            int rc = sqlite3_open_v2(Utf8z(path), out db, SQLITE_OPEN_READONLY, IntPtr.Zero);
+            // read-write so SQLite can fold a copied -wal into the copy
+            int rc = sqlite3_open_v2(Utf8z(path), out db, SQLITE_OPEN_READWRITE, IntPtr.Zero);
             try
             {
-                if (rc == SQLITE_OK)
-                    rc = sqlite3_prepare_v2(db, Utf8z(sql), -1, out stmt, IntPtr.Zero);
+                if (rc != SQLITE_OK)
+                    throw new IOException("Cannot open the session copy: " + Marshal.PtrToStringUTF8(sqlite3_errmsg(db)));
+                rc = sqlite3_prepare_v2(db, Utf8z(sql), -1, out stmt, IntPtr.Zero);
                 if (rc != SQLITE_OK)
                     throw new InvalidDataException("Not a Waves SuperRack/MultiRack session: " + Marshal.PtrToStringUTF8(sqlite3_errmsg(db)));
 

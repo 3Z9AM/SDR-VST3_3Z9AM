@@ -85,6 +85,8 @@ namespace Thetis
 
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
         public string ClassId;
+
+        public int Lane;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -124,12 +126,16 @@ namespace Thetis
         public VstPluginLoadState LoadState { get; set; }
         public VstPluginFormat Format { get; set; }
         public byte[] StateData { get; set; }
+        /// <summary>Parallel path: 0 = A, 1 = B. Any plugin on B splits the chain into two mixed paths.</summary>
+        public int Lane { get; set; }
     }
 
     sealed class VstChainState
     {
         public bool Bypass { get; set; }
         public double Gain { get; set; }
+        public double LaneGainA { get; set; }
+        public double LaneGainB { get; set; }
         public int LatencyFloor { get; set; }
         public List<VstPluginState> Plugins { get; set; }
 
@@ -137,6 +143,8 @@ namespace Thetis
         {
             Bypass = true;
             Gain = 1.0;
+            LaneGainA = 0.5;
+            LaneGainB = 0.5;
             LatencyFloor = 0; // 0 = use native default
             Plugins = new List<VstPluginState>();
         }
@@ -149,6 +157,8 @@ namespace Thetis
         public bool Ready { get; set; }
         public bool Bypass { get; set; }
         public double Gain { get; set; }
+        public double LaneGainA { get; set; }
+        public double LaneGainB { get; set; }
         public int SampleRate { get; set; }
         public int BlockSize { get; set; }
         public int LatencyBlocks { get; set; }
@@ -415,6 +425,15 @@ namespace Thetis
 
         [DllImport(NativeLibrary, EntryPoint = "VST_SetPluginEnabled", CallingConvention = CallingConvention.Cdecl)]
         private static extern int NativeSetPluginEnabled(VstChainKind kind, int index, int enabled);
+
+        [DllImport(NativeLibrary, EntryPoint = "VST_SetPluginLane", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeSetPluginLane(VstChainKind kind, int index, int lane);
+
+        [DllImport(NativeLibrary, EntryPoint = "VST_SetChainLaneGain", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void NativeSetChainLaneGain(VstChainKind kind, int lane, double gain);
+
+        [DllImport(NativeLibrary, EntryPoint = "VST_GetChainLaneGain", CallingConvention = CallingConvention.Cdecl)]
+        private static extern double NativeGetChainLaneGain(VstChainKind kind, int lane);
 
         [DllImport(NativeLibrary, EntryPoint = "VST_GetPluginStateSize", CallingConvention = CallingConvention.Cdecl)]
         private static extern int NativeGetPluginStateSize(VstChainKind kind, int index);
@@ -730,6 +749,13 @@ namespace Thetis
             }
         }
 
+        /// <summary>Display name with the parallel path marker, for the chain list and rack.</summary>
+        public static string GetPluginRackLabel(VstPluginState plugin)
+        {
+            string name = GetPluginDisplayName(plugin);
+            return plugin != null && plugin.Lane == 1 ? name + "  [B]" : name;
+        }
+
         public static string GetPluginDisplayName(VstPluginState plugin)
         {
             if (plugin == null)
@@ -916,6 +942,26 @@ namespace Thetis
             if (!EnsureNativeAvailable()) return false;
 
             NativeSetChainGain(kind, Math.Max(0.0, gain));
+            ScheduleStateSave(DeferredStateSaveDelayMs);
+            return true;
+        }
+
+        /// <summary>Level of parallel path A (lane 0) or B (lane 1) in the mix, linear.</summary>
+        public static bool SetChainLaneGain(VstChainKind kind, int lane, double gain)
+        {
+            if (!EnsureNativeAvailable()) return false;
+
+            NativeSetChainLaneGain(kind, lane, Math.Max(0.0, gain));
+            ScheduleStateSave(DeferredStateSaveDelayMs);
+            return true;
+        }
+
+        public static bool SetPluginLane(VstChainKind kind, int index, int lane)
+        {
+            if (!EnsureNativeAvailable()) return false;
+            if (NativeSetPluginLane(kind, index, lane) != 0)
+                return false;
+
             ScheduleStateSave(DeferredStateSaveDelayMs);
             return true;
         }
@@ -2010,6 +2056,8 @@ namespace Thetis
                 chainInfo.Ready = NativeGetChainReady(kind) != 0;
                 chainInfo.Bypass = NativeGetChainBypass(kind) != 0;
                 chainInfo.Gain = NativeGetChainGain(kind);
+                chainInfo.LaneGainA = NativeGetChainLaneGain(kind, 0);
+                chainInfo.LaneGainB = NativeGetChainLaneGain(kind, 1);
 
                 pluginCount = NativeGetPluginCount(kind);
                 if (pluginCount >= 0)
@@ -2039,6 +2087,7 @@ namespace Thetis
                             ClassId = nativeInfo.ClassId,
                             Enabled = nativeInfo.Enabled != 0,
                             Bypass = nativeInfo.Bypass != 0,
+                            Lane = nativeInfo.Lane,
                             LoadState = (VstPluginLoadState)nativeInfo.LoadState,
                             Format = NormalizePluginFormat((VstPluginFormat)nativeInfo.Format, nativeInfo.Path),
                             StateData = stateData
@@ -2085,6 +2134,7 @@ namespace Thetis
                 ClassId = nativeInfo.ClassId,
                 Enabled = nativeInfo.Enabled != 0,
                 Bypass = nativeInfo.Bypass != 0,
+                Lane = nativeInfo.Lane,
                 LoadState = (VstPluginLoadState)nativeInfo.LoadState,
                 Format = NormalizePluginFormat((VstPluginFormat)nativeInfo.Format, nativeInfo.Path),
                 StateData = includeStateData ? (TryGetPluginStateData(kind, index, out stateData) ? stateData : null) : null
@@ -2100,6 +2150,8 @@ namespace Thetis
 
             state.Bypass = chainInfo.Bypass;
             state.Gain = chainInfo.Gain;
+            state.LaneGainA = chainInfo.LaneGainA;
+            state.LaneGainB = chainInfo.LaneGainB;
             state.LatencyFloor = chainInfo.LatencyFloorBlocks;
             state.Plugins = chainInfo.Plugins ?? new List<VstPluginState>();
             return state;
@@ -2255,6 +2307,8 @@ namespace Thetis
                 return;
 
             NativeSetChainGain(kind, chainState.Gain);
+            NativeSetChainLaneGain(kind, 0, chainState.LaneGainA);
+            NativeSetChainLaneGain(kind, 1, chainState.LaneGainB);
             NativeSetChainBypass(kind, chainState.Bypass ? 1 : 0);
 
             if (chainState.Plugins == null || addedIndexes == null)
@@ -2270,6 +2324,7 @@ namespace Thetis
 
                 NativeSetPluginEnabled(kind, index, desiredState.Enabled ? 1 : 0);
                 NativeSetPluginBypass(kind, index, desiredState.Bypass ? 1 : 0);
+                NativeSetPluginLane(kind, index, desiredState.Lane);
             }
         }
 
