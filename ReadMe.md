@@ -2,7 +2,7 @@
 
 A fork of **SDR-VST3** by SQ4KOU (itself based on **Thetis**, the OpenHPSDR console), developed and tested by **Daniel Poznański, 3Z9AM** on an ANAN-7000DLE (Protocol 2).
 
-**Download:** [Releases](../../releases) – take the `.exe` (includes .NET 10).
+**Download:** [Releases](../../releases) – take the `.msi` (needs the .NET 10 Desktop Runtime x64; the installer says so if it is missing).
 Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, branch `sunsdr`), not tested by me on a radio – feedback welcome.
 
 ## What is new in this fork
@@ -14,7 +14,8 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 
 ## Requirements
 - Windows 10/11 x64, **CPU with AVX2**.
-- The program asks for an **activation code** for testers (shown after pressing POWER) – contact 3Z9AM.
+- The program asks for an **activation code** (menu "Activation", or after pressing POWER) – contact 3Z9AM.
+  The code is there so I stay in touch with every tester: when you send the request code, please add your **radio** (model, firmware), **antennas** and **location** (QTH / locator). This helps refine the program for different radios, antennas and receiving conditions.
 - Installs as its own program next to Thetis / SDR-VST3; the installer replaces any installed SDR-VST3 version.
 
 ## Source and licence
@@ -23,7 +24,7 @@ Original authors and credits are kept below and in the file headers (FlexRadio S
 
 ---
 
-*PL:* Fork SDR-VST3 (SQ4KOU / Thetis) rozwijany przez 3Z9AM: nowy interfejs HUD, panorama 3D na GPU, diversity sekcyjne, WDSP 2.30. Instalki w zakładce Releases, wymagany procesor z AVX2 i kod aktywacji.
+*PL:* Fork SDR-VST3 (SQ4KOU / Thetis) rozwijany przez 3Z9AM: nowy interfejs HUD, panorama 3D na GPU, diversity sekcyjne, WDSP 2.30. Instalki w zakładce Releases, wymagany procesor z AVX2 i kod aktywacji. Kod jest po to, żebym miał kontakt z testerami: przysyłając kod prośby, podaj radio (model, firmware), używane anteny i lokalizację (QTH / lokator) – to pozwala dopracować program.
 
 ---
 

@@ -4217,6 +4217,19 @@ namespace Thetis
                     //panelModeSpecificDigital.BringToFront();
                     break;
             }
+
+            // MIC mute and the VST buttons live on the phone panel; FM has its own panel, so lend them to it
+            Control host = RX1DSPMode == DSPMode.FM ? panelModeSpecificFM : panelModeSpecificPhone;
+            if (chkMicMute.Parent != host)
+            {
+                int vstY = host == panelModeSpecificFM ? 112 : 99;   // FM: free row left of the TX Low/Simplex buttons
+                foreach (Control c in new Control[] { chkMicMute, chkTXVST, chkRXVST, chkVSTTest })
+                {
+                    host.Controls.Add(c);
+                    if (c != chkMicMute) c.Top = vstY;
+                    c.BringToFront();   // MIC covers the FM "Mic" label
+                }
+            }
         }
 
 
