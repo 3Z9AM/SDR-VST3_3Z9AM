@@ -1,3 +1,32 @@
+# SDR-VST3 – 3Z9AM edition
+
+A fork of **SDR-VST3** by SQ4KOU (itself based on **Thetis**, the OpenHPSDR console), developed and tested by **Daniel Poznański, 3Z9AM** on an ANAN-7000DLE (Protocol 2).
+
+**Download:** [Releases](../../releases) – take the `.exe` (includes .NET 10).
+Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, branch `sunsdr`), not tested by me on a radio – feedback welcome.
+
+## What is new in this fork
+- **New HUD-style interface** – full-window panadapter, top bar with VFOs and S-meter, dock with drawers for the original panels, movable panels (Shift + drag), accent colour.
+- **3D panadapter** on the GPU – depth history, floor marks, peak skyline, "waterfall sphere" and inside (planetarium) view.
+- **Diversity per section** (ANAN with two receivers) – max-SINR / MRC / co-phase / null per frequency section, "clean" AUTO, phase views (radar arrow, phase waterfall, 3D phase colours).
+- **WDSP 2.30** – WDSP 2.10 merged with PureSignal from 2.00, NR3/NR4/NR5, soft filter edges (high-tone and carrier side), BIN2 stereo/spatial audio, AGC attack and impulse recovery.
+- **GPU waterfall** with exact FFT, animated / callsign background, built-in CW Skimmer, SonoBus window (remote audio via VST), S-meter correction.
+
+## Requirements
+- Windows 10/11 x64, **CPU with AVX2**.
+- The program asks for an **activation code** for testers (shown after pressing POWER) – contact 3Z9AM.
+- Installs as its own program next to Thetis / SDR-VST3; the installer replaces any installed SDR-VST3 version.
+
+## Source and licence
+GPL v2 or later. Each release has its source under the tag of the same name (e.g. `v6.0.6.0`). This public repository contains release snapshots only.
+Original authors and credits are kept below and in the file headers (FlexRadio Systems, Doug Wigley W5WC, Richard Samphire MW0LGE, Warren Pratt NR0V, SQ4KOU, ChasingCoffee and others).
+
+---
+
+*PL:* Fork SDR-VST3 (SQ4KOU / Thetis) rozwijany przez 3Z9AM: nowy interfejs HUD, panorama 3D na GPU, diversity sekcyjne, WDSP 2.30. Instalki w zakładce Releases, wymagany procesor z AVX2 i kod aktywacji.
+
+---
+
 What is SDR-VST3?
 SDR-VST3 is a fork of Thetis (the OpenHPSDR software-defined radio console application) that adds built-in VST3 audio plugin support to ham radio operations. It allows operators to insert professional audio plugins (EQs, compressors, gates, limiters, noise reduction, etc.) into both the RX (receive) and TX (transmit) signal chains — similar to how a DAW works, but for live radio signal processing.
 Originally called "Thetis Plus", it was rebranded to SDR-VST3 in v4.1 (at the suggestion of Thetis maintainer Richie MW0LGE) to run as a fully independent, side-by-side installation alongside standard Thetis.
