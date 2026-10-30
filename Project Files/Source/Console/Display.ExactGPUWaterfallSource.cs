@@ -1,0 +1,495 @@
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
+using System;
+using System.Runtime.InteropServices;
+
+namespace Thetis
+{
+    partial class Display
+    {
+        private const int ExactGpuFftSize = 16384;
+        private const int ExactGpuIqCapacity = 524288;
+        private const int ExactGpuOverlapPercent = 85;
+
+        private static readonly object _exactGpuLock = new object();
+        private static readonly bool[] _exactGpuInit = new bool[2];
+        private static readonly bool[] _exactGpuIqInit = new bool[3];
+        private static readonly float[][] _exactRingI = new float[2][];
+        private static readonly float[][] _exactRingQ = new float[2][];
+        private static readonly int[] _exactRingHead = new int[2];
+        private static readonly int[] _exactRingCount = new int[2];
+        private static readonly int[] _exactSampleCredit = new int[2];
+        private static readonly bool[] _exactFirstFill = new bool[2];
+        private static readonly float[][] _exactReadI = new float[2][];
+        private static readonly float[][] _exactReadQ = new float[2][];
+        private static readonly float[][] _exactFrameI = new float[2][];
+        private static readonly float[][] _exactFrameQ = new float[2][];
+        private static readonly float[][] _exactRow = new float[2][];
+        private static readonly float[][] _exactRowCopy = new float[2][];
+        private static readonly byte[][] _exactColorRow = new byte[2][];
+        private static readonly float[][] _exactMedianScratch = new float[2][];
+        private static readonly float[] _exactCalOffset = new float[2];
+        private static readonly bool[] _exactCalInit = new bool[2];
+        // calibration kept per IQ source (0/1 = RX, 2 = TX) so a MOX switch resumes the
+        // previous RX level instead of re-learning it from the purged CPU display rows
+        private static readonly float[,] _exactCalOffsetBySource = new float[2, 3];
+        private static readonly bool[,] _exactCalInitBySource = new bool[2, 3];
+        // drop everything queued on the native IQ ring and start the slot's FFT frame anew
+        private static int restartExactIq(int slot, int sourceStream)
+        {
+            int skipped = ExactGpuNative.CM_WaterfallIQ_Skip(sourceStream, int.MaxValue);
+            ExactGpuNative.CM_WaterfallIQ_ResetDropped(sourceStream);
+            _exactRingHead[slot] = 0;
+            _exactRingCount[slot] = 0;
+            _exactSampleCredit[slot] = 0;
+            _exactFirstFill[slot] = false;
+            return skipped;
+        }
+
+        private static readonly bool[] _exactGpuUnavailable = new bool[2];
+        private static readonly int[] _exactLastIqSource = new int[2] { -1, -1 };
+        private static readonly int[] _exactConfiguredWindow = new int[2] { -1, -1 };
+        private static readonly float[] _exactConfiguredKaiser = new float[2] { float.NaN, float.NaN };
+        private static readonly int[] _exactConfiguredMagnitude = new int[2] { -1, -1 };
+        private static readonly int[] _exactConfiguredLanczos = new int[2] { -1, -1 };
+        private static readonly int[] _exactConfiguredResampling = new int[2] { -1, -1 };
+
+        // SDR-VST3 stability path: GPU FFT runs on the native dedicated D3D11 device,
+        // while the visible waterfall history remains on the normal Vortice/D2D bitmap.
+        // This deliberately avoids wrapping the live Vortice device/context in SharpDX.
+        private static bool ExactNativeGPURequested
+        {
+            get
+            {
+                EnsureNativeGPUWaterfallSettingsLoaded();
+                return _gpuWaterfallPipelineEnabled &&
+                       !m_bForceCPURendering && m_eRenderPath == DXRenderPath.Hardware;
+            }
+        }
+
+        internal static class ExactGpuNative
+        {
+            private const string DllName = "ChannelMaster.dll";
+
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_WaterfallIQ_Init(int channel, int requestedSamples);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern void CM_WaterfallIQ_SetEnabled(int channel, int enabled);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_WaterfallIQ_Available(int channel);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_WaterfallIQ_Get(int channel, int requestedSamples, [Out] float[] iOut, [Out] float[] qOut);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_WaterfallIQ_Skip(int channel, int samples);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern ulong CM_WaterfallIQ_DroppedSamples(int channel);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern void CM_WaterfallIQ_ResetDropped(int channel);
+
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_GPUWaterfallExact_Init(int channel, int fftSize, int displayWidth);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_GPUWaterfallExact_Configure(
+                int channel, int windowType, float kaiserBeta, int magnitudeMode, int lanczosWindow, int resamplingMode);
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_GPUWaterfallExact_Process(
+                int channel, int sampleRate, float displayLowHz, float displayHighHz,
+                float[] iData, float[] qData, int count, [Out] float[] outputDb);
+
+            [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+            internal static extern int CM_GPUWaterfallExact_RenderRow(
+                int channel, float lowThreshold, float highThreshold,
+                [Out] byte[] outputBGRA, int outputBytes);
+        }
+
+        private static void ResetExactGPUWaterfallSourceForModeChange(bool enableIQ)
+        {
+            lock (_exactGpuLock)
+            {
+                // A transient init failure must not poison the whole session. A mode,
+                // FFT or overlap transition is an explicit retry boundary.
+                for (int slot = 0; slot < 2; slot++)
+                {
+                    _exactGpuUnavailable[slot] = false;
+                    _exactLastIqSource[slot] = -1;
+                    _exactRingHead[slot] = 0;
+                    _exactRingCount[slot] = 0;
+                    _exactSampleCredit[slot] = 0;
+                    _exactFirstFill[slot] = false;
+                    _exactCalInit[slot] = false;
+                    _exactCalOffset[slot] = 0f;
+                    for (int s = 0; s < 3; s++) _exactCalInitBySource[slot, s] = false;
+                    _gpuLastEffectiveOverlap[slot] = -1.0;
+                }
+
+                for (int source = 0; source < _exactGpuIqInit.Length; source++)
+                {
+                    if (!_exactGpuIqInit[source]) continue;
+                    try
+                    {
+                        ExactGpuNative.CM_WaterfallIQ_SetEnabled(source, enableIQ ? 1 : 0);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            GPUWaterfallLogger.Log("WF-SOURCE",
+                "exact source reset enableIQ=" + enableIQ +
+                " forceCPU=" + m_bForceCPURendering +
+                " pipeline=" + _gpuWaterfallPipelineEnabled);
+        }
+
+        private static int CalculateExactGPUWaterfallHop(int rx, int fftSize, int sampleRate, out double effectiveOverlap)
+        {
+            int overlap = _gpuWaterfallOverlapPercent;
+            if (overlap < 0) overlap = 0;
+            if (overlap > 95) overlap = 95;
+
+            int hop = Math.Max(1, Math.Min(fftSize,
+                (int)Math.Round(fftSize * (1.0 - overlap / 100.0))));
+
+            if (_gpuWaterfallAutoOverlap)
+            {
+                double fps = Math.Max(1.0, m_nFps);
+                int updatePeriod = Math.Max(1, rx == 1 ? waterfall_update_period : rx2_waterfall_update_period);
+                double rowsPerSecond = Math.Min(fps / updatePeriod, 30.0);
+
+                // Preserve the original GPU-waterfall 95% maximum-overlap rule.
+                double maxRowsAt95Percent = sampleRate / (0.05 * fftSize);
+                if (rowsPerSecond > maxRowsAt95Percent)
+                    rowsPerSecond = maxRowsAt95Percent;
+                if (rowsPerSecond < 1.0)
+                    rowsPerSecond = 1.0;
+
+                hop = Math.Max(1, Math.Min(fftSize,
+                    (int)Math.Round(sampleRate / rowsPerSecond)));
+            }
+
+            effectiveOverlap = 1.0 - (double)hop / fftSize;
+            int slot = rx - 1;
+            if (slot >= 0 && slot < 2 &&
+                Math.Abs(effectiveOverlap - _gpuLastEffectiveOverlap[slot]) > 0.005)
+            {
+                _gpuLastEffectiveOverlap[slot] = effectiveOverlap;
+                GPUWaterfallEffectiveOverlapChanged?.Invoke(rx, effectiveOverlap);
+            }
+
+            return hop;
+        }
+
+        // 1 = exact GPU FFT row ready; 0 = healthy source waiting for overlap hop;
+        // -1 = unavailable (caller keeps the classic CPU waterfall row).
+        private static int TryGetExactGpuWaterfallDataRow(
+            int rx, int width, float[] reference, int referenceCount,
+            out float[] dataRow)
+        {
+            dataRow = null;
+            if (!ExactNativeGPURequested || console == null || !console.PowerOn ||
+                width <= 0 || width > 8192)
+                return -1;
+
+            int slot = rx - 1;
+            if (slot < 0 || slot > 1 || _exactGpuUnavailable[slot]) return -1;
+
+            bool txSource = localMox(rx) && !DisplayDuplex;
+            int sourceStream = txSource ? 2 : slot;
+
+            int fftSize = _gpuWaterfallFFTSize;
+            if (fftSize < 1024) fftSize = ExactGpuFftSize;
+            if (fftSize > 262144) fftSize = 262144;
+
+            lock (_exactGpuLock)
+            {
+                try
+                {
+                    if (!_exactGpuIqInit[sourceStream])
+                    {
+                        if (ExactGpuNative.CM_WaterfallIQ_Init(sourceStream, ExactGpuIqCapacity) <= 0)
+                        {
+                            GPUWaterfallLogger.Log("WF-PATH", "RX" + rx + " IQ init failed source=" + sourceStream + "; fallback=classicD2D");
+                            _exactGpuUnavailable[slot] = true;
+                            return -1;
+                        }
+                        ExactGpuNative.CM_WaterfallIQ_SetEnabled(sourceStream, 1);
+                        _exactGpuIqInit[sourceStream] = true;
+                    }
+
+                    if (_exactLastIqSource[slot] != sourceStream)
+                    {
+                        int oldSource = _exactLastIqSource[slot];
+                        if (oldSource >= 0 && oldSource < 3)
+                        {
+                            _exactCalOffsetBySource[slot, oldSource] = _exactCalOffset[slot];
+                            _exactCalInitBySource[slot, oldSource] = _exactCalInit[slot];
+                        }
+                        _exactLastIqSource[slot] = sourceStream;
+                        _exactCalInit[slot] = _exactCalInitBySource[slot, sourceStream];
+                        _exactCalOffset[slot] = _exactCalInit[slot] ? _exactCalOffsetBySource[slot, sourceStream] : 0f;
+
+                        // the new source kept queueing while it was not displayed (RX samples
+                        // during TX): drop that stale backlog so the first rows are live
+                        int skipped = restartExactIq(slot, sourceStream);
+                        GPUWaterfallLogger.Log("WF-PATH", "RX" + rx + " IQ source=" + (txSource ? "TX-postDSP" : "RX") +
+                            " stream=" + sourceStream + " staleSkipped=" + skipped +
+                            " cal=" + _exactCalOffset[slot].ToString("F2"));
+                    }
+
+                    // producer overflowed (consumer stalled): the queue now has a gap, so an
+                    // FFT across it would smear a broadband line - restart from live data
+                    if (ExactGpuNative.CM_WaterfallIQ_DroppedSamples(sourceStream) != 0)
+                    {
+                        int skipped = restartExactIq(slot, sourceStream);
+                        GPUWaterfallLogger.LogRateLimited("WF-SOURCE", "overflow-rx" + rx, 1000,
+                            "RX" + rx + " IQ overflow on stream " + sourceStream + "; skipped=" + skipped + ", ring restarted");
+                    }
+
+                    bool sizeChanged = !_exactGpuInit[slot] ||
+                        _exactRow[slot] == null || _exactRow[slot].Length != width ||
+                        _exactFrameI[slot] == null || _exactFrameI[slot].Length != fftSize;
+
+                    if (sizeChanged)
+                    {
+                        if (ExactGpuNative.CM_GPUWaterfallExact_Init(slot, fftSize, width) == 0)
+                        {
+                            GPUWaterfallLogger.Log("WF-SOURCE", "RX" + rx + " exact init FAILED fft=" + fftSize + " width=" + width);
+                            _exactGpuUnavailable[slot] = true;
+                            return -1;
+                        }
+                        GPUWaterfallLogger.Log("WF-SOURCE", "RX" + rx + " exact init fft=" + fftSize + " width=" + width);
+
+                        _exactGpuInit[slot] = true;
+                        _exactRingI[slot] = new float[fftSize];
+                        _exactRingQ[slot] = new float[fftSize];
+                        _exactReadI[slot] = new float[fftSize * 2];
+                        _exactReadQ[slot] = new float[fftSize * 2];
+                        _exactFrameI[slot] = new float[fftSize];
+                        _exactFrameQ[slot] = new float[fftSize];
+                        _exactRow[slot] = new float[width];
+                        _exactRowCopy[slot] = new float[width];
+                        _exactMedianScratch[slot] = new float[Math.Max(width, referenceCount)];
+                        _exactRingHead[slot] = 0;
+                        _exactRingCount[slot] = 0;
+                        _exactSampleCredit[slot] = 0;
+                        _exactFirstFill[slot] = false;
+                        _exactCalInit[slot] = false;
+                        _exactCalOffset[slot] = 0f;
+                        _exactConfiguredWindow[slot] = -1;
+                    }
+
+                    int window = (int)_gpuWaterfallWindowType;
+                    float kaiser = (float)_gpuWaterfallKaiserBeta;
+                    int magnitude = (int)_gpuWaterfallMagnitudeMode;
+                    int lanczos = _gpuWaterfallLanczosWindow;
+                    int resampling = (int)_gpuWaterfallResamplingMode;
+                    if (_exactConfiguredWindow[slot] != window ||
+                        _exactConfiguredKaiser[slot] != kaiser ||
+                        _exactConfiguredMagnitude[slot] != magnitude ||
+                        _exactConfiguredLanczos[slot] != lanczos ||
+                        _exactConfiguredResampling[slot] != resampling)
+                    {
+                        if (ExactGpuNative.CM_GPUWaterfallExact_Configure(slot, window, kaiser, magnitude, lanczos, resampling) == 0)
+                        {
+                            GPUWaterfallLogger.Log("WF-SOURCE", "RX" + rx + " configure FAILED window=" + window +
+                                " mag=" + magnitude + " lanczos=" + lanczos + " resampling=" + resampling);
+                            return -1;
+                        }
+                        GPUWaterfallLogger.Log("WF-SOURCE", "RX" + rx + " configure window=" + window +
+                            " mag=" + magnitude + " lanczos=" + lanczos + " resampling=" + resampling);
+                        _exactConfiguredWindow[slot] = window;
+                        _exactConfiguredKaiser[slot] = kaiser;
+                        _exactConfiguredMagnitude[slot] = magnitude;
+                        _exactConfiguredLanczos[slot] = lanczos;
+                        _exactConfiguredResampling[slot] = resampling;
+                    }
+
+                    int available = ExactGpuNative.CM_WaterfallIQ_Available(sourceStream);
+                    if (available > fftSize * 2)
+                    {
+                        // behind real time: keep only the newest fftSize samples. They are
+                        // contiguous, so the ring restarts cleanly with one full frame.
+                        int skipped = ExactGpuNative.CM_WaterfallIQ_Skip(sourceStream, available - fftSize);
+                        available -= skipped;
+                        _exactRingHead[slot] = 0;
+                        _exactRingCount[slot] = 0;
+                        GPUWaterfallLogger.LogRateLimited("WF-SOURCE", "backlog-rx" + rx, 1000,
+                            "RX" + rx + " IQ backlog skipped=" + skipped + " stream=" + sourceStream);
+                    }
+                    if (available > 0)
+                    {
+                        int request = Math.Min(available, fftSize * 2);
+                        int got = ExactGpuNative.CM_WaterfallIQ_Get(sourceStream, request, _exactReadI[slot], _exactReadQ[slot]);
+                        if (got > 0)
+                        {
+                            int head = _exactRingHead[slot];
+                            int count = _exactRingCount[slot];
+                            // only the newest fftSize samples survive in the ring
+                            int pos = Math.Max(0, got - fftSize);
+                            head = (head + pos) % fftSize;
+                            while (pos < got)
+                            {
+                                int run = Math.Min(got - pos, fftSize - head);
+                                // ff62e7ad convention: swap I/Q before FFT.
+                                Array.Copy(_exactReadQ[slot], pos, _exactRingI[slot], head, run);
+                                Array.Copy(_exactReadI[slot], pos, _exactRingQ[slot], head, run);
+                                head = (head + run) % fftSize;
+                                pos += run;
+                            }
+                            count = Math.Min(count + got, fftSize);
+                            _exactRingHead[slot] = head;
+                            _exactRingCount[slot] = count;
+                            _exactSampleCredit[slot] += got;
+                        }
+                    }
+
+                    if (_exactRingCount[slot] < fftSize)
+                    {
+                        GPUWaterfallLogger.LogRateLimited("WF-SOURCE", "fill-rx" + rx, 1000,
+                            "RX" + rx + " filling ring count=" + _exactRingCount[slot] + "/" + fftSize +
+                            " credit=" + _exactSampleCredit[slot]);
+                        return 0;
+                    }
+
+                    int sampleRate;
+                    if (txSource)
+                    {
+                        sampleRate = cmaster.GetChannelOutputRate(1, 0);
+                        if (sampleRate <= 0) sampleRate = cmaster.GetInputRate(1, 0);
+                    }
+                    else
+                    {
+                        sampleRate = cmaster.GetInputRate(0, slot);
+                    }
+                    if (sampleRate <= 0) sampleRate = txSource ? 192000 : (rx == 1 ? SampleRateRX1 : SampleRateRX2);
+                    if (sampleRate <= 0) sampleRate = 192000;
+
+                    int hop = CalculateExactGPUWaterfallHop(rx, fftSize, sampleRate, out double effectiveOverlap);
+                    int effectiveOverlapPercent = (int)Math.Round(effectiveOverlap * 100.0);
+
+                    if (!_exactFirstFill[slot])
+                    {
+                        _exactFirstFill[slot] = true;
+                        _exactSampleCredit[slot] = 0;
+                    }
+                    else
+                    {
+                        if (_exactSampleCredit[slot] < hop)
+                        {
+                            GPUWaterfallLogger.LogRateLimited("WF-SOURCE", "hop-rx" + rx, 1000,
+                                "RX" + rx + " waiting hop credit=" + _exactSampleCredit[slot] +
+                                " hop=" + hop + " overlap=" + effectiveOverlapPercent + "%" +
+                                " auto=" + _gpuWaterfallAutoOverlap +
+                        " source=" + (txSource ? "TX" : "RX"));
+                            return 0;
+                        }
+                        _exactSampleCredit[slot] -= hop;
+                    }
+                    int maxCredit = hop * 2;
+                    if (_exactSampleCredit[slot] > maxCredit) _exactSampleCredit[slot] = maxCredit;
+
+                    // unroll the ring oldest-first: [head..end) then [0..head)
+                    int ringHead = _exactRingHead[slot];
+                    int tail = fftSize - ringHead;
+                    Array.Copy(_exactRingI[slot], ringHead, _exactFrameI[slot], 0, tail);
+                    Array.Copy(_exactRingI[slot], 0, _exactFrameI[slot], tail, ringHead);
+                    Array.Copy(_exactRingQ[slot], ringHead, _exactFrameQ[slot], 0, tail);
+                    Array.Copy(_exactRingQ[slot], 0, _exactFrameQ[slot], tail, ringHead);
+
+                    // TX IQ is centred on the TX frequency, not the RX centre: use the TX span
+                    // like the 2D display does during MOX, or the row lands shifted by CTUN/split
+                    float lowHz = txSource ? TXDisplayLow : rx == 1 ? RXDisplayLow : RX2DisplayLow;
+                    float highHz = txSource ? TXDisplayHigh : rx == 1 ? RXDisplayHigh : RX2DisplayHigh;
+
+                    int result = ExactGpuNative.CM_GPUWaterfallExact_Process(
+                        slot, sampleRate, lowHz, highHz,
+                        _exactFrameI[slot], _exactFrameQ[slot], fftSize, _exactRow[slot]);
+                    if (result != 1)
+                    {
+                        GPUWaterfallLogger.LogRateLimited("WF-SOURCE", "process-fail-rx" + rx, 1000,
+                            "RX" + rx + " process result=" + result + " sr=" + sampleRate +
+                            " fft=" + fftSize + " width=" + width);
+                        return -1;
+                    }
+                    GPUWaterfallLogger.LogRateLimited("WF-SOURCE", "ready-rx" + rx, 1000,
+                        "RX" + rx + " READY source=" + (txSource ? "TX-postDSP" : "RX") +
+                        " sr=" + sampleRate + " fft=" + fftSize +
+                        " width=" + width + " hop=" + hop + " overlap=" + effectiveOverlapPercent + "%" +
+                        " auto=" + _gpuWaterfallAutoOverlap);
+
+                    int refCount = Math.Min(referenceCount, reference == null ? 0 : reference.Length);
+                    if (refCount > 8)
+                    {
+                        float cpuMedian = ExactMedian(reference, refCount, slot);
+                        float gpuMedian = ExactMedian(_exactRow[slot], width, slot);
+                        float target = cpuMedian - gpuMedian;
+                        if (!float.IsNaN(target) && !float.IsInfinity(target) && target >= -12f && target <= 7f)
+                        {
+                            if (!_exactCalInit[slot])
+                            {
+                                _exactCalOffset[slot] = target;
+                                _exactCalInit[slot] = true;
+                            }
+                            else
+                            {
+                                float old = _exactCalOffset[slot];
+                                float next = old * 0.9f + target * 0.1f;
+                                if (next > old + 1f) next = old + 1f;
+                                if (next < old - 1f) next = old - 1f;
+                                _exactCalOffset[slot] = next;
+                            }
+                        }
+                    }
+
+                    float offset = _exactCalOffset[slot];
+                    float rowMin = float.PositiveInfinity;
+                    float rowMax = float.NegativeInfinity;
+                    int finiteCount = 0;
+                    for (int i = 0; i < width; i++)
+                    {
+                        float v = _exactRow[slot][i] + offset;
+                        _exactRowCopy[slot][i] = v;
+                        if (!float.IsNaN(v) && !float.IsInfinity(v))
+                        {
+                            finiteCount++;
+                            if (v < rowMin) rowMin = v;
+                            if (v > rowMax) rowMax = v;
+                        }
+                    }
+
+                    GPUWaterfallLogger.LogRateLimited("WF-DATA", "rx" + rx, 1000,
+                        "RX" + rx +
+                        " finite=" + finiteCount + "/" + width +
+                        " min=" + (finiteCount > 0 ? rowMin.ToString("F1") : "NaN") +
+                        " max=" + (finiteCount > 0 ? rowMax.ToString("F1") : "NaN") +
+                        " span=" + (finiteCount > 0 ? (rowMax - rowMin).ToString("F1") : "NaN") +
+                        " cal=" + offset.ToString("F2"));
+
+                    dataRow = _exactRowCopy[slot];
+                    return 1;
+                }
+                catch (Exception ex)
+                {
+                    GPUWaterfallLogger.Log("WF-SOURCE-EX", ex.ToString());
+                    Common.LogString("Exact native GPU waterfall fallback: " + ex.Message);
+                    return -1;
+                }
+            }
+        }
+
+        private static float ExactMedian(float[] source, int count, int slot)
+        {
+            if (source == null || count <= 0) return -200f;
+            int n = Math.Min(count, source.Length);
+            float[] scratch = _exactMedianScratch[slot];
+            if (scratch == null || scratch.Length < n)
+            {
+                scratch = new float[n];
+                _exactMedianScratch[slot] = scratch;
+            }
+            Array.Copy(source, scratch, n);
+            Array.Sort(scratch, 0, n);
+            int mid = n / 2;
+            return (n & 1) != 0 ? scratch[mid] : (scratch[mid - 1] + scratch[mid]) * 0.5f;
+        }
+    }
+}

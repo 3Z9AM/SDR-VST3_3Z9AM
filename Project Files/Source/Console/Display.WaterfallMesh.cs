@@ -1,0 +1,686 @@
+// Tier 3 extension - GPU mesh waterfall
+//
+// Moves the waterfall surface off the D2D bitmap-scroll path onto a Direct3D11
+// ring texture rendered straight into the shared swapchain backbuffer BEFORE the
+// D2D frame begins (same pattern as Display.Pan3DMesh.cs). The D2D bitmap path in
+// DrawWaterfallDX2D stays untouched and remains the permanent fallback (GPU
+// fallback rule 1).
+//
+// Visual contract: PIXEL-IDENTICAL to the D2D path. Row colours are still baked
+// on the CPU by the existing scheme switch (Custom/enhanced/... unchanged); this
+// module only replaces storage + scrolling + presentation:
+//   - per rx a W x rows B8G8R8A8_UNorm default-usage ring texture holds the
+//     history; one row is appended per waterfall line via a small staging texture
+//     + CopySubresourceRegion (replaces CreateBitmap + two full-height
+//     CopyFromBitmap scrolls + CopyFromMemory every line)
+//   - horizontal tuning anchoring replicates prepareWaterfallBitmapShift exactly:
+//     a cumulative pixel-shift counter advances by the same wholeShift the D2D
+//     path applies; each stored row remembers the counter value at write time and
+//     the shader re-derives the source column per row, so old content stays
+//     anchored to RF frequency and exposed strips render empty (identical to the
+//     clear strips of the scroll path). Smear mode falls out naturally: the shift
+//     output is always 0 there so the counter never advances.
+//   - presentation is one textured quad per visible pane; the pixel shader does
+//     the ring lookup, per-row anchoring and opacity (premultiplied output so the
+//     AlphaBlend state composites as SourceOver, matching DrawBitmap opacity).
+//
+// Dispatch/lifecycle:
+//   - DrawWaterfallDX2D captures per-pane geometry every frame (one-frame latency,
+//     same as CaptureMeshFrameParams) and hands freshly built rows to
+//     WaterfallMeshCommitLine when the master GPU mesh toggle is on and the render
+//     path is Hardware (Force CPU / WARP automatically disables all mesh paths).
+//   - RenderGpuWaterfall() presents captured panes pre-BeginDraw, sharing the
+//     backdrop ownership protocol with the 3D mesh pass via EnsureGpuBackdrop().
+//   - Any failure tears the ring down and returns false; the caller runs the D2D
+//     scroll code for that line and re-owns presentation seamlessly.
+using System;
+// Third-party: GPU interop via Vortice.Windows (MIT License, Copyright (c) Amer Koleci and Contributors).
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
+// Full license text ships with the app (Licenses folder) and lives in the repo under Project Files\lib\licenses\.
+using Vortice.Direct3D11;
+using Vortice.DXGI;
+using Vortice.Mathematics;
+using MapMode = Vortice.Direct3D11.MapMode;
+
+namespace Thetis
+{
+    partial class Display
+    {
+        #region GPU waterfall mesh fields
+
+        private const int WfSlotCount = 2;
+
+        // Shared-backbuffer spectrum/waterfall/overlay meshes remain disabled.
+        // The stable SDR-VST3 bandscope and the dedicated GPU waterfall pipeline
+        // are intentionally kept independent.
+        private const bool ExperimentalSharedBackbufferMeshesEnabled = false;   // index 0 = rx1, index 1 = rx2
+
+        private static bool _wfShadersBuilt;
+        private static ID3D11VertexShader _wfVS;
+        private static ID3D11PixelShader _wfPS;
+        private static ID3D11InputLayout _wfIL;
+        private static ID3D11Buffer _wfQuadVB;      // static unit quad
+        private static ID3D11Buffer _wfQuadIB;
+        private static ID3D11Buffer _wfCB;          // per-pane constants
+        private static ID3D11BlendState _wfBlend;   // premultiplied SourceOver
+        private static ID3D11RasterizerState _wfRS;
+        private static ID3D11SamplerState _wfSampPoint;
+
+        private struct WfRingState
+        {
+            public ID3D11Texture2D RowsTex;         // Width x Rows, native waterfall history
+            public ID3D11ShaderResourceView RowsSRV;
+            public Format Format;                   // BGRA8 or RGBA16F
+            public ID3D11Texture2D AnchorTex;       // 1 x Rows, R32Float
+            public ID3D11ShaderResourceView AnchorSRV;
+            public ID3D11Texture2D PhaseTex;        // Width x Rows BGRA8, phase view colours (alpha 0 = none)
+            public ID3D11ShaderResourceView PhaseSRV;
+            public bool PhaseOn;                    // PhaseTex wiped since the phase view was last enabled
+            public int Width;                       // built dimensions
+            public int Rows;
+            public int Head;                        // next row to write
+            public int ValidRows;                   // rows written since last clear
+            public double CumAnchor;                // cumulative tuning-shift counter (px)
+            public bool MeshOwnsPane;               // true while GPU path owns presentation
+        }
+        private static readonly WfRingState[] _wf = new WfRingState[WfSlotCount];
+
+        /// <summary>Per-frame pane geometry captured by DrawWaterfallDX2D, consumed
+        /// by the pre-BeginDraw pass of the NEXT frame.</summary>
+        private struct WfPaneParams
+        {
+            public bool Valid;
+            public float Shift, W, H;
+        }
+        private static readonly WfPaneParams[] _wfPane = new WfPaneParams[WfSlotCount];
+
+        #endregion
+
+        #region GPU waterfall mesh control
+
+        /// <summary>Native Vortice waterfall gate.
+        /// This path is deliberately independent of the legacy shared-backbuffer
+        /// experimental switch and of the old SharpDX WaterfallGPURenderer.
+        /// It is armed only for the stable ExactGPU source on the live Vortice D3D11
+        /// device.  Bit10 remains on the classic D2D fallback until a typed-UAV path
+        /// is validated for R10G10B10A2.</summary>
+        private static bool WfMeshArmed
+        {
+            get
+            {
+                bool supportedDepth =
+                    WaterfallEnhancer.Depth == WaterfallEnhancer.ColorDepth.Bit8 ||
+                    WaterfallEnhancer.Depth == WaterfallEnhancer.ColorDepth.Bit16;
+                // This is the new native Vortice waterfall owner.  It must not
+                // depend on GpuComputeEnabled, which belongs to the old experimental
+                // readback compute path and may legitimately be persisted OFF.
+                return supportedDepth && ExactNativeGPURequested &&
+                    !m_bForceCPURendering &&
+                    m_eRenderPath == DXRenderPath.Hardware && _device != null && _bDX2Setup;
+            }
+        }
+
+        private static Format NativeWaterfallFormat =>
+            WaterfallEnhancer.Depth == WaterfallEnhancer.ColorDepth.Bit16
+                ? Format.R16G16B16A16_Float
+                : Format.B8G8R8A8_UNorm;
+
+        /// <summary>True while the GPU ring owns presentation of this rx's pane (the
+        /// D2D DrawBitmap present is skipped). Cleared automatically on any failure
+        /// so the D2D path takes back over.</summary>
+        private static bool WfMeshOwnsPane(int rx)
+        {
+            return _wf[rx == 2 ? 1 : 0].MeshOwnsPane;
+        }
+
+        private static void CaptureWaterfallPaneParams(int nVerticalShift, int W, int H, int rx)
+        {
+            _wfPane[rx == 2 ? 1 : 0] = new WfPaneParams
+            {
+                Valid = true,
+                Shift = nVerticalShift,
+                W = W,
+                H = H,
+            };
+        }
+
+        private static void ClearWaterfallPaneCaptures()
+        {
+            _wfPane[0].Valid = false;
+            _wfPane[1].Valid = false;
+        }
+
+        #endregion
+
+        #region GPU waterfall mesh HLSL
+
+        private const string WF_HLSL = @"
+            cbuffer WfCB : register(b0)
+            {
+                float4 CB_Geom;    // paneX, paneY, paneW, paneH (px)
+                float4 CB_Target;  // targetW, targetH, texW, texH
+                float4 CB_State;   // head, validRows, anchorNow, opacity
+                float4 CB_Phase;   // x: 1 = phase view (hue from WfPhaseTex, brightness from the waterfall)
+            };
+
+            Texture2D WfRowsTex : register(t0);
+            Texture2D WfAnchorTex : register(t1);
+            Texture2D WfPhaseTex : register(t2);
+            SamplerState WfPointSamp : register(s0);
+
+            struct WFOUT
+            {
+                float4 pos : SV_POSITION;
+                float2 px : TEXCOORD0;   // pixel coords within the pane
+            };
+
+            WFOUT vs_wf(float2 uv : POSITION)
+            {
+                WFOUT o;
+                float2 p = CB_Geom.xy + uv * CB_Geom.zw;
+                o.pos = float4(p.x / CB_Target.x * 2.0 - 1.0, 1.0 - p.y / CB_Target.y * 2.0, 0.0, 1.0);
+                o.px = uv * CB_Geom.zw;
+                return o;
+            }
+
+            // Ring lookup: screen row -> age -> ring row; screen column -> write-time
+            // column via the row's stored tuning anchor. Rows outside the valid window
+            // or columns outside [0,texW) return transparent black, invisible under
+            // premultiplied SourceOver - matches the cleared strips of the D2D scroll.
+            // Rows are baked BGRA pixels with alpha 255, so col.a is 1 for real data.
+            float4 ps_wf(WFOUT i) : SV_Target
+            {
+                float x = floor(i.px.x);
+                float age = floor(i.px.y);          // 0 = newest line (top of pane)
+
+                if (age >= CB_State.y) return float4(0, 0, 0, 0);
+
+                float rr = CB_State.x - 1.0 - age;  // ring row of this age
+                rr = (rr < 0.0) ? rr + CB_Target.w : rr;
+                float v = (rr + 0.5) / CB_Target.w;
+
+                float anch = WfAnchorTex.SampleLevel(WfPointSamp, float2(0.5, v), 0).r;
+                float cw = x - (CB_State.z - anch); // write-time source column
+                if (cw < 0.0 || cw >= CB_Target.z) return float4(0, 0, 0, 0);
+
+                float u = (floor(cw) + 0.5) / CB_Target.z;
+                float4 col = WfRowsTex.SampleLevel(WfPointSamp, float2(u, v), 0);
+                if (CB_Phase.x > 0.5)
+                {
+                    float4 pc = WfPhaseTex.SampleLevel(WfPointSamp, float2(u, v), 0);
+                    if (pc.a > 0.5) col.rgb = pc.rgb * saturate(max(col.r, max(col.g, col.b)));
+                }
+
+                float a = col.a * saturate(CB_State.w);
+                return float4(col.rgb * a, a);      // premultiplied SourceOver
+            }
+            ";
+
+        #endregion
+
+        #region GPU waterfall mesh implementation
+
+        private static void ReleaseWaterfallMeshObjects()
+        {
+            for (int i = 0; i < WfSlotCount; i++) ReleaseWaterfallRing(ref _wf[i]);
+            _wfIL?.Dispose(); _wfIL = null;
+            _wfVS?.Dispose(); _wfVS = null;
+            _wfPS?.Dispose(); _wfPS = null;
+            _wfQuadVB?.Dispose(); _wfQuadVB = null;
+            _wfQuadIB?.Dispose(); _wfQuadIB = null;
+            _wfCB?.Dispose(); _wfCB = null;
+            _wfBlend?.Dispose(); _wfBlend = null;
+            _wfRS?.Dispose(); _wfRS = null;
+            _wfSampPoint?.Dispose(); _wfSampPoint = null;
+            _wfShadersBuilt = false;
+        }
+
+        private static void ReleaseWaterfallRing(ref WfRingState r)
+        {
+            r.RowsSRV?.Dispose();
+            r.RowsTex?.Dispose();
+            r.AnchorSRV?.Dispose();
+            r.AnchorTex?.Dispose();
+            r.PhaseSRV?.Dispose();
+            r.PhaseTex?.Dispose();
+            r.RowsTex = null; r.RowsSRV = null;
+            r.AnchorTex = null; r.AnchorSRV = null;
+            r.PhaseTex = null; r.PhaseSRV = null;
+            r.PhaseOn = false;
+            r.Width = 0; r.Rows = 0; r.Format = Format.Unknown;
+            r.Head = 0; r.ValidRows = 0;
+            r.CumAnchor = 0;
+            r.MeshOwnsPane = false;
+        }
+
+        private static bool BuildWaterfallPipeline(ID3D11Device device)
+        {
+            if (_wfShadersBuilt) return true;
+            try
+            {
+                byte[] vsBytes = Vortice.D3DCompiler.Compiler.Compile(WF_HLSL, "vs_wf", "waterfallmesh.hlsl", "vs_5_0",
+                    Vortice.D3DCompiler.ShaderFlags.None, Vortice.D3DCompiler.EffectFlags.None).ToArray();
+                byte[] psBytes = Vortice.D3DCompiler.Compiler.Compile(WF_HLSL, "ps_wf", "waterfallmesh.hlsl", "ps_5_0",
+                    Vortice.D3DCompiler.ShaderFlags.None, Vortice.D3DCompiler.EffectFlags.None).ToArray();
+                _wfVS = device.CreateVertexShader(vsBytes, null);
+                _wfPS = device.CreatePixelShader(psBytes);
+                _wfIL = device.CreateInputLayout(new Vortice.Direct3D11.InputElementDescription[]
+                {
+                    new Vortice.Direct3D11.InputElementDescription("POSITION", 0, Format.R32G32_Float, 0, 0),
+                }, vsBytes);
+
+                float[] quad = new float[] { 0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f };
+                uint[] idx = new uint[] { 0, 1, 2, 2, 1, 3 };
+                _wfQuadVB = device.CreateBuffer(quad, new BufferDescription(
+                    (uint)(quad.Length * sizeof(float)), BindFlags.VertexBuffer, ResourceUsage.Immutable));
+                _wfQuadIB = device.CreateBuffer(idx, new BufferDescription(
+                    (uint)(idx.Length * sizeof(uint)), BindFlags.IndexBuffer, ResourceUsage.Immutable));
+
+                _wfCB = device.CreateBuffer(new BufferDescription(64, BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write));
+                _wfBlend = device.CreateBlendState(Vortice.Direct3D11.BlendDescription.AlphaBlend);
+                _wfRS = device.CreateRasterizerState(new Vortice.Direct3D11.RasterizerDescription(CullMode.None, Vortice.Direct3D11.FillMode.Solid));
+                _wfSampPoint = device.CreateSamplerState(new SamplerDescription(
+                    Vortice.Direct3D11.Filter.MinMagMipPoint, TextureAddressMode.Clamp, TextureAddressMode.Clamp, TextureAddressMode.Clamp));
+
+                _wfShadersBuilt = true;
+                return true;
+            }
+            catch (Exception e)
+            {
+                Common.MeshDiagLog("GPU waterfall mesh: pipeline build failed - " + e.Message);
+                ReleaseWaterfallMeshObjects();
+                return false;
+            }
+        }
+
+        /// <summary>Builds (or rebuilds on dimension change) the ring textures for a
+        /// slot. Rebuild clears history - same as a width-change clear on the D2D
+        /// path; height-only changes are handled by rebuilding too (the D2D path
+        /// stretches stale content instead, mesh starts fresh).</summary>
+        private static bool EnsureWaterfallRing(ID3D11Device device, int slot, int width, int rows)
+        {
+            return EnsureWaterfallRing(device, slot, width, rows, Format.B8G8R8A8_UNorm);
+        }
+
+        private static bool EnsureWaterfallRing(ID3D11Device device, int slot, int width, int rows, Format format)
+        {
+            ref WfRingState r = ref _wf[slot];
+            if (r.RowsTex != null && r.Width == width && r.Rows == rows && r.Format == format) return true;
+
+            var n = new WfRingState();
+            try
+            {
+                n.RowsTex = CreateRingTexture(device, width, rows, format);
+                n.RowsSRV = device.CreateShaderResourceView(n.RowsTex);
+                n.AnchorTex = CreateRingTexture(device, 1, rows, Format.R32_Float);
+                n.AnchorSRV = device.CreateShaderResourceView(n.AnchorTex);
+                n.PhaseTex = CreateRingTexture(device, width, rows, Format.B8G8R8A8_UNorm);
+                n.PhaseSRV = device.CreateShaderResourceView(n.PhaseTex);
+                n.Width = width;
+                n.Rows = rows;
+                n.Format = format;
+
+                // height-only change (window resize): carry the newest rows over instead of starting empty
+                if (r.RowsTex != null && r.Width == width && r.Format == format && r.ValidRows > 0)
+                {
+                    int keep = Math.Min(r.ValidRows, rows);
+                    CopyNewestRows(device.ImmediateContext, ref r, ref n, keep);
+                    n.ValidRows = keep;
+                    n.Head = keep % rows;
+                    n.CumAnchor = r.CumAnchor;
+                    n.MeshOwnsPane = r.MeshOwnsPane;
+                    n.PhaseOn = r.PhaseOn;
+                }
+            }
+            catch (Exception e)
+            {
+                Common.MeshDiagLog("GPU waterfall mesh: ring build failed (" + width + "x" + rows + ") - " + e.Message);
+                ReleaseWaterfallRing(ref n);
+                ReleaseWaterfallRing(ref r);
+                return false;
+            }
+
+            ReleaseWaterfallRing(ref r);
+            r = n;
+            return true;
+        }
+
+        private static ID3D11Texture2D CreateRingTexture(ID3D11Device device, int width, int rows, Format format)
+        {
+            return device.CreateTexture2D(new Texture2DDescription()
+            {
+                Width = (uint)width,
+                Height = (uint)rows,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = format,
+                SampleDescription = new SampleDescription(1, 0),
+                Usage = ResourceUsage.Default,
+                BindFlags = BindFlags.ShaderResource,
+            });
+        }
+
+        // copies the newest 'keep' rows of src (oldest first) to rows 0..keep-1 of dst;
+        // the ring wraps, so that is at most two contiguous blocks
+        private static void CopyNewestRows(ID3D11DeviceContext dc, ref WfRingState src, ref WfRingState dst, int keep)
+        {
+            int start = (src.Head - keep + src.Rows) % src.Rows;
+            int first = Math.Min(keep, src.Rows - start);
+            CopyRingBlock(dc, ref src, ref dst, start, 0, first);
+            if (keep > first) CopyRingBlock(dc, ref src, ref dst, 0, first, keep - first);
+        }
+
+        private static void CopyRingBlock(ID3D11DeviceContext dc, ref WfRingState src, ref WfRingState dst, int srcRow, int dstRow, int count)
+        {
+            dc.CopySubresourceRegion(dst.RowsTex, 0, 0u, (uint)dstRow, 0u, src.RowsTex, 0,
+                new Box(0, srcRow, 0, src.Width, srcRow + count, 1));
+            dc.CopySubresourceRegion(dst.AnchorTex, 0, 0u, (uint)dstRow, 0u, src.AnchorTex, 0,
+                new Box(0, srcRow, 0, 1, srcRow + count, 1));
+            dc.CopySubresourceRegion(dst.PhaseTex, 0, 0u, (uint)dstRow, 0u, src.PhaseTex, 0,
+                new Box(0, srcRow, 0, src.Width, srcRow + count, 1));
+        }
+
+        private struct WfConstants
+        {
+            public float PaneX, PaneY, PaneW, PaneH;    // 0-15
+            public float TargetW, TargetH, TexW, TexH;  // 16-31
+            public float Head, ValidRows, AnchorNow, Opacity; // 32-47
+            public float Phase, Pad0, Pad1, Pad2;       // 48-63
+        }
+
+        /// <summary>
+        /// Hands one freshly coloured waterfall line to the GPU ring. Called from
+        /// DrawWaterfallDX2D INSTEAD of the D2D bitmap scroll when armed; returns
+        /// false (caller then runs the D2D code) whenever anything is off. The GPU
+        /// path takes over presentation of the pane with the FIRST committed row;
+        /// hold frames (addRow=false) are handled internally once it owns the pane.
+        /// </summary>
+        /// <param name="row">BGRA bytes, W*4 long, exactly as built for CopyFromMemory</param>
+        /// <param name="paneRows">ring height for this pane = H - 20</param>
+        /// <param name="addRow">false = tuning-settle hold: advance anchors only</param>
+        /// <param name="shiftPixels">wholeShift from prepareWaterfallBitmapShift</param>
+        /// <param name="clearExisting">width-change/full-clear request from same</param>
+        private static bool WaterfallMeshCommitLine(int rx, byte[] row, int paneRows, bool addRow, int shiftPixels, bool clearExisting)
+        {
+            // Legacy CPU-coloured upload remains only as an 8-bit emergency fallback.
+            // The primary native path copies the compute-shader row texture directly,
+            // without GPU->CPU readback.
+            if (!WfMeshArmed || WaterfallEnhancer.Depth != WaterfallEnhancer.ColorDepth.Bit8)
+            {
+                SetOwns(rx, false);
+                return false;
+            }
+
+            int slot = rx == 2 ? 1 : 0;
+            try
+            {
+                ID3D11DeviceContext dc = _device.ImmediateContext;
+                if (!BuildWaterfallPipeline(_device)) { SetOwns(rx, false); return false; }
+
+                ref WfRingState r = ref _wf[slot];
+                int width = row.Length / 4;
+
+                // anchor bookkeeping first - mirrors the order the D2D path applies:
+                // clear wipes history, shifts re-anchor existing content, then the new
+                // row is written under the post-shift counter value
+                if (clearExisting)
+                {
+                    r.ValidRows = 0;
+                    r.CumAnchor = 0;
+                }
+                else
+                {
+                    r.CumAnchor += shiftPixels;
+                }
+
+                if (!EnsureWaterfallRing(_device, slot, width, Math.Max(2, paneRows)))
+                {
+                    SetOwns(rx, false);
+                    return false;
+                }
+
+                if (addRow)
+                {
+                    UploadRow(dc, ref r, row);
+                    UploadPhaseRow(dc, ref r, slot);
+                    UploadAnchor(dc, ref r, (float)r.CumAnchor, r.Head);
+                    r.Head = (r.Head + 1) % r.Rows;
+                    if (r.ValidRows < r.Rows) r.ValidRows++;
+                    r.MeshOwnsPane = true;   // GPU owns presentation from here on
+                }
+
+                return r.MeshOwnsPane;
+            }
+            catch (Exception e)
+            {
+                Common.MeshDiagLog("GPU waterfall mesh: commit failed - falling back to D2D : " + e.Message);
+                ReleaseWaterfallRing(ref _wf[slot]);
+                SetOwns(rx, false);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Commits a GPU-coloured W x 1 texture directly into the native Vortice
+        /// waterfall history ring.  No SharpDX wrapper, D2D bitmap, event-query
+        /// wait or GPU->CPU readback is involved.
+        /// </summary>
+        private static bool WaterfallMeshCommitGpuTexture(
+            int rx,
+            ID3D11Texture2D gpuRow,
+            int width,
+            int paneRows,
+            bool addRow,
+            int shiftPixels,
+            bool clearExisting,
+            Format format)
+        {
+            if (!WfMeshArmed || gpuRow == null)
+            {
+                SetOwns(rx, false);
+                return false;
+            }
+
+            int slot = rx == 2 ? 1 : 0;
+            try
+            {
+                ID3D11DeviceContext dc = _device.ImmediateContext;
+                if (!BuildWaterfallPipeline(_device))
+                {
+                    SetOwns(rx, false);
+                    return false;
+                }
+
+                ref WfRingState r = ref _wf[slot];
+
+                if (clearExisting)
+                {
+                    r.ValidRows = 0;
+                    r.CumAnchor = 0;
+                }
+                else
+                {
+                    r.CumAnchor += shiftPixels;
+                }
+
+                if (!EnsureWaterfallRing(_device, slot, width, Math.Max(2, paneRows), format))
+                {
+                    SetOwns(rx, false);
+                    return false;
+                }
+
+                if (addRow)
+                {
+                    // GPU command ordering on the immediate context guarantees that
+                    // the preceding compute dispatch completes before this copy.
+                    dc.CopySubresourceRegion(
+                        (ID3D11Resource)r.RowsTex, 0,
+                        0u, (uint)r.Head, 0u,
+                        (ID3D11Resource)gpuRow, 0, null);
+
+                    UploadPhaseRow(dc, ref r, slot);
+                    UploadAnchor(dc, ref r, (float)r.CumAnchor, r.Head);
+                    r.Head = (r.Head + 1) % r.Rows;
+                    if (r.ValidRows < r.Rows) r.ValidRows++;
+                    r.MeshOwnsPane = true;
+                }
+
+                return r.MeshOwnsPane;
+            }
+            catch (Exception e)
+            {
+                GPUWaterfallLogger.Log("WF-NATIVE-FAIL",
+                    "RX" + rx + " direct ring commit failed: " + e);
+                ReleaseWaterfallRing(ref _wf[slot]);
+                SetOwns(rx, false);
+                return false;
+            }
+        }
+
+        private static void SetOwns(int rx, bool owns)
+        {
+            _wf[rx == 2 ? 1 : 0].MeshOwnsPane = owns;
+        }
+
+        // UpdateSubresource lets the driver version the upload, so the CPU never waits for
+        // the GPU to finish reading a shared staging texture from the previous row
+        private static void UploadRow(ID3D11DeviceContext dc, ref WfRingState r, byte[] row)
+        {
+            dc.UpdateSubresource(new ReadOnlySpan<byte>(row, 0, r.Width * 4), r.RowsTex, 0, (uint)(r.Width * 4), 0,
+                new Box(0, r.Head, 0, r.Width, r.Head + 1, 1));
+        }
+
+        // phase view colours of the row being written (RX1 only). Nothing is uploaded while
+        // the view is off; turning it on wipes the texture (alpha 0 = normal colours), so rows
+        // written while it was off never show stale phase.
+        private static uint[] _wfPhaseRow;
+        private static void UploadPhaseRow(ID3D11DeviceContext dc, ref WfRingState r, int slot)
+        {
+            if (slot != 0 || !_waterfallPhaseView)
+            {
+                r.PhaseOn = false;
+                return;
+            }
+            uint pitch = (uint)(r.Width * 4);
+            if (!r.PhaseOn)
+            {
+                dc.UpdateSubresource(new ReadOnlySpan<uint>(new uint[r.Width * r.Rows]), r.PhaseTex, 0, pitch);
+                r.PhaseOn = true;
+            }
+            if (_wfPhaseRow == null || _wfPhaseRow.Length != r.Width) _wfPhaseRow = new uint[r.Width];
+            FillPhaseColours(_wfPhaseRow, r.Width);
+            dc.UpdateSubresource(new ReadOnlySpan<uint>(_wfPhaseRow), r.PhaseTex, 0, pitch, 0,
+                new Box(0, r.Head, 0, r.Width, r.Head + 1, 1));
+        }
+
+        private static void UploadAnchor(ID3D11DeviceContext dc, ref WfRingState r, float anchor, int ringRow)
+        {
+            dc.UpdateSubresource(in anchor, r.AnchorTex, 0, 4u, 0, new Box(0, ringRow, 0, 1, ringRow + 1, 1));
+        }
+
+        /// <summary>
+        /// Pre-BeginDraw pass: renders every captured waterfall pane into the
+        /// swapchain backbuffer. Returns true when at least one pane was drawn (the
+        /// frame must then skip the D2D global clear/background block). Runs under
+        /// _objDX2Lock alongside RenderGpuMesh3D().
+        /// </summary>
+        private static bool RenderGpuWaterfall()
+        {
+            if (!WfMeshArmed) return false;
+            if (_paused_display) return false;
+
+            bool drew = false;
+            try
+            {
+                for (int slot = 0; slot < WfSlotCount; slot++)
+                {
+                    if (!_wfPane[slot].Valid) continue;
+                    if (!RenderWaterfallPane(slot)) continue;
+                    drew = true;
+                }
+
+                if (drew)
+                {
+                    _device.ImmediateContext.Flush();
+                    if (!_wfLoggedActive)
+                    {
+                        _wfLoggedActive = true;
+                        Common.MeshDiagLog("GPU waterfall mesh active");
+                    }
+                }
+                return drew;
+            }
+            catch (Exception e)
+            {
+                Common.MeshDiagLog("GPU waterfall mesh: render failed - falling back to D2D bitmap : " + e.Message);
+                ReleaseWaterfallMeshObjects();
+                ClearWaterfallPaneCaptures();
+                return false;
+            }
+        }
+
+        private static bool _wfLoggedActive;
+        private static readonly ID3D11RenderTargetView[] _wfRtvArg = new ID3D11RenderTargetView[1];
+        private static readonly ID3D11SamplerState[] _wfSampArg = new ID3D11SamplerState[1];
+
+        private static bool RenderWaterfallPane(int slot)
+        {
+            WfPaneParams p = _wfPane[slot];
+            ref WfRingState r = ref _wf[slot];
+            // SetOwns(false) is the authoritative fallback boundary. Never present a
+            // stale GPU ring after the exact source/compute path has failed.
+            if (!r.MeshOwnsPane || r.RowsTex == null || r.RowsSRV == null || r.AnchorSRV == null || r.ValidRows == 0) return false;
+            if (!EnsureMeshRTV(_device)) return false;
+
+            ID3D11DeviceContext dc = _device.ImmediateContext;
+
+            // backdrop ownership: skin image prepass or full background clear,
+            // exactly once per frame across all mesh passes
+            EnsureGpuBackdrop(dc);
+
+            float paneH = p.H - 20;   // top 20px of the pane stay with D2D, like DrawBitmap
+            var cb = new WfConstants
+            {
+                PaneX = 0f,
+                PaneY = p.Shift + 20f,
+                PaneW = p.W,
+                PaneH = paneH,
+                TargetW = displayTargetWidth,
+                TargetH = displayTargetHeight,
+                TexW = r.Width,
+                TexH = r.Rows,
+                Head = r.Head,
+                ValidRows = r.ValidRows,
+                AnchorNow = (float)r.CumAnchor,
+                Opacity = slot == 0 ? m_fRX1WaterfallOpacity : m_fRX2WaterfallOpacity,
+                Phase = slot == 0 && _waterfallPhaseView ? 1f : 0f,
+            };
+            MappedSubresource cbMap = dc.Map((ID3D11Resource)_wfCB, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
+            unsafe { System.Runtime.CompilerServices.Unsafe.Write((void*)cbMap.DataPointer, cb); }
+            dc.Unmap((ID3D11Resource)_wfCB, 0);
+
+            _wfRtvArg[0] = _meshRTV;
+            _wfSampArg[0] = _wfSampPoint;
+            dc.OMSetRenderTargets(_wfRtvArg, null);
+            dc.IASetInputLayout(_wfIL);
+            dc.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
+            dc.IASetVertexBuffer(0, _wfQuadVB, 8, 0);
+            dc.IASetIndexBuffer(_wfQuadIB, Format.R32_UInt, 0);
+            dc.VSSetShader(_wfVS);
+            dc.VSSetConstantBuffer(0, _wfCB);
+            dc.PSSetShader(_wfPS);
+            dc.PSSetConstantBuffer(0, _wfCB);
+            dc.PSSetShaderResource(0, r.RowsSRV);
+            dc.PSSetShaderResource(1, r.AnchorSRV);
+            dc.PSSetShaderResource(2, r.PhaseSRV);
+            dc.PSSetSamplers(0, _wfSampArg);
+            dc.OMSetBlendState(_wfBlend);
+            dc.RSSetState(_wfRS);
+            dc.RSSetViewport(new Viewport(0f, 0f, displayTargetWidth, displayTargetHeight));
+            dc.DrawIndexed(6, 0, 0);
+            return true;
+        }
+
+        #endregion
+    }
+}

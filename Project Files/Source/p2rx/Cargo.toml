@@ -1,0 +1,15 @@
+[package]
+name = "p2rx"
+version = "0.1.0"
+edition = "2021"
+description = "Protocol 2 receive-packet parsing for ChannelMaster (bounds-checked)"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+
+[profile.dev]
+panic = "abort"

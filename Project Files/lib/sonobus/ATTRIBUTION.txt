@@ -1,0 +1,9 @@
+SonoBus 1.7.2 (VST3 plugin)
+Copyright (C) Jesse Chappell / Sonosaurus LLC
+https://sonobus.net
+
+Licensed under the GNU General Public License version 3 (see LICENSE-GPL-3.0.txt).
+Source code for this version: https://github.com/sonosaurus/sonobus (release 1.7.2).
+
+Shipped unmodified as the Windows x64 VST3 binary from the official SonoBus installer,
+for use in the SDR-VST3 RX/TX VST chains (network audio without virtual cables).

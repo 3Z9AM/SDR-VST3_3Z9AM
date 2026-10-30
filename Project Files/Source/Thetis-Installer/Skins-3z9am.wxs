@@ -1,0 +1,1483 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="AppDataFolder">
+      <Directory Id="OpenHPSDRAppData" Name="OpenHPSDR">
+        <Directory Id="SkinsDir" Name="Skins">
+          <Directory Id="Z9AMSkinDir" Name="3z9am">
+            <Directory Id="Z9AMConsoleDir" Name="Console" />
+            <Directory Id="Z9AMMetersDir" Name="Meters" />
+          </Directory>
+        </Directory>
+      </Directory>
+    </DirectoryRef>
+  </Fragment>
+  <Fragment>
+    <ComponentGroup Id="Z9AMSkinComponents">
+      <Component Id="Z9AM_c_0001" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0001" Source="Skins\3z9am\Console\btnBandHF-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0002" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0002" Source="Skins\3z9am\Console\btnBandHF-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0003" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0003" Source="Skins\3z9am\Console\btnBandHF1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0004" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0004" Source="Skins\3z9am\Console\btnBandHF1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0005" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0005" Source="Skins\3z9am\Console\btnBandVHF-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0006" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0006" Source="Skins\3z9am\Console\btnBandVHF-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0007" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0007" Source="Skins\3z9am\Console\btnDisplayPanCenter-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0008" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0008" Source="Skins\3z9am\Console\btnDisplayPanCenter-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0009" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0009" Source="Skins\3z9am\Console\btnDisplayZTB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0010" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0010" Source="Skins\3z9am\Console\btnDisplayZTB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0011" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0011" Source="Skins\3z9am\Console\btnFilterShiftReset-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0012" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0012" Source="Skins\3z9am\Console\btnFilterShiftReset-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0013" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0013" Source="Skins\3z9am\Console\btnFMMemory-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0014" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0014" Source="Skins\3z9am\Console\btnFMMemory-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0015" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0015" Source="Skins\3z9am\Console\btnFMMemoryDown-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0016" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0016" Source="Skins\3z9am\Console\btnFMMemoryDown-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0017" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0017" Source="Skins\3z9am\Console\btnFMMemoryUp-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0018" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0018" Source="Skins\3z9am\Console\btnFMMemoryUp-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0019" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0019" Source="Skins\3z9am\Console\btnIFtoVFO-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0020" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0020" Source="Skins\3z9am\Console\btnIFtoVFO-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0021" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0021" Source="Skins\3z9am\Console\btnMemoryQuickRestore-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0022" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0022" Source="Skins\3z9am\Console\btnMemoryQuickRestore-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0023" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0023" Source="Skins\3z9am\Console\btnMemoryQuickSave-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0024" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0024" Source="Skins\3z9am\Console\btnMemoryQuickSave-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0025" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0025" Source="Skins\3z9am\Console\btnRITReset-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0026" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0026" Source="Skins\3z9am\Console\btnRITReset-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0027" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0027" Source="Skins\3z9am\Console\btnTNFAdd-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0028" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0028" Source="Skins\3z9am\Console\btnTNFAdd-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0029" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0029" Source="Skins\3z9am\Console\btnTuneStepChangeLarger-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0030" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0030" Source="Skins\3z9am\Console\btnTuneStepChangeLarger-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0031" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0031" Source="Skins\3z9am\Console\btnTuneStepChangeSmaller-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0032" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0032" Source="Skins\3z9am\Console\btnTuneStepChangeSmaller-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0033" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0033" Source="Skins\3z9am\Console\btnVFOAtoB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0034" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0034" Source="Skins\3z9am\Console\btnVFOAtoB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0035" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0035" Source="Skins\3z9am\Console\btnVFOBtoA-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0036" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0036" Source="Skins\3z9am\Console\btnVFOBtoA-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0037" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0037" Source="Skins\3z9am\Console\btnVFOSwap-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0038" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0038" Source="Skins\3z9am\Console\btnVFOSwap-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0039" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0039" Source="Skins\3z9am\Console\btnXITReset-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0040" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0040" Source="Skins\3z9am\Console\btnXITReset-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0041" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0041" Source="Skins\3z9am\Console\btnZeroBeat-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0042" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0042" Source="Skins\3z9am\Console\btnZeroBeat-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0043" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0043" Source="Skins\3z9am\Console\chk2TONE-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0044" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0044" Source="Skins\3z9am\Console\chk2TONE-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0045" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0045" Source="Skins\3z9am\Console\chkANF-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0046" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0046" Source="Skins\3z9am\Console\chkANF-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0047" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0047" Source="Skins\3z9am\Console\chkBCI-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0048" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0048" Source="Skins\3z9am\Console\chkBCI-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0049" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0049" Source="Skins\3z9am\Console\chkBIN-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0050" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0050" Source="Skins\3z9am\Console\chkBIN-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0051" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0051" Source="Skins\3z9am\Console\chkCPDR-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0052" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0052" Source="Skins\3z9am\Console\chkCPDR-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0053" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0053" Source="Skins\3z9am\Console\chkCWAPFEnabled-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0054" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0054" Source="Skins\3z9am\Console\chkCWAPFEnabled-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0055" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0055" Source="Skins\3z9am\Console\chkCWVAC-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0056" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0056" Source="Skins\3z9am\Console\chkCWVAC-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0057" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0057" Source="Skins\3z9am\Console\chkDisplayAVG-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0058" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0058" Source="Skins\3z9am\Console\chkDisplayAVG-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0059" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0059" Source="Skins\3z9am\Console\chkDisplayPeak-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0060" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0060" Source="Skins\3z9am\Console\chkDisplayPeak-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0061" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0061" Source="Skins\3z9am\Console\chkDSPNB2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0062" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0062" Source="Skins\3z9am\Console\chkDSPNB2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0063" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0063" Source="Skins\3z9am\Console\chkDX-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0064" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0064" Source="Skins\3z9am\Console\chkDX-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0065" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0065" Source="Skins\3z9am\Console\chkEnableMultiRX-0-v2.10.0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0066" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0066" Source="Skins\3z9am\Console\chkEnableMultiRX-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0067" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0067" Source="Skins\3z9am\Console\chkEnableMultiRX-1-v2.10.0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0068" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0068" Source="Skins\3z9am\Console\chkEnableMultiRX-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0069" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0069" Source="Skins\3z9am\Console\chkExternalPA-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0070" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0070" Source="Skins\3z9am\Console\chkExternalPA-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0071" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0071" Source="Skins\3z9am\Console\chkFMCTCSS-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0072" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0072" Source="Skins\3z9am\Console\chkFMCTCSS-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0073" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0073" Source="Skins\3z9am\Console\chkFMTXHigh-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0074" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0074" Source="Skins\3z9am\Console\chkFMTXHigh-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0075" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0075" Source="Skins\3z9am\Console\chkFMTXLow-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0076" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0076" Source="Skins\3z9am\Console\chkFMTXLow-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0077" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0077" Source="Skins\3z9am\Console\chkFMTXRev-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0078" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0078" Source="Skins\3z9am\Console\chkFMTXRev-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0079" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0079" Source="Skins\3z9am\Console\chkFMTXSimplex-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0080" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0080" Source="Skins\3z9am\Console\chkFMTXSimplex-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0081" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0081" Source="Skins\3z9am\Console\chkFMVAC-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0082" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0082" Source="Skins\3z9am\Console\chkFMVAC-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0083" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0083" Source="Skins\3z9am\Console\chkFWCATU-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0084" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0084" Source="Skins\3z9am\Console\chkFWCATU-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0085" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0085" Source="Skins\3z9am\Console\chkFWCATUBypass-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0086" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0086" Source="Skins\3z9am\Console\chkFWCATUBypass-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0087" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0087" Source="Skins\3z9am\Console\chkMicMute-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0088" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0088" Source="Skins\3z9am\Console\chkMicMute-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0089" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0089" Source="Skins\3z9am\Console\chkMON-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0090" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0090" Source="Skins\3z9am\Console\chkMON-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0091" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0091" Source="Skins\3z9am\Console\chkMOX-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0092" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0092" Source="Skins\3z9am\Console\chkMOX-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0093" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0093" Source="Skins\3z9am\Console\chkMUT-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0094" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0094" Source="Skins\3z9am\Console\chkMUT-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0095" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0095" Source="Skins\3z9am\Console\chkNB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0096" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0096" Source="Skins\3z9am\Console\chkNB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0097" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0097" Source="Skins\3z9am\Console\chkNoiseGate-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0098" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0098" Source="Skins\3z9am\Console\chkNoiseGate-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0099" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0099" Source="Skins\3z9am\Console\chkNR-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0100" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0100" Source="Skins\3z9am\Console\chkNR-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0101" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0101" Source="Skins\3z9am\Console\chkPanSwap-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0102" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0102" Source="Skins\3z9am\Console\chkPanSwap-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0103" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0103" Source="Skins\3z9am\Console\chkPhoneVAC-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0104" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0104" Source="Skins\3z9am\Console\chkPhoneVAC-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0105" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0105" Source="Skins\3z9am\Console\chkPLTone-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0106" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0106" Source="Skins\3z9am\Console\chkPLTone-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0107" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0107" Source="Skins\3z9am\Console\chkPower-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0108" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0108" Source="Skins\3z9am\Console\chkPower-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0109" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0109" Source="Skins\3z9am\Console\chkQSK-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0110" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0110" Source="Skins\3z9am\Console\chkQSK-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0111" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0111" Source="Skins\3z9am\Console\chkRIT-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0112" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0112" Source="Skins\3z9am\Console\chkRIT-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0113" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0113" Source="Skins\3z9am\Console\chkRX1Preamp-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0114" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0114" Source="Skins\3z9am\Console\chkRX1Preamp-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0115" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0115" Source="Skins\3z9am\Console\chkRX2-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0116" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0116" Source="Skins\3z9am\Console\chkRX2-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0117" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0117" Source="Skins\3z9am\Console\chkRX2ANF-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0118" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0118" Source="Skins\3z9am\Console\chkRX2ANF-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0119" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0119" Source="Skins\3z9am\Console\chkRX2BIN-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0120" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0120" Source="Skins\3z9am\Console\chkRX2BIN-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0121" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0121" Source="Skins\3z9am\Console\chkRX2DisplayAVG-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0122" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0122" Source="Skins\3z9am\Console\chkRX2DisplayAVG-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0123" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0123" Source="Skins\3z9am\Console\chkRX2DisplayPeak-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0124" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0124" Source="Skins\3z9am\Console\chkRX2DisplayPeak-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0125" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0125" Source="Skins\3z9am\Console\chkRX2Mute-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0126" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0126" Source="Skins\3z9am\Console\chkRX2Mute-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0127" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0127" Source="Skins\3z9am\Console\chkRX2NB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0128" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0128" Source="Skins\3z9am\Console\chkRX2NB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0129" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0129" Source="Skins\3z9am\Console\chkRX2NB2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0130" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0130" Source="Skins\3z9am\Console\chkRX2NB2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0131" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0131" Source="Skins\3z9am\Console\chkRX2NR-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0132" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0132" Source="Skins\3z9am\Console\chkRX2NR-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0133" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0133" Source="Skins\3z9am\Console\chkRX2Preamp-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0134" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0134" Source="Skins\3z9am\Console\chkRX2Preamp-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0135" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0135" Source="Skins\3z9am\Console\chkRX2Squelch-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0136" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0136" Source="Skins\3z9am\Console\chkRX2Squelch-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0137" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0137" Source="Skins\3z9am\Console\chkRX2SR-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0138" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0138" Source="Skins\3z9am\Console\chkRX2SR-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0139" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0139" Source="Skins\3z9am\Console\chkRxAnt-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0140" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0140" Source="Skins\3z9am\Console\chkRxAnt-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0141" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0141" Source="Skins\3z9am\Console\chkRXEQ-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0142" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0142" Source="Skins\3z9am\Console\chkRXEQ-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0143" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0143" Source="Skins\3z9am\Console\chkShowTXFilter-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0144" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0144" Source="Skins\3z9am\Console\chkShowTXFilter-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0145" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0145" Source="Skins\3z9am\Console\chkSplitDisplay-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0146" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0146" Source="Skins\3z9am\Console\chkSplitDisplay-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0147" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0147" Source="Skins\3z9am\Console\chkSquelch-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0148" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0148" Source="Skins\3z9am\Console\chkSquelch-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0149" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0149" Source="Skins\3z9am\Console\chkSR-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0150" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0150" Source="Skins\3z9am\Console\chkSR-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0151" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0151" Source="Skins\3z9am\Console\chkTNF-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0152" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0152" Source="Skins\3z9am\Console\chkTNF-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0153" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0153" Source="Skins\3z9am\Console\chkTUN-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0154" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0154" Source="Skins\3z9am\Console\chkTUN-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0155" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0155" Source="Skins\3z9am\Console\chkTXEQ-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0156" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0156" Source="Skins\3z9am\Console\chkTXEQ-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0157" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0157" Source="Skins\3z9am\Console\chkVAC1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0158" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0158" Source="Skins\3z9am\Console\chkVAC1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0159" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0159" Source="Skins\3z9am\Console\chkVAC2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0160" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0160" Source="Skins\3z9am\Console\chkVAC2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0161" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0161" Source="Skins\3z9am\Console\chkVFOATX-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0162" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0162" Source="Skins\3z9am\Console\chkVFOATX-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0163" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0163" Source="Skins\3z9am\Console\chkVFOBLock-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0164" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0164" Source="Skins\3z9am\Console\chkVFOBLock-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0165" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0165" Source="Skins\3z9am\Console\chkVFOBTX-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0166" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0166" Source="Skins\3z9am\Console\chkVFOBTX-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0167" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0167" Source="Skins\3z9am\Console\chkVFOLock-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0168" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0168" Source="Skins\3z9am\Console\chkVFOLock-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0169" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0169" Source="Skins\3z9am\Console\chkVFOSplit-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0170" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0170" Source="Skins\3z9am\Console\chkVFOSplit-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0171" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0171" Source="Skins\3z9am\Console\chkVFOSync-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0172" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0172" Source="Skins\3z9am\Console\chkVFOSync-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0173" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0173" Source="Skins\3z9am\Console\chkVOX-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0174" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0174" Source="Skins\3z9am\Console\chkVOX-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0175" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0175" Source="Skins\3z9am\Console\chkX2TR-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0176" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0176" Source="Skins\3z9am\Console\chkX2TR-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0177" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0177" Source="Skins\3z9am\Console\chkXIT-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0178" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0178" Source="Skins\3z9am\Console\chkXIT-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0179" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0179" Source="Skins\3z9am\Console\ckQuickPlay-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0180" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0180" Source="Skins\3z9am\Console\ckQuickPlay-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0181" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0181" Source="Skins\3z9am\Console\ckQuickRec-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0182" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0182" Source="Skins\3z9am\Console\ckQuickRec-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0183" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0183" Source="Skins\3z9am\Console\Console.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0184" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0184" Source="Skins\3z9am\Console\infoBar_button1-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0185" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0185" Source="Skins\3z9am\Console\infoBar_button1-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0186" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0186" Source="Skins\3z9am\Console\infoBar_button2-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0187" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0187" Source="Skins\3z9am\Console\infoBar_button2-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0188" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0188" Source="Skins\3z9am\Console\panelBandGEN.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0189" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0189" Source="Skins\3z9am\Console\panelBandHF.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0190" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0190" Source="Skins\3z9am\Console\panelBandVHF.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0191" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0191" Source="Skins\3z9am\Console\panelDisplay2.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0192" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0192" Source="Skins\3z9am\Console\panelDSP.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0193" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0193" Source="Skins\3z9am\Console\panelFilter.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0194" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0194" Source="Skins\3z9am\Console\panelMode.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0195" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0195" Source="Skins\3z9am\Console\panelModeSpecificCW.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0196" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0196" Source="Skins\3z9am\Console\panelModeSpecificDigital.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0197" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0197" Source="Skins\3z9am\Console\panelModeSpecificFM.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0198" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0198" Source="Skins\3z9am\Console\panelModeSpecificPhone.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0199" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0199" Source="Skins\3z9am\Console\panelMultiRX.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0200" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0200" Source="Skins\3z9am\Console\panelOptions-v2.10.3.5.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0201" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0201" Source="Skins\3z9am\Console\panelOptions.full.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0202" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0202" Source="Skins\3z9am\Console\panelOptions.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0203" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0203" Source="Skins\3z9am\Console\panelSoundControls-v2.10.3.5.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0204" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0204" Source="Skins\3z9am\Console\panelSoundControls.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0205" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0205" Source="Skins\3z9am\Console\panelVFO-v2.10.3.5.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0206" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0206" Source="Skins\3z9am\Console\panelVFO.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0207" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0207" Source="Skins\3z9am\Console\picDisplay.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0208" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0208" Source="Skins\3z9am\Console\picMultiMeterDigital-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0209" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0209" Source="Skins\3z9am\Console\picMultiMeterDigital.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0210" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0210" Source="Skins\3z9am\Console\picRX2Meter.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0211" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0211" Source="Skins\3z9am\Console\ptbAF-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0212" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0212" Source="Skins\3z9am\Console\ptbAF-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0213" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0213" Source="Skins\3z9am\Console\ptbCPDR-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0214" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0214" Source="Skins\3z9am\Console\ptbCPDR-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0215" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0215" Source="Skins\3z9am\Console\ptbCWAPFBandwidth-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0216" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0216" Source="Skins\3z9am\Console\ptbCWAPFBandwidth-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0217" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0217" Source="Skins\3z9am\Console\ptbCWAPFFreq-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0218" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0218" Source="Skins\3z9am\Console\ptbCWAPFFreq-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0219" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0219" Source="Skins\3z9am\Console\ptbCWAPFGain-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0220" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0220" Source="Skins\3z9am\Console\ptbCWAPFGain-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0221" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0221" Source="Skins\3z9am\Console\ptbCWSpeed-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0222" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0222" Source="Skins\3z9am\Console\ptbCWSpeed-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0223" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0223" Source="Skins\3z9am\Console\ptbDisplayPan-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0224" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0224" Source="Skins\3z9am\Console\ptbDisplayPan-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0225" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0225" Source="Skins\3z9am\Console\ptbDisplayZoom-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0226" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0226" Source="Skins\3z9am\Console\ptbDisplayZoom-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0227" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0227" Source="Skins\3z9am\Console\ptbDX-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0228" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0228" Source="Skins\3z9am\Console\ptbDX-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0229" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0229" Source="Skins\3z9am\Console\ptbFilterShift-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0230" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0230" Source="Skins\3z9am\Console\ptbFilterShift-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0231" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0231" Source="Skins\3z9am\Console\ptbFilterWidth-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0232" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0232" Source="Skins\3z9am\Console\ptbFilterWidth-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0233" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0233" Source="Skins\3z9am\Console\ptbFMMic-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0234" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0234" Source="Skins\3z9am\Console\ptbFMMic-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0235" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0235" Source="Skins\3z9am\Console\ptbMic-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0236" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0236" Source="Skins\3z9am\Console\ptbMic-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0237" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0237" Source="Skins\3z9am\Console\ptbNoiseGate-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0238" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0238" Source="Skins\3z9am\Console\ptbPanMainRX-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0239" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0239" Source="Skins\3z9am\Console\ptbPanMainRX-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0240" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0240" Source="Skins\3z9am\Console\ptbPanSubRX-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0241" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0241" Source="Skins\3z9am\Console\ptbPanSubRX-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0242" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0242" Source="Skins\3z9am\Console\ptbPWR-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0243" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0243" Source="Skins\3z9am\Console\ptbPWR-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0244" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0244" Source="Skins\3z9am\Console\ptbRF-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0245" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0245" Source="Skins\3z9am\Console\ptbRF-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0246" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0246" Source="Skins\3z9am\Console\ptbRX0Gain-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0247" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0247" Source="Skins\3z9am\Console\ptbRX0Gain-head.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0248" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0248" Source="Skins\3z9am\Console\ptbRX1AF-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0249" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0249" Source="Skins\3z9am\Console\ptbRX1AF-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0250" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0250" Source="Skins\3z9am\Console\ptbRX1Gain-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0251" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0251" Source="Skins\3z9am\Console\ptbRX1Gain-head.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0252" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0252" Source="Skins\3z9am\Console\ptbRX2AF-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0253" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0253" Source="Skins\3z9am\Console\ptbRX2AF-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0254" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0254" Source="Skins\3z9am\Console\ptbRX2Gain-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0255" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0255" Source="Skins\3z9am\Console\ptbRX2Gain-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0256" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0256" Source="Skins\3z9am\Console\ptbRX2Pan-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0257" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0257" Source="Skins\3z9am\Console\ptbRX2Pan-head.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0258" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0258" Source="Skins\3z9am\Console\ptbRX2RF-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0259" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0259" Source="Skins\3z9am\Console\ptbRX2RF-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0260" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0260" Source="Skins\3z9am\Console\ptbRX2Squelch-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0261" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0261" Source="Skins\3z9am\Console\ptbRX2Squelch-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0262" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0262" Source="Skins\3z9am\Console\ptbSquelch-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0263" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0263" Source="Skins\3z9am\Console\ptbSquelch-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0264" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0264" Source="Skins\3z9am\Console\ptbTune-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0265" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0265" Source="Skins\3z9am\Console\ptbTune-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0266" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0266" Source="Skins\3z9am\Console\ptbVACRXGain-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0267" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0267" Source="Skins\3z9am\Console\ptbVACRXGain-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0268" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0268" Source="Skins\3z9am\Console\ptbVACTXGain-back.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0269" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0269" Source="Skins\3z9am\Console\ptbVACTXGain-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0270" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0270" Source="Skins\3z9am\Console\ptbVOX-back.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0271" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0271" Source="Skins\3z9am\Console\ptbVOX-head.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0272" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0272" Source="Skins\3z9am\Console\radBand10-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0273" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0273" Source="Skins\3z9am\Console\radBand10-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0274" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0274" Source="Skins\3z9am\Console\radBand12-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0275" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0275" Source="Skins\3z9am\Console\radBand12-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0276" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0276" Source="Skins\3z9am\Console\radBand15-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0277" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0277" Source="Skins\3z9am\Console\radBand15-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0278" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0278" Source="Skins\3z9am\Console\radBand160-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0279" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0279" Source="Skins\3z9am\Console\radBand160-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0280" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0280" Source="Skins\3z9am\Console\radBand17-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0281" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0281" Source="Skins\3z9am\Console\radBand17-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0282" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0282" Source="Skins\3z9am\Console\radBand2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0283" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0283" Source="Skins\3z9am\Console\radBand2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0284" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0284" Source="Skins\3z9am\Console\radBand20-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0285" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0285" Source="Skins\3z9am\Console\radBand20-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0286" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0286" Source="Skins\3z9am\Console\radBand30-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0287" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0287" Source="Skins\3z9am\Console\radBand30-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0288" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0288" Source="Skins\3z9am\Console\radBand40-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0289" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0289" Source="Skins\3z9am\Console\radBand40-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0290" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0290" Source="Skins\3z9am\Console\radBand6-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0291" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0291" Source="Skins\3z9am\Console\radBand6-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0292" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0292" Source="Skins\3z9am\Console\radBand60-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0293" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0293" Source="Skins\3z9am\Console\radBand60-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0294" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0294" Source="Skins\3z9am\Console\radBand80-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0295" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0295" Source="Skins\3z9am\Console\radBand80-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0296" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0296" Source="Skins\3z9am\Console\radBandGEN-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0297" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0297" Source="Skins\3z9am\Console\radBandGEN-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0298" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0298" Source="Skins\3z9am\Console\radBandGEN0-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0299" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0299" Source="Skins\3z9am\Console\radBandGEN0-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0300" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0300" Source="Skins\3z9am\Console\radBandGEN1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0301" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0301" Source="Skins\3z9am\Console\radBandGEN1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0302" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0302" Source="Skins\3z9am\Console\radBandGEN10-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0303" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0303" Source="Skins\3z9am\Console\radBandGEN10-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0304" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0304" Source="Skins\3z9am\Console\radBandGEN11-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0305" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0305" Source="Skins\3z9am\Console\radBandGEN11-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0306" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0306" Source="Skins\3z9am\Console\radBandGEN12-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0307" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0307" Source="Skins\3z9am\Console\radBandGEN12-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0308" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0308" Source="Skins\3z9am\Console\radBandGEN13-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0309" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0309" Source="Skins\3z9am\Console\radBandGEN13-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0310" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0310" Source="Skins\3z9am\Console\radBandGEN2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0311" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0311" Source="Skins\3z9am\Console\radBandGEN2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0312" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0312" Source="Skins\3z9am\Console\radBandGEN3-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0313" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0313" Source="Skins\3z9am\Console\radBandGEN3-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0314" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0314" Source="Skins\3z9am\Console\radBandGEN4-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0315" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0315" Source="Skins\3z9am\Console\radBandGEN4-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0316" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0316" Source="Skins\3z9am\Console\radBandGEN5-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0317" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0317" Source="Skins\3z9am\Console\radBandGEN5-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0318" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0318" Source="Skins\3z9am\Console\radBandGEN6-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0319" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0319" Source="Skins\3z9am\Console\radBandGEN6-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0320" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0320" Source="Skins\3z9am\Console\radBandGEN7-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0321" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0321" Source="Skins\3z9am\Console\radBandGEN7-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0322" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0322" Source="Skins\3z9am\Console\radBandGEN8-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0323" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0323" Source="Skins\3z9am\Console\radBandGEN8-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0324" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0324" Source="Skins\3z9am\Console\radBandGEN9-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0325" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0325" Source="Skins\3z9am\Console\radBandGEN9-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0326" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0326" Source="Skins\3z9am\Console\radBandVHF0-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0327" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0327" Source="Skins\3z9am\Console\radBandVHF0-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0328" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0328" Source="Skins\3z9am\Console\radBandVHF1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0329" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0329" Source="Skins\3z9am\Console\radBandVHF1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0330" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0330" Source="Skins\3z9am\Console\radBandVHF10-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0331" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0331" Source="Skins\3z9am\Console\radBandVHF10-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0332" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0332" Source="Skins\3z9am\Console\radBandVHF11-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0333" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0333" Source="Skins\3z9am\Console\radBandVHF11-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0334" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0334" Source="Skins\3z9am\Console\radBandVHF12-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0335" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0335" Source="Skins\3z9am\Console\radBandVHF12-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0336" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0336" Source="Skins\3z9am\Console\radBandVHF13-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0337" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0337" Source="Skins\3z9am\Console\radBandVHF13-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0338" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0338" Source="Skins\3z9am\Console\radBandVHF2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0339" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0339" Source="Skins\3z9am\Console\radBandVHF2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0340" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0340" Source="Skins\3z9am\Console\radBandVHF3-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0341" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0341" Source="Skins\3z9am\Console\radBandVHF3-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0342" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0342" Source="Skins\3z9am\Console\radBandVHF4-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0343" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0343" Source="Skins\3z9am\Console\radBandVHF4-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0344" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0344" Source="Skins\3z9am\Console\radBandVHF5-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0345" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0345" Source="Skins\3z9am\Console\radBandVHF5-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0346" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0346" Source="Skins\3z9am\Console\radBandVHF6-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0347" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0347" Source="Skins\3z9am\Console\radBandVHF6-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0348" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0348" Source="Skins\3z9am\Console\radBandVHF7-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0349" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0349" Source="Skins\3z9am\Console\radBandVHF7-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0350" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0350" Source="Skins\3z9am\Console\radBandVHF8-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0351" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0351" Source="Skins\3z9am\Console\radBandVHF8-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0352" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0352" Source="Skins\3z9am\Console\radBandVHF9-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0353" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0353" Source="Skins\3z9am\Console\radBandVHF9-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0354" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0354" Source="Skins\3z9am\Console\radBandWWV-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0355" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0355" Source="Skins\3z9am\Console\radBandWWV-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0356" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0356" Source="Skins\3z9am\Console\radDisplayZoom05-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0357" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0357" Source="Skins\3z9am\Console\radDisplayZoom05-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0358" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0358" Source="Skins\3z9am\Console\radDisplayZoom1x-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0359" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0359" Source="Skins\3z9am\Console\radDisplayZoom1x-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0360" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0360" Source="Skins\3z9am\Console\radDisplayZoom2x-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0361" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0361" Source="Skins\3z9am\Console\radDisplayZoom2x-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0362" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0362" Source="Skins\3z9am\Console\radDisplayZoom4x-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0363" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0363" Source="Skins\3z9am\Console\radDisplayZoom4x-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0364" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0364" Source="Skins\3z9am\Console\radDisplayZoomTB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0365" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0365" Source="Skins\3z9am\Console\radDisplayZoomTB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0366" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0366" Source="Skins\3z9am\Console\radFilter1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0367" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0367" Source="Skins\3z9am\Console\radFilter1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0368" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0368" Source="Skins\3z9am\Console\radFilter10-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0369" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0369" Source="Skins\3z9am\Console\radFilter10-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0370" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0370" Source="Skins\3z9am\Console\radFilter2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0371" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0371" Source="Skins\3z9am\Console\radFilter2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0372" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0372" Source="Skins\3z9am\Console\radFilter3-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0373" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0373" Source="Skins\3z9am\Console\radFilter3-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0374" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0374" Source="Skins\3z9am\Console\radFilter4-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0375" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0375" Source="Skins\3z9am\Console\radFilter4-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0376" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0376" Source="Skins\3z9am\Console\radFilter5-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0377" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0377" Source="Skins\3z9am\Console\radFilter5-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0378" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0378" Source="Skins\3z9am\Console\radFilter6-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0379" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0379" Source="Skins\3z9am\Console\radFilter6-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0380" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0380" Source="Skins\3z9am\Console\radFilter7-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0381" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0381" Source="Skins\3z9am\Console\radFilter7-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0382" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0382" Source="Skins\3z9am\Console\radFilter8-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0383" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0383" Source="Skins\3z9am\Console\radFilter8-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0384" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0384" Source="Skins\3z9am\Console\radFilter9-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0385" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0385" Source="Skins\3z9am\Console\radFilter9-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0386" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0386" Source="Skins\3z9am\Console\radFilterVar1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0387" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0387" Source="Skins\3z9am\Console\radFilterVar1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0388" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0388" Source="Skins\3z9am\Console\radFilterVar2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0389" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0389" Source="Skins\3z9am\Console\radFilterVar2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0390" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0390" Source="Skins\3z9am\Console\radFMDeviation2kHz-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0391" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0391" Source="Skins\3z9am\Console\radFMDeviation2kHz-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0392" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0392" Source="Skins\3z9am\Console\radFMDeviation5kHz-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0393" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0393" Source="Skins\3z9am\Console\radFMDeviation5kHz-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0394" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0394" Source="Skins\3z9am\Console\radModeAM-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0395" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0395" Source="Skins\3z9am\Console\radModeAM-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0396" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0396" Source="Skins\3z9am\Console\radModeCWL-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0397" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0397" Source="Skins\3z9am\Console\radModeCWL-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0398" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0398" Source="Skins\3z9am\Console\radModeCWU-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0399" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0399" Source="Skins\3z9am\Console\radModeCWU-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0400" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0400" Source="Skins\3z9am\Console\radModeDIGL-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0401" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0401" Source="Skins\3z9am\Console\radModeDIGL-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0402" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0402" Source="Skins\3z9am\Console\radModeDIGU-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0403" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0403" Source="Skins\3z9am\Console\radModeDIGU-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0404" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0404" Source="Skins\3z9am\Console\radModeDRM-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0405" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0405" Source="Skins\3z9am\Console\radModeDRM-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0406" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0406" Source="Skins\3z9am\Console\radModeDSB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0407" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0407" Source="Skins\3z9am\Console\radModeDSB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0408" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0408" Source="Skins\3z9am\Console\radModeFMN-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0409" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0409" Source="Skins\3z9am\Console\radModeFMN-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0410" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0410" Source="Skins\3z9am\Console\radModeLSB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0411" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0411" Source="Skins\3z9am\Console\radModeLSB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0412" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0412" Source="Skins\3z9am\Console\radModeSAM-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0413" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0413" Source="Skins\3z9am\Console\radModeSAM-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0414" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0414" Source="Skins\3z9am\Console\radModeSPEC-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0415" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0415" Source="Skins\3z9am\Console\radModeSPEC-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0416" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0416" Source="Skins\3z9am\Console\radModeUSB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0417" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0417" Source="Skins\3z9am\Console\radModeUSB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0418" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0418" Source="Skins\3z9am\Console\radRX2Filter1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0419" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0419" Source="Skins\3z9am\Console\radRX2Filter1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0420" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0420" Source="Skins\3z9am\Console\radRX2Filter2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0421" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0421" Source="Skins\3z9am\Console\radRX2Filter2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0422" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0422" Source="Skins\3z9am\Console\radRX2Filter3-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0423" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0423" Source="Skins\3z9am\Console\radRX2Filter3-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0424" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0424" Source="Skins\3z9am\Console\radRX2Filter4-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0425" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0425" Source="Skins\3z9am\Console\radRX2Filter4-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0426" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0426" Source="Skins\3z9am\Console\radRX2Filter5-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0427" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0427" Source="Skins\3z9am\Console\radRX2Filter5-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0428" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0428" Source="Skins\3z9am\Console\radRX2Filter6-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0429" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0429" Source="Skins\3z9am\Console\radRX2Filter6-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0430" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0430" Source="Skins\3z9am\Console\radRX2Filter7-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0431" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0431" Source="Skins\3z9am\Console\radRX2Filter7-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0432" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0432" Source="Skins\3z9am\Console\radRX2FilterVar1-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0433" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0433" Source="Skins\3z9am\Console\radRX2FilterVar1-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0434" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0434" Source="Skins\3z9am\Console\radRX2FilterVar2-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0435" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0435" Source="Skins\3z9am\Console\radRX2FilterVar2-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0436" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0436" Source="Skins\3z9am\Console\radRX2ModeAM-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0437" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0437" Source="Skins\3z9am\Console\radRX2ModeAM-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0438" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0438" Source="Skins\3z9am\Console\radRX2ModeCWL-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0439" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0439" Source="Skins\3z9am\Console\radRX2ModeCWL-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0440" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0440" Source="Skins\3z9am\Console\radRX2ModeCWU-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0441" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0441" Source="Skins\3z9am\Console\radRX2ModeCWU-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0442" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0442" Source="Skins\3z9am\Console\radRX2ModeDIGL-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0443" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0443" Source="Skins\3z9am\Console\radRX2ModeDIGL-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0444" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0444" Source="Skins\3z9am\Console\radRX2ModeDIGU-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0445" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0445" Source="Skins\3z9am\Console\radRX2ModeDIGU-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0446" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0446" Source="Skins\3z9am\Console\radRX2ModeDRM-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0447" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0447" Source="Skins\3z9am\Console\radRX2ModeDRM-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0448" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0448" Source="Skins\3z9am\Console\radRX2ModeDSB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0449" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0449" Source="Skins\3z9am\Console\radRX2ModeDSB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0450" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0450" Source="Skins\3z9am\Console\radRX2ModeFMN-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0451" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0451" Source="Skins\3z9am\Console\radRX2ModeFMN-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0452" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0452" Source="Skins\3z9am\Console\radRX2ModeLSB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0453" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0453" Source="Skins\3z9am\Console\radRX2ModeLSB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0454" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0454" Source="Skins\3z9am\Console\radRX2ModeSAM-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0455" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0455" Source="Skins\3z9am\Console\radRX2ModeSAM-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0456" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0456" Source="Skins\3z9am\Console\radRX2ModeSPEC-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0457" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0457" Source="Skins\3z9am\Console\radRX2ModeSPEC-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0458" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0458" Source="Skins\3z9am\Console\radRX2ModeUSB-0.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0459" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0459" Source="Skins\3z9am\Console\radRX2ModeUSB-1.PNG" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0460" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0460" Source="Skins\3z9am\Console\ucQuickRecallPad_list-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0461" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0461" Source="Skins\3z9am\Console\ucQuickRecallPad_list-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0462" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0462" Source="Skins\3z9am\Console\ucQuickRecallPad_next-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0463" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0463" Source="Skins\3z9am\Console\ucQuickRecallPad_next-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0464" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0464" Source="Skins\3z9am\Console\ucQuickRecallPad_previous-0.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_c_0465" Directory="Z9AMConsoleDir" Guid="*">
+        <File Id="Z9AM_f_0465" Source="Skins\3z9am\Console\ucQuickRecallPad_previous-1.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_01" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_01" Source="Skins\3z9am\Meters\ananMM-bg-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_02" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_02" Source="Skins\3z9am\Meters\ananMM-bg-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_03" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_03" Source="Skins\3z9am\Meters\ananMM-bg-tx-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_04" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_04" Source="Skins\3z9am\Meters\ananMM-bg-tx-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_05" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_05" Source="Skins\3z9am\Meters\ananMM-bg-tx.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_06" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_06" Source="Skins\3z9am\Meters\ananMM-bg.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_07" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_07" Source="Skins\3z9am\Meters\ananMM-dark-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_08" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_08" Source="Skins\3z9am\Meters\ananMM-dark-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_09" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_09" Source="Skins\3z9am\Meters\ananMM-dark.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_10" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_10" Source="Skins\3z9am\Meters\ananMM-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_11" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_11" Source="Skins\3z9am\Meters\ananMM-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_12" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_12" Source="Skins\3z9am\Meters\ananMM.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_13" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_13" Source="Skins\3z9am\Meters\cross-needle-bg-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_14" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_14" Source="Skins\3z9am\Meters\cross-needle-bg-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_15" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_15" Source="Skins\3z9am\Meters\cross-needle-bg.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_16" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_16" Source="Skins\3z9am\Meters\cross-needle-dark-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_17" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_17" Source="Skins\3z9am\Meters\cross-needle-dark-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_18" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_18" Source="Skins\3z9am\Meters\cross-needle-dark.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_19" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_19" Source="Skins\3z9am\Meters\cross-needle-large.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_20" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_20" Source="Skins\3z9am\Meters\cross-needle-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_21" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_21" Source="Skins\3z9am\Meters\cross-needle.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_22" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_22" Source="Skins\3z9am\Meters\eye-bezel-small.png" KeyPath="yes" />
+      </Component>
+      <Component Id="Z9AM_mc_23" Directory="Z9AMMetersDir" Guid="*">
+        <File Id="Z9AM_mf_23" Source="Skins\3z9am\Meters\eye-bezel.png" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>
