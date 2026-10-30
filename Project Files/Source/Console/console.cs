@@ -46270,6 +46270,8 @@ namespace Thetis
             // overwrite them with designer defaults.
             RestoreNativePanelLocationsFromState();
 
+            loadActivationFeatures();   // extras of the tester's unlock code (Console.Activation.cs)
+            initActivationMenu();
             initNewGui();
         }
 

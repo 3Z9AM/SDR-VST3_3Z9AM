@@ -95,7 +95,7 @@ namespace Thetis
             {
                 if (!p.Visible || cb.DroppedDown) return;
                 DiversityForm f = diversityForm;
-                bool alive = f != null && !f.IsDisposed;
+                bool alive = f != null && !f.IsDisposed && ActivationCode.Has(ActivationFeature.SectionDiversity);   // extra for chosen testers
                 cb.Enabled = alive;
                 int m = alive ? f.SectionMode : 0;
                 if (cb.SelectedIndex != m) cb.SelectedIndex = m;

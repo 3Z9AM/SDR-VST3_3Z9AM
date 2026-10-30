@@ -81,6 +81,8 @@ namespace Thetis
                 "MRC - RX2 phased onto RX1 and weighted by its signal share\nco-phase - RX2 phased onto RX1 and raised to its level in every section (antennas of similar strength)\nnull - RX2 as a noise antenna: its noise subtracted from RX1 per section\nmax-SINR - per section the best signal to noise+interference (acts as MRC, null or co-phase as the noise needs), background stays at the RX1 noise floor\nadds one FFT of delay (~21 ms)");
             sec.SelectedIndexChanged += delegate { _secMode = sec.SelectedIndex; };
             picRadar.Controls.Add(sec);
+            // extra for chosen testers (activation code); off = the radar weight as before
+            VisibleChanged += delegate { sec.Enabled = ActivationCode.Has(ActivationFeature.SectionDiversity); };
             var secN = new NumericUpDownTS { Name = "udSectionDiv", Minimum = 1, Maximum = 60, Value = 20, Location = new Point(2, 26), Size = new Size(42, 20) };
             toolTip1.SetToolTip(secN, "Sections across the RX1 filter (1 = one weight; bins are ~47 Hz, fine ~12 Hz)");
             secN.ValueChanged += delegate { _secSections = (int)secN.Value; };
@@ -268,7 +270,7 @@ namespace Thetis
             if (_secSens != _secSensSent) { _secSensSent = _secSens; WDSP.SetEXTDIVSectionsCleanSens(_secSens); }
 
             Display.RX1FilterIqOffsets(out int lo, out int hi);
-            int m = _phaseRun ? _secMode : 0, n = _secSections;
+            int m = _phaseRun && ActivationCode.Has(ActivationFeature.SectionDiversity) ? _secMode : 0, n = _secSections;   // locked: radar weight
             if (m == _secSent && n == _secSentN && rate == _secSentRate && lo == _secSentLo && hi == _secSentHi) return;
             _secSent = m; _secSentN = n; _secSentRate = rate; _secSentLo = lo; _secSentHi = hi;
             WDSP.SetEXTDIVSections(m, n, SectionTau, rate, -hi, -lo);    // panadapter frame Q + jI -> native I + jQ mirrors

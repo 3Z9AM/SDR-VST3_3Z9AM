@@ -43,21 +43,73 @@ namespace Thetis
             return Environment.MachineName;
         }
 
-        private static bool activationMatches(string call, string unlock) =>
-            ActivationCode.NormalizeCall(call).Length > 0 &&
-            ActivationCode.Normalize(unlock) == ActivationCode.Unlock(ActivationCode.Request(call, activationMachineId()));
+        // features of the unlock code when it fits this callsign and PC, null otherwise
+        private static ActivationFeature? activationFeatures(string call, string unlock) =>
+            ActivationCode.NormalizeCall(call).Length > 0 ? ActivationCode.Check(ActivationCode.Request(call, activationMachineId()), unlock) : null;
+
+        private ActivationFeature? storedActivation(out string call)
+        {
+            Dictionary<string, string> st = DB.GetVarsDictionary("State");
+            st.TryGetValue(ActivationCallKey, out call);
+            st.TryGetValue(ActivationCodeKey, out string unlock);
+            return activationFeatures(call, unlock);
+        }
+
+        // at start (Console_Shown): extras of the stored code, before anything is switched on
+        private void loadActivationFeatures()
+        {
+            ActivationFeature? f = storedActivation(out _);
+            _activated = f.HasValue;
+            applyActivationFeatures(f ?? ActivationFeature.None);
+        }
+
+        // the gated values go to WDSP again (radio.cs sends 0 for a locked soft edge)
+        private void applyActivationFeatures(ActivationFeature f)
+        {
+            ActivationCode.Unlocked = f;
+            for (int t = 0; t < 2; t++)
+                for (int s = 0; s < 2; s++)
+                {
+                    RadioDSPRX rx = radio.GetDSPRX(t, s);
+                    rx.RXSoftEdge = rx.RXSoftEdge;
+                    rx.RXSoftEdgeCarrier = rx.RXSoftEdgeCarrier;
+                }
+            RadioDSPTX tx = radio.GetDSPTX(0);
+            tx.TXSoftEdge = tx.TXSoftEdge;
+            tx.TXSoftEdgeCarrier = tx.TXSoftEdgeCarrier;
+        }
 
         // false = keep POWER off
         private bool ensureActivated()
         {
             if (_activated) return true;
-            Dictionary<string, string> st = DB.GetVarsDictionary("State");
-            st.TryGetValue(ActivationCallKey, out string call);
-            st.TryGetValue(ActivationCodeKey, out string unlock);
-            if (activationMatches(call, unlock)) return _activated = true;
+            if (storedActivation(out string call) is ActivationFeature f)
+            {
+                applyActivationFeatures(f);
+                return _activated = true;
+            }
+            return showActivation(call);
+        }
 
+        private bool showActivation(string call)
+        {
             using (Form f = activationForm(string.IsNullOrEmpty(call) ? CallsignBackground.SavedCallsign() : call))
-                return _activated = f.ShowDialog(this) == DialogResult.OK;
+                if (f.ShowDialog(this) != DialogResult.OK) return _activated;
+            loadActivationFeatures();
+            return _activated;
+        }
+
+        // menu "Activation": a new code (with extra features) at any time
+        private void initActivationMenu()
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem("Activation");
+            item.ForeColor = SystemColors.ControlLightLight;
+            item.Click += delegate
+            {
+                storedActivation(out string call);
+                showActivation(call);
+            };
+            menuStrip1.Items.Add(item);
         }
 
         private Form activationForm(string call)
@@ -86,9 +138,10 @@ namespace Thetis
             TextBox txtReq = new TextBox { Location = new Point(130, 100), Width = 150, ReadOnly = true, Font = big, TextAlign = HorizontalAlignment.Center };
             Button btnCopy = new Button { Text = "Copy", Location = new Point(290, 104), Width = 80 };
             Label lUnlock = new Label { Text = "Unlock code", Location = new Point(12, 162), AutoSize = true };
-            TextBox txtUnlock = new TextBox { Location = new Point(130, 152), Width = 150, Font = big, MaxLength = ActivationCode.Length + 2,
+            TextBox txtUnlock = new TextBox { Location = new Point(130, 152), Width = 150, Font = big, MaxLength = ActivationCode.Length + 3,
                 CharacterCasing = CharacterCasing.Upper, TextAlign = HorizontalAlignment.Center };
             Label lErr = new Label { Location = new Point(12, 200), Size = new Size(396, 20), ForeColor = Color.IndianRed };
+            if (_activated) lErr.Text = "Now: " + ActivationCode.Describe(ActivationCode.Unlocked);
             Button btnOk = new Button { Text = "Activate", Location = new Point(240, 230), Width = 80 };
             Button btnCancel = new Button { Text = "Cancel", Location = new Point(328, 230), Width = 80, DialogResult = DialogResult.Cancel };
             f.Controls.AddRange(new Control[] { info, lCall, txtCall, lReq, txtReq, btnCopy, lUnlock, txtUnlock, lErr, btnOk, btnCancel });
@@ -106,7 +159,7 @@ namespace Thetis
             btnCopy.Click += (s, e) => { if (txtReq.Text.Length > 0) Clipboard.SetText(txtReq.Text); };
             btnOk.Click += (s, e) =>
             {
-                if (!activationMatches(txtCall.Text, txtUnlock.Text))
+                if (activationFeatures(txtCall.Text, txtUnlock.Text) == null)
                 {
                     lErr.Text = "Wrong unlock code for this callsign and PC.";
                     return;
