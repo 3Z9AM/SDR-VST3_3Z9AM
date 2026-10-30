@@ -1612,7 +1612,7 @@ namespace Thetis
             using (OpenFileDialog dialog = new OpenFileDialog())
             {
                 dialog.Title = "Import " + chainName + " Chain";
-                dialog.Filter = "TX Profile Chains (vst_chains_tx_*.json)|vst_chains_tx_*.json|All JSON Files (*.json)|*.json|All Files (*.*)|*.*";
+                dialog.Filter = "TX Profile Chains (vst_chains_tx_*.json)|vst_chains_tx_*.json|All JSON Files (*.json)|*.json|Waves SuperRack/MultiRack Session (*.sprk;*.mrdb)|*.sprk;*.mrdb|All Files (*.*)|*.*";
                 dialog.DefaultExt = "json";
                 dialog.CheckFileExists = true;
                 if (!string.IsNullOrEmpty(vstDir) && Directory.Exists(vstDir))
@@ -1620,6 +1620,13 @@ namespace Thetis
 
                 if (dialog.ShowDialog(this) != DialogResult.OK)
                     return;
+
+                string ext = Path.GetExtension(dialog.FileName);
+                if (string.Equals(ext, ".sprk", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".mrdb", StringComparison.OrdinalIgnoreCase))
+                {
+                    ImportWavesSession(page, dialog.FileName);
+                    return;
+                }
 
                 try
                 {
@@ -1688,6 +1695,33 @@ namespace Thetis
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+        }
+
+        private void ImportWavesSession(ChainPage page, string path)
+        {
+            List<string> report;
+
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+                report = VstWavesImport.Import(page.Kind, path, MaxPluginsPerChain - GetDisplayedPluginCount(page));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Failed to import the Waves session: " + ex.Message, "Import Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
+
+            _activePage = page;
+            RefreshChainPageAsync(page);
+            MessageBox.Show(this,
+                "Added to the end of the " + VstHost.GetChainDisplayName(page.Kind) + " chain:\n\n  - " + string.Join("\n  - ", report),
+                "Waves Session Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         #endregion
