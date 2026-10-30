@@ -110,6 +110,16 @@ namespace Thetis
                 lblDSPSoftEdgeCarrierRX, tbDSPSoftEdgeCarrierRX,
                 lblDSPSoftEdgeCarrierTX, tbDSPSoftEdgeCarrierTX });
             tpDSPOptions.Controls.Add(grpDSPSoftEdgeCarrier);
+
+            // extra for chosen testers (activation code): locked = sharp edges in WDSP (radio.cs), sliders greyed
+            string edgeText = grpDSPSoftEdge.Text, carrierText = grpDSPSoftEdgeCarrier.Text;
+            VisibleChanged += delegate
+            {
+                bool on = ActivationCode.Has(ActivationFeature.SoftEdges);
+                grpDSPSoftEdge.Enabled = grpDSPSoftEdgeCarrier.Enabled = on;
+                grpDSPSoftEdge.Text = on ? edgeText : edgeText + " - locked";
+                grpDSPSoftEdgeCarrier.Text = on ? carrierText : carrierText + " - locked";
+            };
         }
 
         private static TrackBarTS carrierSlider(string name, int y)

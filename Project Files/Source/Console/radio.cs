@@ -1914,7 +1914,7 @@ namespace Thetis
                 rx_soft_edge = value;
                 if (update)
                 {
-                    double soft = SoftEdgeMode(dsp_mode) ? value : 0;
+                    double soft = SoftEdgeMode(dsp_mode) && ActivationCode.Has(ActivationFeature.SoftEdges) ? value : 0;   // locked: sharp
                     if (soft != rx_soft_edge_dsp || force)
                     {
                         WDSP.SetRXASoftEdge(WDSP.id(thread, subrx), soft);
@@ -1935,7 +1935,7 @@ namespace Thetis
                 rx_soft_edge_carrier = value;
                 if (update)
                 {
-                    double soft = SoftEdgeMode(dsp_mode) ? value : 0;
+                    double soft = SoftEdgeMode(dsp_mode) && ActivationCode.Has(ActivationFeature.SoftEdges) ? value : 0;   // locked: sharp
                     if (soft != rx_soft_edge_carrier_dsp || force)
                     {
                         WDSP.SetRXASoftEdgeCarrier(WDSP.id(thread, subrx), soft);
@@ -3537,7 +3537,7 @@ namespace Thetis
                 tx_soft_edge = value;
                 if (update)
                 {
-                    double soft = RadioDSPRX.SoftEdgeMode(current_dsp_mode) ? value : 0;
+                    double soft = RadioDSPRX.SoftEdgeMode(current_dsp_mode) && ActivationCode.Has(ActivationFeature.SoftEdges) ? value : 0;   // locked: sharp
                     if (soft != tx_soft_edge_dsp || force)
                     {
                         WDSP.SetTXASoftEdge(WDSP.id(thread, 0), soft);
@@ -3558,7 +3558,7 @@ namespace Thetis
                 tx_soft_edge_carrier = value;
                 if (update)
                 {
-                    double soft = RadioDSPRX.SoftEdgeMode(current_dsp_mode) ? value : 0;
+                    double soft = RadioDSPRX.SoftEdgeMode(current_dsp_mode) && ActivationCode.Has(ActivationFeature.SoftEdges) ? value : 0;   // locked: sharp
                     if (soft != tx_soft_edge_carrier_dsp || force)
                     {
                         WDSP.SetTXASoftEdgeCarrier(WDSP.id(thread, 0), soft);
