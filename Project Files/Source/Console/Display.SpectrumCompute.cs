@@ -29,6 +29,7 @@ using System;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 // Third-party: GPU interop via Vortice.Windows (MIT License, Copyright (c) Amer Koleci and Contributors).
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 // Full license text ships with the app (Licenses folder) and lives in the repo under Project Files\lib\licenses\.
 using Vortice.Direct3D11;
 using Vortice.DXGI;

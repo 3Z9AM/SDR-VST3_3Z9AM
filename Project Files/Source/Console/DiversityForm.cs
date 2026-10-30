@@ -38,6 +38,9 @@
 // its original terms and is not affected by this dual-licensing statement in any way.        //
 // Richard Samphire can be reached by email at :  mw0lge@grange-lane.co.uk                    //
 //============================================================================================//
+//
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM: per-section diversity (max-SINR,
+// clean, AUTO per bin) state saved with the form - see DiversityForm.Phase.cs, wdsp/secdiv.c.
 
 using System;
 using System.Diagnostics;

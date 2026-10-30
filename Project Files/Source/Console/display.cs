@@ -4,6 +4,7 @@
 // Thetis is a C# implementation of a Software Defined Radio.
 // Copyright (C) 2004-2009  FlexRadio Systems
 // Copyright (C) 2010-2020  Doug Wigley (W5WC)
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM: Waterfall sphere and its inside (planetarium) view on the 3D panadapter
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License

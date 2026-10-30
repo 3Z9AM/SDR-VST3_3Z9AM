@@ -1,6 +1,7 @@
 /*
  * network.c
  * Copyright (C) 2015-2020 Doug Wigley (W5WC)
+ * Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

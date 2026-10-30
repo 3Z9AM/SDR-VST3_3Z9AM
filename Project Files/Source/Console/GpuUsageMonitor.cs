@@ -1,3 +1,4 @@
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 // Per-process GPU utilisation monitor for the console GPU% indicator.
 // Samples the Windows "GPU Engine" performance counter category (the same
 // source Task Manager's per-process GPU column uses), summing every engine

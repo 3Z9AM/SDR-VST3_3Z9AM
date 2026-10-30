@@ -4,6 +4,7 @@
 // Thetis is a C# implementation of a Software Defined Radio.
 // Copyright (C) 2004-2012  FlexRadio Systems 
 // Copyright (C) 2010-2020  Doug Wigley
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License

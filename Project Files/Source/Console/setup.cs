@@ -28,6 +28,7 @@
 //
 //=================================================================
 // Continual modifications Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //=================================================================
 //
 //============================================================================================//
@@ -5995,7 +5996,7 @@ namespace Thetis
                 {
                     if (value > (float)udDisplayGridMin.Maximum) value = (float)udDisplayGridMin.Maximum;
                     if (value < (float)udDisplayGridMin.Minimum) value = (float)udDisplayGridMin.Minimum;
-                    udDisplayGridMin.Value = (decimal)value;
+                    udDisplayGridMin.Value = Math.Round((decimal)value, udDisplayGridMin.DecimalPlaces); // float->decimal keeps 7 digits: fractional Max - Step never matched after a round trip, Min clamp recursed until stack overflow
                 }
             }
         }
@@ -6009,7 +6010,7 @@ namespace Thetis
                 {
                     if (value > (float)udDisplayGridMax.Maximum) value = (float)udDisplayGridMax.Maximum;
                     if (value < (float)udDisplayGridMax.Minimum) value = (float)udDisplayGridMax.Minimum;
-                    udDisplayGridMax.Value = (decimal)value;
+                    udDisplayGridMax.Value = Math.Round((decimal)value, udDisplayGridMax.DecimalPlaces);
                 }
             }
         }
@@ -6023,7 +6024,7 @@ namespace Thetis
                 {
                     if (value > (float)udRX2DisplayGridMin.Maximum) value = (float)udRX2DisplayGridMin.Maximum;
                     if (value < (float)udRX2DisplayGridMin.Minimum) value = (float)udRX2DisplayGridMin.Minimum;
-                    udRX2DisplayGridMin.Value = (decimal)value;
+                    udRX2DisplayGridMin.Value = Math.Round((decimal)value, udRX2DisplayGridMin.DecimalPlaces);
                 }
             }
         }
@@ -6037,7 +6038,7 @@ namespace Thetis
                 {
                     if (value > (float)udRX2DisplayGridMax.Maximum) value = (float)udRX2DisplayGridMax.Maximum;
                     if (value < (float)udRX2DisplayGridMax.Minimum) value = (float)udRX2DisplayGridMax.Minimum;
-                    udRX2DisplayGridMax.Value = (decimal)value;
+                    udRX2DisplayGridMax.Value = Math.Round((decimal)value, udRX2DisplayGridMax.DecimalPlaces);
                 }
             }
         }

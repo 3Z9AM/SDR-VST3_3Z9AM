@@ -1,3 +1,4 @@
+// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 #include <Windows.h>
 #include <malloc.h>
 #include <stdint.h>

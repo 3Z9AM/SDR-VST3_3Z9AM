@@ -1,4 +1,7 @@
-﻿// Tier 3 - GPU mesh based 3D panadapter surface (experimental)
+﻿// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM: Waterfall sphere and its inside (planetarium) view on the 3D panadapter
+// (sphere/inside projection in the shaders and mesh below).
+//
+// Tier 3 - GPU mesh based 3D panadapter surface (experimental)
 //
 // Replaces the per-column DrawLine curtain painting of DrawPanadapter3DHistoryDX2D with a
 // real Direct3D11 triangle sheet rendered straight into the shared swapchain backbuffer
