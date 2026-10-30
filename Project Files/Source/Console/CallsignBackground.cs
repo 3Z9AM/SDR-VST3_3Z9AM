@@ -81,6 +81,14 @@ namespace Thetis
             if (Directory.Exists(Root)) Directory.Delete(Root, true);
         }
 
+        // splash screen: top W x H band of the background rendered W wide (the callsign sits there), green
+        public static Bitmap SplashImage(string call, int W, int H)
+        {
+            int fullH = W * 800 / 1280;
+            using (Bitmap full = fromHsv(toHsv(render(call, W, fullH)), W, fullH, 0f))
+                return full.Clone(new Rectangle(0, 0, W, H), full.PixelFormat);
+        }
+
         // ---- picture --------------------------------------------------------------------
 
         private static readonly float[] BodyColor = { 25 / 255f, 178 / 255f, 66 / 255f };

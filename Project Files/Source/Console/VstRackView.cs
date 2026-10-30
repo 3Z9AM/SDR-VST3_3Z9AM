@@ -939,7 +939,7 @@ namespace Thetis
                 {
                     sf.LineAlignment = StringAlignment.Center;
                     g.DrawString(
-                        _plugin != null ? VstHost.GetPluginDisplayName(_plugin) : string.Empty,
+                        _plugin != null ? VstHost.GetPluginRackLabel(_plugin) : string.Empty,
                         font, brush, new Rectangle(nameLeft, 0, nameRight - nameLeft, Height), sf);
                 }
             }
@@ -1032,7 +1032,7 @@ namespace Thetis
             PaintIcon(g, _removeRect, VstRackHitRegion.Remove);
             PaintCollapseChevron(g);
 
-            string name = _plugin != null ? VstHost.GetPluginDisplayName(_plugin) : string.Empty;
+            string name = _plugin != null ? VstHost.GetPluginRackLabel(_plugin) : string.Empty;
             int nameLeft = _removeRect.Right + ScaleBy(10);
             int nameRight = _collapseRect.Left - ScaleBy(6);
             Rectangle nameRect = new Rectangle(nameLeft, ScaleBy(4),
@@ -1356,7 +1356,7 @@ namespace Thetis
             PaintScrew(g, new Point(bounds.Left + ScaleBy(9), bounds.Bottom - ScaleBy(9)));
             PaintScrew(g, new Point(bounds.Right - ScaleBy(9), bounds.Bottom - ScaleBy(9)));
 
-            string name = _plugin != null ? VstHost.GetPluginDisplayName(_plugin) : string.Empty;
+            string name = _plugin != null ? VstHost.GetPluginRackLabel(_plugin) : string.Empty;
 
             // Recessed name plate, like a screened badge on a faceplate.
             int plateWidth = Math.Min(Math.Max(ScaleBy(140), bounds.Width / 2), Math.Max(1, bounds.Width - ScaleBy(96)));

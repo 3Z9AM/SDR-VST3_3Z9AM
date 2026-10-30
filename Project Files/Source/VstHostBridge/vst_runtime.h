@@ -6,6 +6,7 @@ This code/file can be found on GitHub : https://github.com/nubbyless/Thetis-Plus
 
 Copyright (C) 2026 ChasingCoffee
 Copyright (C) 2026 nubbyless <nubbyless@yahoo.com>
+Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -52,6 +53,7 @@ void VstRuntime_Retain(VstPluginRuntime* runtime);
 void VstRuntime_Destroy(VstPluginRuntime*& runtime);
 int VstRuntime_Reconfigure(VstPluginRuntime* runtime, int sample_rate, int max_block_size, int num_channels);
 int VstRuntime_Process(VstPluginRuntime* runtime, double* interleaved_buffer, int frames, int chain_channels);
+int VstRuntime_GetLatencySamples(VstPluginRuntime* runtime);
 int VstRuntime_GetStateSize(VstPluginRuntime* runtime);
 int VstRuntime_GetState(VstPluginRuntime* runtime, void* buffer, int buffer_size, int* bytes_written);
 int VstRuntime_SetState(VstPluginRuntime* runtime, const void* buffer, int buffer_size);
