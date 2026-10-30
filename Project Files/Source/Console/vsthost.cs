@@ -490,10 +490,18 @@ namespace Thetis
             NativeShutdown();
         }
 
+        private static int _rxChainRate, _rxChainMaxBlock;
+
+        // A create on a live chain rebuilds every plugin (editors close, SonoBus leaves its group). SunSDR grows the
+        // RX block after start (64 -> 96 at power-on, 192/384 at the lower PRO rates), so build with headroom and
+        // rebuild only for a new rate or a block above it - VST3 takes any block up to the max.
         public static void CreateRxChain(int sampleRate, int blockSize)
         {
-            NativeCreateChain(VstChainKind.Rx, sampleRate, blockSize, 2);
-            NativeCreateChain(VstChainKind.Remote, sampleRate, blockSize, 2);       // fed from the RX mixer too
+            if (sampleRate == _rxChainRate && blockSize <= _rxChainMaxBlock) return;
+            int maxBlock = Math.Max(blockSize, 1024);
+            int r = NativeCreateChain(VstChainKind.Rx, sampleRate, maxBlock, 2);
+            NativeCreateChain(VstChainKind.Remote, sampleRate, maxBlock, 2);       // fed from the RX mixer too
+            if (r == 0) { _rxChainRate = sampleRate; _rxChainMaxBlock = maxBlock; }
         }
 
         public static void CreateTxChain(int sampleRate, int blockSize)
@@ -503,6 +511,7 @@ namespace Thetis
 
         public static void DestroyRxChain()
         {
+            _rxChainRate = _rxChainMaxBlock = 0;
             NativeDestroyChain(VstChainKind.Rx);
             NativeDestroyChain(VstChainKind.Remote);
         }
@@ -555,6 +564,11 @@ namespace Thetis
         private static readonly double[] _remoteRing = new double[RemoteRingFrames];
         private static long _remoteWritten, _remoteRead;   // frames
         private static int _remoteBlock;                   // RX mixer frames per write
+        // jitter reserve: SunSDR feeds the RX mixer in bursts during TX (~240 frames at once), a 2-block reserve
+        // skipped ahead constantly (raspy voice); grows by a block on every underrun, up to RemoteMaxKeep
+        private const int RemoteMaxKeep = 2048;            // ~43 ms at 48 kHz
+        private static int _remoteKeep;                    // shortcut: never shrinks within a session; add a decay if the latency bothers
+        private static bool _remoteFill = true;            // underrun: silence until the reserve is back
         private static long _remoteHeardMs = long.MinValue / 2;
 
         // shortcut: SonoBus does not tell the host about peers - its output is digital zero until a peer's stream
@@ -595,12 +609,22 @@ namespace Thetis
             bool sameRate = cmaster.GetInputRate(1, 0) == Audio.OutRate;
             long w = System.Threading.Volatile.Read(ref _remoteWritten);
             long r = _remoteRead;
-            long keep = 2L * Math.Max(frames, _remoteBlock);
-            if (w - r > keep + Math.Max(frames, _remoteBlock)) r = w - keep;   // stale (after RX) or drifting backlog
+            int block = Math.Max(frames, _remoteBlock);
+            if (_remoteKeep < 2 * block) _remoteKeep = 2 * block;
+            if (w - r > _remoteKeep + 2L * block) r = w - _remoteKeep;   // stale (after RX) or drifting backlog
+            if (_remoteFill && w - r >= _remoteKeep) _remoteFill = false;
             for (int i = 0; i < frames; i++)
             {
                 double s = 0;
-                if (sameRate && r < w) s = _remoteRing[r++ & (RemoteRingFrames - 1)];
+                if (sameRate && !_remoteFill)
+                {
+                    if (r < w) s = _remoteRing[r++ & (RemoteRingFrames - 1)];
+                    else
+                    {
+                        _remoteFill = true;
+                        _remoteKeep = Math.Min(_remoteKeep + block, RemoteMaxKeep);
+                    }
+                }
                 buffer[2 * i] = s;
                 buffer[2 * i + 1] = s;
             }
