@@ -21,6 +21,7 @@ namespace Thetis
     using System;
     using System.Collections.Generic;
     using System.Numerics;
+    using System.Runtime.InteropServices;
     using Vortice.Direct2D1;
     using Vortice.DirectWrite;
     using Color = System.Drawing.Color;
@@ -163,36 +164,92 @@ namespace Thetis
 
         // panel rectangles in display coordinates; set by the console while Modern UI is on
         internal static Rectangle[] ModernPanelShadowRects;
+        // the display window (cursor mapping for the hover lift), the open drawer and how far it has risen (0..1)
+        internal static IntPtr ModernDisplayHwnd;
+        internal static Rectangle ModernDrawerRect;
+        internal static float ModernDim;
+
+        private static float[] _modernLift = new float[0];
+        private static double _modernLastShadowMs;
+
+        [DllImport("user32.dll")]
+        private static extern bool ScreenToClient(IntPtr hWnd, ref System.Drawing.Point p);
 
         // stroked rings outside each panel only, so a see-through panel is not darkened inside;
-        // the rings sink slightly so the shadow is heavier below the panel
+        // the rings sink so the shadow is heavier below the panel. A panel under the mouse rises:
+        // its shadow grows, falls further down and softens. The open drawer floats highest.
         private static void drawModernPanelShadowsDX2D()
         {
+            if (!ModernTheme.Enabled) return;
+            double now = m_dElapsedFrameStart;
+            float dt = (float)Math.Max(0.0, Math.Min(0.1, (now - _modernLastShadowMs) / 1000.0));
+            _modernLastShadowMs = now;
+
             Rectangle[] rects = ModernPanelShadowRects;
-            if (!ModernTheme.Enabled || rects == null) return;
-            const int rings = 7;
-            foreach (Rectangle r in rects)
+            if (rects != null)
             {
-                for (int i = 1; i <= rings; i++)
+                System.Drawing.Point mouse = System.Windows.Forms.Cursor.Position;
+                bool mouseOk = ModernDisplayHwnd != IntPtr.Zero && ScreenToClient(ModernDisplayHwnd, ref mouse);
+                if (_modernLift.Length != rects.Length) _modernLift = new float[rects.Length];
+                for (int n = 0; n < rects.Length; n++)
                 {
-                    double k = 1.0 - (i - 1) / (double)rings;
-                    int alpha = (int)(110 * k * k);
-                    if (alpha <= 0) continue;
-                    RoundedRectangle rr = new RoundedRectangle
-                    {
-                        Rect = new RectangleF(r.X - i + 0.5f, r.Y - i + 0.5f + i * 0.4f, r.Width + 2 * i - 1, r.Height + 2 * i - 1),
-                        RadiusX = 5 + i,
-                        RadiusY = 5 + i,
-                    };
-                    _d2dRenderTarget.DrawRoundedRectangle(rr, getDXBrushForColour(Color.FromArgb(alpha, 0, 0, 0)), 1f);
+                    float target = mouseOk && rects[n].Contains(mouse) ? 1f : 0f;
+                    _modernLift[n] += (target - _modernLift[n]) * Math.Min(1f, dt * 12f);
+                    drawModernShadowDX2D(rects[n], _modernLift[n], 0f);
                 }
             }
+            Rectangle d = ModernDrawerRect;
+            if (!d.IsEmpty) drawModernShadowDX2D(d, 1f, ModernDim);
+        }
+
+        // lift 0..1 = hover, height 0..1 = extra for the drawer
+        private static void drawModernShadowDX2D(Rectangle r, float lift, float height)
+        {
+            int rings = 7 + (int)Math.Round(5 * lift + 6 * height);
+            float sink = 0.4f + 0.4f * lift + 0.4f * height;
+            for (int i = 1; i <= rings; i++)
+            {
+                double k = 1.0 - (i - 1) / (double)rings;
+                int alpha = (int)(110 * (1f - 0.2f * lift) * k * k);
+                if (alpha <= 0) continue;
+                RoundedRectangle rr = new RoundedRectangle
+                {
+                    Rect = new RectangleF(r.X - i + 0.5f, r.Y - i + 0.5f + i * sink, r.Width + 2 * i - 1, r.Height + 2 * i - 1),
+                    RadiusX = 5 + i,
+                    RadiusY = 5 + i,
+                };
+                _d2dRenderTarget.DrawRoundedRectangle(rr, getDXBrushForColour(Color.FromArgb(alpha, 0, 0, 0)), 1f);
+            }
+        }
+
+        // ---- the panorama under glass: a faint reflection at the top ----
+
+        private static ID2D1LinearGradientBrush _modernSheen;
+
+        private static void drawModernGlassDX2D(float W, float H)
+        {
+            if (!ModernTheme.Enabled || W < 2 || H < 2) return;
+            if (_modernSheen == null)
+            {
+                GradientStop[] stops =
+                {
+                    new GradientStop { Color = new Vortice.Mathematics.Color4(1f, 1f, 1f, 0.07f), Position = 0f },
+                    new GradientStop { Color = new Vortice.Mathematics.Color4(1f, 1f, 1f, 0f), Position = 1f },
+                };
+                using (ID2D1GradientStopCollection coll = _d2dRenderTarget.CreateGradientStopCollection(stops))
+                    _modernSheen = _d2dRenderTarget.CreateLinearGradientBrush(new LinearGradientBrushProperties(), coll);
+            }
+            _modernSheen.StartPoint = new Vector2(0, 0);
+            _modernSheen.EndPoint = new Vector2(0, H * 0.22f);
+            _d2dRenderTarget.FillRectangle(new RectangleF(0, 0, W, H * 0.22f), _modernSheen);
         }
 
         private static void releaseModernBrushes()
         {
             foreach (ID2D1LinearGradientBrush b in _modernGradientBrushes.Values) b?.Dispose();
             _modernGradientBrushes.Clear();
+            _modernSheen?.Dispose();
+            _modernSheen = null;
         }
     }
 }

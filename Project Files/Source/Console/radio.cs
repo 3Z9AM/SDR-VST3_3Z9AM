@@ -369,6 +369,12 @@ namespace Thetis
             this.RXBandpassWindow = rx.rx_bandpass_window;
             this.RXSoftEdge = rx.rx_soft_edge;
             this.RXSoftEdgeCarrier = rx.rx_soft_edge_carrier;
+            this.RXAnalogToneCorner = rx.rx_analog_tone_corner;
+            this.RXAnalogToneDepth = rx.rx_analog_tone_depth;
+            this.RXAnalogToneFollow = rx.rx_analog_tone_follow;
+            this.RXAnalogToneFollowPct = rx.rx_analog_tone_follow_pct;
+            this.RXAnalogToneRipple = rx.rx_analog_tone_ripple;
+            this.RXAnalogTone = rx.rx_analog_tone;
             this.RXPreGenRun = rx.rx_pregen_run;
             this.RXPreGenMode = rx.rx_pregen_mode;
             this.RXPreGenToneMag = rx.rx_pregen_tone_mag;
@@ -481,6 +487,7 @@ namespace Thetis
             RXBandpassWindow = rx_bandpass_window;
             RXSoftEdge = rx_soft_edge;
             RXSoftEdgeCarrier = rx_soft_edge_carrier;
+            applyAnalogTone();
             RXPreGenRun = rx_pregen_run;
             RXPreGenMode = rx_pregen_mode;
             RXPreGenToneMag = rx_pregen_tone_mag;
@@ -632,6 +639,7 @@ namespace Thetis
 						dsp_mode_dsp = value;
                         RXSoftEdge = rx_soft_edge;  // soft edges only in SSB
                         RXSoftEdgeCarrier = rx_soft_edge_carrier;
+                        applyAnalogTone();          // not in digital modes
 					}
 				}
 			}
@@ -652,6 +660,7 @@ namespace Thetis
 					rx_filter_high_dsp = high;
 				}
 			}
+            applyAnalogTone();   // follow filter / crystal ripple sit on the filter edges
 		}
 
 		private int rx_filter_low_dsp;
@@ -672,6 +681,7 @@ namespace Thetis
 						rx_filter_low_dsp = value;
 					}
 				}
+                applyAnalogTone();
 			}
 		}
 
@@ -693,6 +703,7 @@ namespace Thetis
 						rx_filter_high_dsp = value;
 					}
 				}
+                applyAnalogTone();
 			}
 		}
 
@@ -1900,6 +1911,39 @@ namespace Thetis
             if (v == rx_bin2_spatial_dsp && !force) return;
             WDSP.SetRXABin2Spatial(WDSP.id(thread, subrx), rx_bin2_spatial ? 1 : 0, rx_bin2_width, rx_bin2_speaker, rx_bin2_room);
             rx_bin2_spatial_dsp = v;
+        }
+
+        // analog tone: treble roll-off of an analog audio chain; off in digital modes (modems need a flat band)
+        internal static bool AnalogToneMode(DSPMode m) => m != DSPMode.DIGU && m != DSPMode.DIGL && m != DSPMode.DRM && m != DSPMode.SPEC;
+        private bool rx_analog_tone = false, rx_analog_tone_follow = true;
+        private double rx_analog_tone_corner = 2000, rx_analog_tone_depth = 8, rx_analog_tone_follow_pct = 70, rx_analog_tone_ripple = 0;
+        private (int, double, double, double, double, double) rx_analog_tone_dsp = (0, 2000, 8, 0, 0, 0);
+        public bool RXAnalogTone { get { return rx_analog_tone; } set { rx_analog_tone = value; applyAnalogTone(); } }
+        public double RXAnalogToneCorner { get { return rx_analog_tone_corner; } set { rx_analog_tone_corner = value; applyAnalogTone(); } }
+        public double RXAnalogToneDepth { get { return rx_analog_tone_depth; } set { rx_analog_tone_depth = value; applyAnalogTone(); } }
+        // follow filter: the corner is this % of the RX filter's upper audio edge (the same character at any width)
+        public bool RXAnalogToneFollow { get { return rx_analog_tone_follow; } set { rx_analog_tone_follow = value; applyAnalogTone(); } }
+        public double RXAnalogToneFollowPct { get { return rx_analog_tone_follow_pct; } set { rx_analog_tone_follow_pct = value; applyAnalogTone(); } }
+        // crystal-filter ripple across the RX filter, dB peak to peak (0 = none)
+        public double RXAnalogToneRipple { get { return rx_analog_tone_ripple; } set { rx_analog_tone_ripple = value; applyAnalogTone(); } }
+
+        // the RX filter as audio Hz: SSB/CW edges by magnitude, a filter around the carrier (AM, FM, DSB) from 0
+        private (double lo, double hi) rxAudioBand()
+        {
+            double a = Math.Abs(rx_filter_low), b = Math.Abs(rx_filter_high);
+            if (rx_filter_low < 0 && rx_filter_high > 0) return (0, Math.Max(a, b));
+            return (Math.Min(a, b), Math.Max(a, b));
+        }
+
+        private void applyAnalogTone()
+        {
+            if (!update) return;
+            (double lo, double hi) = rxAudioBand();
+            double corner = rx_analog_tone_follow ? Math.Max(100, hi * rx_analog_tone_follow_pct / 100.0) : rx_analog_tone_corner;
+            var v = (rx_analog_tone && AnalogToneMode(dsp_mode) ? 1 : 0, corner, rx_analog_tone_depth, rx_analog_tone_ripple, lo, hi);
+            if (v == rx_analog_tone_dsp && !force) return;
+            WDSP.SetRXAAnalogTone(WDSP.id(thread, subrx), v.Item1, v.Item2, v.Item3, v.Item4, v.Item5, v.Item6);
+            rx_analog_tone_dsp = v;
         }
 
         // soft (raised-cosine) high-audio filter edge, Hz (0 = sharp); SSB only, other modes keep the sharp filter

@@ -255,6 +255,9 @@ namespace Thetis
                 using (Pen pen = new Pen(eb, 1f))
                     g.DrawPath(pen, p);
             }
+            // light from above: the bottom edge in shade
+            using (Pen shade = new Pen(Color.FromArgb(90, Color.Black)))
+                g.DrawLine(shade, r.Left + cut * 0.3f + 1f, r.Bottom - 1f, r.Right - cut - 1f, r.Bottom - 1f);
             // reflection along the top edge, brightest in the middle
             RectangleF top = new RectangleF(r.Left + cut + 2f, r.Top + 1f, Math.Max(1f, r.Width - cut - 4f), 1f);
             using (LinearGradientBrush hb = new LinearGradientBrush(RectangleF.Inflate(top, 1f, 0f), Color.Transparent, Color.Transparent, LinearGradientMode.Horizontal))
@@ -354,6 +357,9 @@ namespace Thetis
             // skins pack buttons edge to edge; a 1 px gap on each side keeps them apart (tiny ones stay full size)
             float inset = Math.Min(bounds.Width, bounds.Height) >= 16 ? 1.5f : 0.5f;
             RectangleF r = new RectangleF(bounds.X + inset, bounds.Y + inset, bounds.Width - 2 * inset, bounds.Height - 2 * inset);
+            // the face rises toward the mouse and sinks when pressed
+            float lift = !enabled || inset <= 1f ? 0f : pressed ? 1f : -hover;
+            r.Offset(0f, lift);
             float cut = Math.Max(2f, Math.Min(7f, r.Height / 2.8f));
             // glass button (as the top panels): lit = the colour shining through the pane, the edge warms up on hover
             Color glass = enabled ? Lerp(Lerp(BorderStrong, onColour, 0.6f * hover), onColour, on) : Lerp(Border, Back, 0.5f);
@@ -393,7 +399,7 @@ namespace Thetis
             }
             if (string.IsNullOrEmpty(text)) return;
 
-            int dy = pressed ? 1 : 0;
+            int dy = (int)Math.Round(lift);
             if (glyph != null)
             {
                 // icon on the left, caption in the rest of the face

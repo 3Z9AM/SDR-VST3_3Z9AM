@@ -357,6 +357,7 @@ namespace Thetis
                 Rectangle r = pnlDisplay.RectangleToClient(RectangleToScreen(c.Bounds));
                 if (r.IntersectsWith(area)) rects.Add(r);
             }
+            Display.ModernDisplayHwnd = pnlDisplay.Handle;   // hover lift: the render thread maps the cursor into the display
             Display.ModernPanelShadowRects = rects.ToArray();
         }
 

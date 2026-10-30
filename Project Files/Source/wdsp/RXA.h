@@ -191,6 +191,10 @@ struct _rxa
 	} mpeak;
 	struct
 	{
+		ATONE p;
+	} atone;
+	struct
+	{
 		BIN2 p;
 	} bin2;
 	struct

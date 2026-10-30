@@ -88,6 +88,7 @@ warren@wpratt.com
 #include "osctrl.h"
 #include "patchpanel.h"
 #include "bin2.h"
+#include "atone.h"
 #include "phrot.h"
 #include "resample.h"
 #include "reshb.h"
