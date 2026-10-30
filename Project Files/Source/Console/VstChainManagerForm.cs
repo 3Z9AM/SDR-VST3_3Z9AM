@@ -38,11 +38,14 @@ namespace Thetis
         private const int MaxPluginsPerChain = 16;
         private const int EditorCaptureSettleMs = 1500;
 
-        private static readonly Color FormBack = Color.FromArgb(0x2B, 0x2B, 0x2B);
-        private static readonly Color PanelBack = Color.FromArgb(0x33, 0x33, 0x33);
-        private static readonly Color TextPrimary = Color.FromArgb(0xE0, 0xE0, 0xE0);
-        private static readonly Color TextSecondary = Color.FromArgb(0xA8, 0xA8, 0xA8);
-        private static readonly Color ButtonBack = Color.FromArgb(0x45, 0x45, 0x45);
+        // HUD colours of the rest of the program while Modern Look is on, the original greys otherwise
+        private static Color FormBack => ModernTheme.Enabled ? ModernColours.Back : Color.FromArgb(0x2B, 0x2B, 0x2B);
+        private static Color PanelBack => ModernTheme.Enabled ? ModernColours.Input : Color.FromArgb(0x33, 0x33, 0x33);
+        private static Color TextPrimary => ModernTheme.Enabled ? ModernColours.Text : Color.FromArgb(0xE0, 0xE0, 0xE0);
+        private static Color TextSecondary => ModernTheme.Enabled ? ModernColours.TextDim : Color.FromArgb(0xA8, 0xA8, 0xA8);
+        private static Color ButtonBack => ModernTheme.Enabled ? ModernColours.Button : Color.FromArgb(0x45, 0x45, 0x45);
+        private static Color ListBack => ModernTheme.Enabled ? ModernColours.Panel : Color.FromArgb(0x24, 0x24, 0x24);
+        private static Color ButtonBorder => ModernTheme.Enabled ? ModernColours.Border : Color.FromArgb(0x1A, 0x1A, 0x1A);
 
         private sealed class StatusSnapshot
         {
@@ -128,6 +131,15 @@ namespace Thetis
             ShowInTaskbar = false;
             BackColor = FormBack;
             ForeColor = TextPrimary;
+            if (ModernTheme.Enabled)
+            {
+                Font = ModernTheme.UiFont(9f);   // shared cache: never disposed
+                Shown += delegate
+                {
+                    new ModernColours().Apply(this);    // HUD buttons, dark list and spin boxes
+                    Console.ngDarkTitleBar(this);
+                };
+            }
 
             _viewMode = VstHost.UiState.ChainViewMode;
 
@@ -397,7 +409,7 @@ namespace Thetis
             button.FlatStyle = FlatStyle.Flat;
             button.BackColor = ButtonBack;
             button.ForeColor = TextPrimary;
-            button.FlatAppearance.BorderColor = Color.FromArgb(0x1A, 0x1A, 0x1A);
+            button.FlatAppearance.BorderColor = ButtonBorder;
             button.FlatAppearance.CheckedBackColor = Color.FromArgb(0x5E, 0x5E, 0x5E);
             return button;
         }
@@ -535,7 +547,7 @@ namespace Thetis
             page.PluginListView.HideSelection = false;
             page.PluginListView.MultiSelect = false;
             page.PluginListView.View = View.Details;
-            page.PluginListView.BackColor = Color.FromArgb(0x24, 0x24, 0x24);
+            page.PluginListView.BackColor = ListBack;
             page.PluginListView.ForeColor = TextPrimary;
             page.PluginListView.BorderStyle = BorderStyle.FixedSingle;
             page.PluginListView.Columns.Add("#", 30);
@@ -585,11 +597,11 @@ namespace Thetis
             page.RemoveButton.Click += delegate { RemovePluginAt(page, GetSelectedIndex(page)); };
             buttonPanel.Controls.Add(page.RemoveButton);
 
-            page.MoveUpButton = CreateButton("↑", 32);
+            page.MoveUpButton = CreateButton("Up", 40);
             page.MoveUpButton.Click += delegate { MovePluginAt(page, GetSelectedIndex(page), -1); };
             buttonPanel.Controls.Add(page.MoveUpButton);
 
-            page.MoveDownButton = CreateButton("↓", 32);
+            page.MoveDownButton = CreateButton("Down", 52);
             page.MoveDownButton.Click += delegate { MovePluginAt(page, GetSelectedIndex(page), 1); };
             buttonPanel.Controls.Add(page.MoveDownButton);
 
@@ -605,7 +617,7 @@ namespace Thetis
 
             if (kind == VstChainKind.Tx)
             {
-                page.LaneButton = CreateButton("→ B", 48);
+                page.LaneButton = CreateButton("To B", 52);
                 page.LaneButton.Click += delegate { TogglePluginLaneAt(page, GetSelectedIndex(page)); };
                 buttonPanel.Controls.Add(page.LaneButton);
             }
@@ -770,7 +782,7 @@ namespace Thetis
             button.FlatStyle = FlatStyle.Flat;
             button.BackColor = ButtonBack;
             button.ForeColor = TextPrimary;
-            button.FlatAppearance.BorderColor = Color.FromArgb(0x1A, 0x1A, 0x1A);
+            button.FlatAppearance.BorderColor = ButtonBorder;
             // Labels swap at runtime (Enable/Disable, Bypass/Unbypass); keep a
             // longer one on a single line rather than wrapping it.
             button.AutoEllipsis = false;
@@ -1389,7 +1401,7 @@ namespace Thetis
             if (page.LaneButton != null)
             {
                 page.LaneButton.Enabled = hasSelection && !isStub;
-                page.LaneButton.Text = plugin != null && plugin.Lane == 1 ? "→ A" : "→ B";
+                page.LaneButton.Text = plugin != null && plugin.Lane == 1 ? "To A" : "To B";
             }
             page.OpenEditorButton.Enabled = hasSelection && !isStub && plugin != null && plugin.LoadState == VstPluginLoadState.Active;
 

@@ -59,22 +59,22 @@ namespace Thetis
     /// </summary>
     internal static class VstRackTheme
     {
-        public static readonly Color Void = Color.FromArgb(0x1E, 0x1E, 0x1E);
-        public static readonly Color FaceTop = Color.FromArgb(0x4A, 0x4A, 0x4A);
-        public static readonly Color FaceBottom = Color.FromArgb(0x3A, 0x3A, 0x3A);
-        public static readonly Color Inset = Color.FromArgb(0x33, 0x33, 0x33);
-        public static readonly Color Border = Color.FromArgb(0x1A, 0x1A, 0x1A);
-        public static readonly Color Bevel = Color.FromArgb(0x5E, 0x5E, 0x5E);
-        public static readonly Color TextPrimary = Color.FromArgb(0xD8, 0xD8, 0xD8);
-        public static readonly Color TextSecondary = Color.FromArgb(0x9A, 0x9A, 0x9A);
-        public static readonly Color SelectionBorder = Color.FromArgb(0x8A, 0x8A, 0x8A);
-        public static readonly Color Gutter = Color.FromArgb(0x26, 0x26, 0x26);
-        public static readonly Color IconHover = Color.FromArgb(0x60, 0x60, 0x60);
+        public static Color Void => ModernTheme.Enabled ? ModernColours.Panel : Color.FromArgb(0x1E, 0x1E, 0x1E);
+        public static Color FaceTop => ModernTheme.Enabled ? ModernColours.Button : Color.FromArgb(0x4A, 0x4A, 0x4A);
+        public static Color FaceBottom => ModernTheme.Enabled ? ModernColours.Input : Color.FromArgb(0x3A, 0x3A, 0x3A);
+        public static Color Inset => ModernTheme.Enabled ? ModernColours.Back : Color.FromArgb(0x33, 0x33, 0x33);
+        public static Color Border => ModernTheme.Enabled ? ModernColours.Border : Color.FromArgb(0x1A, 0x1A, 0x1A);
+        public static Color Bevel => ModernTheme.Enabled ? ModernTheme.BorderStrong : Color.FromArgb(0x5E, 0x5E, 0x5E);
+        public static Color TextPrimary => ModernTheme.Enabled ? ModernColours.Text : Color.FromArgb(0xD8, 0xD8, 0xD8);
+        public static Color TextSecondary => ModernTheme.Enabled ? ModernColours.TextDim : Color.FromArgb(0x9A, 0x9A, 0x9A);
+        public static Color SelectionBorder => ModernTheme.Enabled ? ModernTheme.Accent : Color.FromArgb(0x8A, 0x8A, 0x8A);
+        public static Color Gutter => ModernTheme.Enabled ? ModernColours.Back : Color.FromArgb(0x26, 0x26, 0x26);
+        public static Color IconHover => ModernTheme.Enabled ? ModernTheme.SurfaceHover : Color.FromArgb(0x60, 0x60, 0x60);
         public static readonly Color LedActive = Color.FromArgb(0x6E, 0xC8, 0x6E);
         public static readonly Color LedDescriptor = Color.FromArgb(0xD6, 0xA8, 0x4A);
         public static readonly Color LedFailed = Color.FromArgb(0xD0, 0x5A, 0x5A);
-        public static readonly Color LedOff = Color.FromArgb(0x55, 0x55, 0x55);
-        public static readonly Color AccentOn = Color.FromArgb(0x7E, 0xC8, 0xF0);
+        public static Color LedOff => ModernTheme.Enabled ? ModernTheme.TextDisabled : Color.FromArgb(0x55, 0x55, 0x55);
+        public static Color AccentOn => ModernTheme.Enabled ? ModernTheme.Accent : Color.FromArgb(0x7E, 0xC8, 0xF0);
     }
 
     /// <summary>
