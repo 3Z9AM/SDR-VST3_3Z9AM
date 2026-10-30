@@ -151,6 +151,7 @@ namespace Thetis
                 "panelAndromedaMisc",
                 "panelDiversityMini",
                 "panelModernSMeter",
+                "ngTop",    // info panel of the new layout (Console.NewGUI.cs)
 
                 // RX1 squelch is not contained in a PanelTS in the native
                 // designer. It is three separate top-level controls that
@@ -769,6 +770,26 @@ namespace Thetis
         }
 
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        // the wheel goes to the focused control: after a value was changed in the drawer of the new layout
+        // (filter width...) it kept changing that value with the mouse over the VFO / panorama. Outside the
+        // drawer the wheel goes to the window under the mouse instead, as if the drawer had never had focus.
+        private bool ngDrawerUnderMouse() =>
+            _ngDrawer != null && _ngDrawer.Visible && _ngDrawer.RectangleToScreen(_ngDrawer.ClientRectangle).Contains(Control.MousePosition);
+
+        private bool RedirectWheelFromDrawer(Message m)
+        {
+            if (_ngDrawer == null || !_ngDrawer.Visible || !_ngDrawer.ContainsFocus) return false;
+            IntPtr under = WindowFromPoint(Control.MousePosition);
+            Control target = Control.FromChildHandle(under);
+            if (target == null || target.FindForm() != this || _ngDrawer.Contains(target) || target == _ngDrawer) return false;
+            btnHidden.Focus();
+            SendMessage(under, m.Msg, m.WParam, m.LParam);
+            return true;
+        }
+
         private static bool IsNativeMovableControl(Control control)
         {
             if (control == null) return false;
@@ -1031,7 +1052,7 @@ namespace Thetis
 
                     case WM_MOUSEWHEEL:
                         // Shift + wheel over a movable panel changes its opacity.
-                        return _owner.AdjustNativePanelOpacityFromWheel(m.WParam);
+                        return _owner.AdjustNativePanelOpacityFromWheel(m.WParam) || _owner.RedirectWheelFromDrawer(m);
                 }
 
                 return false;

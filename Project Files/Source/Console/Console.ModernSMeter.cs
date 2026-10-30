@@ -83,6 +83,9 @@ namespace Thetis
             public bool Average = true;   // AVG at every start, a click toggles MAX/AVG
             private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
             private double _lastMs;
+            // phosphor bar: a segment lights up at once and its glow fades out like an old CRT
+            private const float PhosphorTauS = 0.5f, SegPitch = 5f, SegWidth = 3.5f;
+            private float[] _glow = new float[0];
             private Font _fBig, _fSmall, _fTick;   // sized from the panel height
 
             public ModernSMeterPanel(Console c)
@@ -129,6 +132,7 @@ namespace Thetis
                 {
                     // radio off: the meter returns garbage, show "--" and an empty bar
                     _shown = _peak = MinDbm;
+                    Array.Clear(_glow, 0, _glow.Length);
                     Invalidate();
                     return;
                 }
@@ -150,8 +154,24 @@ namespace Thetis
                     _peak = level;
                     _peakTime = now;
                 }
+
+                RectangleF bar = barRect();
+                int n = Math.Max(0, (int)Math.Ceiling(bar.Width / SegPitch));
+                if (_glow.Length != n) _glow = new float[n];
+                float fade = (float)Math.Exp(-dt / PhosphorTauS), xv = xOf(bar, level);
+                for (int i = 0; i < n; i++)
+                    _glow[i] = bar.X + i * SegPitch < xv ? 1f : _glow[i] * fade;
                 Invalidate();
             }
+
+            private RectangleF barRect()
+            {
+                int W = ClientSize.Width, H = ClientSize.Height;
+                return new RectangleF(ModernGlassRadius, H * 0.66f, W - 2 * ModernGlassRadius, Math.Max(4f, H * 0.14f));
+            }
+
+            private static float xOf(RectangleF bar, float dbm) =>
+                bar.X + (Math.Max(MinDbm, Math.Min(MaxDbm, dbm)) - MinDbm) / (MaxDbm - MinDbm) * bar.Width;
 
             private static string sUnits(float dbm)
             {
@@ -173,7 +193,6 @@ namespace Thetis
                 Color accent = _tx ? ModernVfoColorTX : ModernVfoColorA;
                 ModernTheme.GlassFrame(g,new RectangleF(0.5f, 0.5f, W - 1f, H - 1f), _tx ? accent : ModernTheme.BorderStrong,
                     ModernGlassRadius * 1.4f, _tx);
-
                 // digits: S units (or watts) big, dBm (or SWR) small on the right
                 string big = _off ? "--" : _tx ? _watts.ToString("0.0") + " W" : sUnits(_shown);
                 bool swr = _tx && _watts > 0.5f && _swr >= 1f;   // no reading without forward power
@@ -194,29 +213,21 @@ namespace Thetis
                 }
 
                 // bar: S0 .. S9+60, amber up to S9, red above; ticks at S1..S9, +20, +40
-                RectangleF bar = new RectangleF(ModernGlassRadius, H * 0.66f, W - 2 * ModernGlassRadius, Math.Max(4f, H * 0.14f));
-                float Xof(float dbm) => bar.X + (Math.Max(MinDbm, Math.Min(MaxDbm, dbm)) - MinDbm) / (MaxDbm - MinDbm) * bar.Width;
+                RectangleF bar = barRect();
+                float Xof(float dbm) => xOf(bar, dbm);
                 using (SolidBrush track = new SolidBrush(Color.FromArgb(28, 255, 255, 255)))
                     g.FillRectangle(track, bar);
 
-                float xs9 = Xof(S9Dbm), xv = Xof(_shown);
-                if (_tx)
+                // segmented bar with phosphor afterglow (_glow, faded in Sample)
+                float xs9 = Xof(S9Dbm);
+                for (int i = 0; i < _glow.Length; i++)
                 {
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(210, accent)))
-                        g.FillRectangle(b, bar.X, bar.Y, xv - bar.X, bar.Height);
+                    if (_glow[i] < 0.02f) continue;
+                    float sx = bar.X + i * SegPitch;
+                    Color c = _tx || sx >= xs9 ? (_tx ? accent : ModernVfoColorTX) : ModernVfoColorA;
+                    using (SolidBrush b = new SolidBrush(Color.FromArgb((int)(210 * _glow[i]), c)))
+                        g.FillRectangle(b, sx, bar.Y, Math.Min(SegWidth, bar.Right - sx), bar.Height);
                 }
-                else
-                {
-                    using (SolidBrush low = new SolidBrush(Color.FromArgb(210, ModernVfoColorA)))
-                        g.FillRectangle(low, bar.X, bar.Y, Math.Min(xv, xs9) - bar.X, bar.Height);
-                    if (xv > xs9)
-                        using (SolidBrush high = new SolidBrush(Color.FromArgb(210, ModernVfoColorTX)))
-                            g.FillRectangle(high, xs9, bar.Y, xv - xs9, bar.Height);
-                }
-
-                // segmented bar: cut it into 4 px blocks
-                using (Pen gap = new Pen(ModernPanelBack, 1.5f))
-                    for (float gx = bar.X + 4f; gx < bar.Right; gx += 5f) g.DrawLine(gap, gx, bar.Y, gx, bar.Bottom);
 
                 float xp = Xof(_peak);
                 if (!_off)
