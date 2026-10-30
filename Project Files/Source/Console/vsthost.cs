@@ -490,10 +490,18 @@ namespace Thetis
             NativeShutdown();
         }
 
+        private static int _rxChainRate, _rxChainMaxBlock;
+
+        // A create on a live chain rebuilds every plugin (editors close, SonoBus leaves its group). SunSDR grows the
+        // RX block after start (64 -> 96 at power-on, 192/384 at the lower PRO rates), so build with headroom and
+        // rebuild only for a new rate or a block above it - VST3 takes any block up to the max.
         public static void CreateRxChain(int sampleRate, int blockSize)
         {
-            NativeCreateChain(VstChainKind.Rx, sampleRate, blockSize, 2);
-            NativeCreateChain(VstChainKind.Remote, sampleRate, blockSize, 2);       // fed from the RX mixer too
+            if (sampleRate == _rxChainRate && blockSize <= _rxChainMaxBlock) return;
+            int maxBlock = Math.Max(blockSize, 1024);
+            int r = NativeCreateChain(VstChainKind.Rx, sampleRate, maxBlock, 2);
+            NativeCreateChain(VstChainKind.Remote, sampleRate, maxBlock, 2);       // fed from the RX mixer too
+            if (r == 0) { _rxChainRate = sampleRate; _rxChainMaxBlock = maxBlock; }
         }
 
         public static void CreateTxChain(int sampleRate, int blockSize)
@@ -503,6 +511,7 @@ namespace Thetis
 
         public static void DestroyRxChain()
         {
+            _rxChainRate = _rxChainMaxBlock = 0;
             NativeDestroyChain(VstChainKind.Rx);
             NativeDestroyChain(VstChainKind.Remote);
         }
