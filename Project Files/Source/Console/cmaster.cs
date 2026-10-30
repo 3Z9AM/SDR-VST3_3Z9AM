@@ -160,6 +160,9 @@ namespace Thetis
         [DllImport("ChannelMaster.dll", EntryPoint = "SendpVstTxProcess", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SendpVstTxProcess(VstProcessCallback del);
 
+        [DllImport("ChannelMaster.dll", EntryPoint = "SetTxMonInput", CallingConvention = CallingConvention.Cdecl)]
+        public static extern unsafe void SetTxMonInput(int tx, double* buff, int frames);
+
         [DllImport("ChannelMaster.dll", EntryPoint = "SendpVstInitialize", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SendpVstInitialize(VstLifecycleCallback del);
 

@@ -532,6 +532,15 @@ void SendpVstTxProcess (void (*Process)(double* buff, int frames))
 	pcm->VstTxProcess = Process;
 }
 
+// Called from the VST TX callback: replaces the MON PRE tap (copied before that callback) with a source the
+// callback inserted itself (SonoBus remote voice); otherwise PRE monitors the empty radio mic.
+PORT
+void SetTxMonInput (int tx, double* buff, int frames)
+{
+	if (frames > 0 && frames <= getbuffsize (pcm->cmMAXInRate))
+		memcpy (pcm->xmtr[tx].mon_input, buff, frames * sizeof (complex));
+}
+
 PORT
 void SendpVstInitialize (void (*Init)(void))
 {

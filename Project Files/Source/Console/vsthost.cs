@@ -564,6 +564,11 @@ namespace Thetis
         private static readonly double[] _remoteRing = new double[RemoteRingFrames];
         private static long _remoteWritten, _remoteRead;   // frames
         private static int _remoteBlock;                   // RX mixer frames per write
+        // jitter reserve: SunSDR feeds the RX mixer in bursts during TX (~240 frames at once), a 2-block reserve
+        // skipped ahead constantly (raspy voice); grows by a block on every underrun, up to RemoteMaxKeep
+        private const int RemoteMaxKeep = 2048;            // ~43 ms at 48 kHz
+        private static int _remoteKeep;                    // shortcut: never shrinks within a session; add a decay if the latency bothers
+        private static bool _remoteFill = true;            // underrun: silence until the reserve is back
         private static long _remoteHeardMs = long.MinValue / 2;
 
         // shortcut: SonoBus does not tell the host about peers - its output is digital zero until a peer's stream
@@ -604,12 +609,22 @@ namespace Thetis
             bool sameRate = cmaster.GetInputRate(1, 0) == Audio.OutRate;
             long w = System.Threading.Volatile.Read(ref _remoteWritten);
             long r = _remoteRead;
-            long keep = 2L * Math.Max(frames, _remoteBlock);
-            if (w - r > keep + Math.Max(frames, _remoteBlock)) r = w - keep;   // stale (after RX) or drifting backlog
+            int block = Math.Max(frames, _remoteBlock);
+            if (_remoteKeep < 2 * block) _remoteKeep = 2 * block;
+            if (w - r > _remoteKeep + 2L * block) r = w - _remoteKeep;   // stale (after RX) or drifting backlog
+            if (_remoteFill && w - r >= _remoteKeep) _remoteFill = false;
             for (int i = 0; i < frames; i++)
             {
                 double s = 0;
-                if (sameRate && r < w) s = _remoteRing[r++ & (RemoteRingFrames - 1)];
+                if (sameRate && !_remoteFill)
+                {
+                    if (r < w) s = _remoteRing[r++ & (RemoteRingFrames - 1)];
+                    else
+                    {
+                        _remoteFill = true;
+                        _remoteKeep = Math.Min(_remoteKeep + block, RemoteMaxKeep);
+                    }
+                }
                 buffer[2 * i] = s;
                 buffer[2 * i + 1] = s;
             }
@@ -635,7 +650,11 @@ namespace Thetis
 
         public static unsafe void ProcessTxAudio(double* buffer, int frames)
         {
-            if (_remoteOn && (Audio.MOX || _txTestOnRx)) readRemote(buffer, frames);
+            if (_remoteOn && (Audio.MOX || _txTestOnRx))
+            {
+                readRemote(buffer, frames);
+                cmaster.SetTxMonInput(0, buffer, frames);   // MON PRE hears the SonoBus voice, not the radio mic
+            }
             // the mic stream runs during RX too: TX plugins only need to run while transmitting
             if (!Audio.MOX)
             {
