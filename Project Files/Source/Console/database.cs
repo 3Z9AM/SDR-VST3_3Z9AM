@@ -4,7 +4,6 @@
 // Thetis is a C# implementation of a Software Defined Radio.
 // Copyright (C) 2004-2012  FlexRadio Systems 
 // Copyright (C) 2010-2020  Doug Wigley
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -9928,6 +9927,19 @@ namespace Thetis
         }
 
         //-W2PA Write specific dataset to a file 
+        // Atomic write: serialise the DataSet to <fn>.tmp, then rename
+        // over the real file. If the app crashes mid-serialise, the
+        // .tmp is discarded on next startup and the previous valid fn
+        // remains intact. Previously dsIN.WriteXml(fn, ...) truncated
+        // fn and wrote in-place; a crash mid-write left a partially-
+        // serialised XML that the next load parsed as valid but
+        // produced a dataset with missing rows/columns, which
+        // manifested downstream as a CLR null-deref crash at startup
+        // that bricked the install until the user wiped
+        // %AppData%\ArtemisSDR. This removes the write-side corruption
+        // window entirely. File.Replace is atomic on NTFS; the
+        // IOException fallback covers the rare case where AV/OneDrive
+        // is holding an exclusive handle on fn.
         public static bool WriteDB(string fn, DataSet dsIN)
         {
             if (dsIN == null || string.IsNullOrWhiteSpace(fn)) return false;

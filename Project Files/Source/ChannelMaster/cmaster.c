@@ -3,7 +3,6 @@
 This file is part of a program that implements a Software-Defined Radio.
 
 Copyright (C) 2014-2019 Warren Pratt, NR0V
-Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -29,6 +28,7 @@ warren@wpratt.com
 #include "fldigi_mod.h"
 #include "wsjtx_mod.h"
 #include "waterfall_iq.h"
+
 
 cmaster cm  = {0};
 CMASTER pcm = &cm;
@@ -141,6 +141,8 @@ void create_xmtr()
 		// out[2] is used for sidetone-out
 		for (j = 0; j < 3; j++)
 			pcm->xmtr[i].out[j] = (double *) malloc0 (getbuffsize (pcm->cmMAXTxOutRate) * sizeof (complex));
+		pcm->xmtr[i].mon_input = (double*)malloc0(getbuffsize(pcm->cmMAXInRate) * sizeof(complex));
+		pcm->xmtr[i].mon_output = (double*)malloc0(getbuffsize(pcm->cmMAXTxOutRate) * sizeof(complex));
 
 		// dexp - vox
 		create_dexp (
@@ -283,6 +285,8 @@ void destroy_xmtr()
 		destroy_dexp (i);
 		for (j = 0; j < 3; j++)
 			_aligned_free (pcm->xmtr[i].out[j]);
+		_aligned_free(pcm->xmtr[i].mon_input);
+		_aligned_free(pcm->xmtr[i].mon_output);
 	}
 }
 
@@ -342,12 +346,28 @@ void create_cmaster()
 void destroy_cmaster()
 {
 	int i;
+	/* REORDERED 2026-04-27 (k0koz): stop per-receiver / per-transmitter
+	 * analyzer dispatcher threads BEFORE destroying the router, the
+	 * audio mixer and the analyzer pool that those threads read from.
+	 *
+	 * Old order destroyed the router/aamix/analyzer-pool first, then
+	 * called destroy_rcvr/destroy_xmtr last — and DestroyAnalyzer is
+	 * inside those. So the analyzer's sendbuf dispatcher kept iterating
+	 * on shared input buffers that destroy_router had ALREADY freed,
+	 * producing 0xc0000374 heap corruption on app exit (crash dump
+	 * 8988.dmp: wdsp!sendbuf+0x262 in analyzer.c). NR2 made it more
+	 * reproducible because EMNR's heavier per-block work shifted the
+	 * dispatcher to a more vulnerable phase of its loop when teardown
+	 * hit.
+	 *
+	 * New order: stop dispatchers first, then free the buffers.
+	 */
+	destroy_rcvr();
+	destroy_xmtr();
 	destroy_analyzer_alloc();
 	destroy_router(0, 0);
 	destroy_cmasio();
 	destroy_aamix  (0, 0);
-	destroy_xmtr();
-	destroy_rcvr();
 	for (i = 0; i < pcm->cmSTREAM; i++)
 	{
 		DeleteCriticalSection (&pcm->update[i]);
@@ -447,16 +467,19 @@ void xcmaster (int stream)
 				memset (pcm->in[stream], 0, pcm->xcm_insize[stream] * sizeof (complex));
 		}
 		xpipe (stream, 0, pcm->in);
+		memcpy(pcm->xmtr[tx].mon_input, pcm->in[stream], pcm->xcm_insize[stream] * sizeof(complex));
 		xdexp (tx);																				// vox-dexp
 		if (pcm->VstTxProcess && vst_tx_chain_active(tx))
 			pcm->VstTxProcess(pcm->in[stream], pcm->xcm_insize[stream]);
-		fexchange0 (chid (stream, 0), pcm->in[stream], pcm->xmtr[tx].out[0], &error);			// dsp
+		fexchange0WithMonitor(chid(stream, 0), pcm->in[stream], pcm->xmtr[tx].out[0],
+			pcm->xmtr[tx].mon_input, pcm->xmtr[tx].mon_output, &error);
 		// WriteAudio(10.0, pcm->xmtr[tx].ch_outrate, pcm->xmtr[tx].ch_outsize, pcm->xmtr[tx].out[0], 3);
-		xsidetone(tx);
+		xsidetone(tx, pcm->xmtr[tx].mon_output);
 		xpipe (stream, 1, pcm->xmtr[tx].out);
 		CM_WaterfallIQ_Push(2, pcm->xmtr[tx].ch_outsize, pcm->xmtr[tx].out[0]);
 		// Spectrum0 (1, stream, 0, 0, pcm->xmtr[tx].out[0]);									// panadapter
-		xMixAudio (0, 0, chid (stream, 0), pcm->xmtr[tx].out[2]);								// mix monitor audio
+		// out[2] carries the selected audio tap or the keyed CW sidetone.
+		xMixAudioSized (0, 0, chid (stream, 0), pcm->xmtr[tx].ch_outsize, pcm->xmtr[tx].out[2]);
 		xtxgain (pcm->xmtr[tx].pgain);															// Gain for Penelope & amp_protect
 		xeer (pcm->xmtr[tx].peer);																// EER transmission
 		xilv(pcm->xmtr[tx].pilv, pcm->xmtr[tx].out);											// interleave EER, call Outbound()
@@ -564,11 +587,31 @@ void SetTCIApplyTxVst (int apply)
 //end tci
 
 PORT
+void SetRXOutputGain (int channel, double gain)
+{
+	// Per-input gain on the speaker mixer (aamix id 0). The user's RX AF /
+	// volume slider used to call WDSP's SetRXAPanelGain1, which scales the
+	// audio inside the RXA pipeline before xpipe taps it for VAC, TCI and
+	// the WAV recorder. That coupled the digital feed to the operator's
+	// listening volume (issue #40 — Decodium / JTDX / FLDIGI couldn't
+	// decode unless AF was somewhere near 50%). By moving the gain to this
+	// mixer's input, the speaker still tracks the slider but VAC + TCI +
+	// recorder receive a fixed DSP-level signal.
+	SetAAudioMixVol (0, 0, channel, gain);
+}
+
+PORT
 void SetRunPanadapter (int id, int run)
 {
 	_InterlockedExchange (&pcm->rcvr[id].run_pan, run);
 }
 
+/* Declared in sunsdr.c. Place this BEFORE PORT below so the export
+ * macro still applies to SetXcmInrate — when this extern decl was
+ * inserted between PORT and the function, PORT silently shifted onto
+ * the extern decl and the C# P/Invoke startup-failed with
+ * EntryPointNotFoundException. */
+extern void sdr_logf(const char* fmt, ...);
 PORT
 void SetXcmInrate (int in_id, int rate)	// 2014-12-18:  called for streams 0, 1, 3, 4 (RX).  Stream 2 (TX) called in CMCreateCMaster().
 {
@@ -576,6 +619,14 @@ void SetXcmInrate (int in_id, int rate)	// 2014-12-18:  called for streams 0, 1,
 	EnterCriticalSection (&pcm->update[in_id]);
 	if (pcm->xcm_inrate[in_id] != rate)
 	{
+		int rx_for_log = (stype(in_id) == 0) ? rxid(in_id) : -1;
+		int old_inrate = pcm->xcm_inrate[in_id];
+		int old_insize = pcm->xcm_insize[in_id];
+		int old_chout  = (rx_for_log >= 0 && rx_for_log < pcm->cmRCVR) ? pcm->rcvr[rx_for_log].ch_outsize : -1;
+		int old_aout   = pcm->audio_outsize;
+		sdr_logf("[RATE-CASCADE BEFORE] in_id=%d stype=%d rx=%d  xcm_inrate=%d -> %d  xcm_insize=%d  rcvr.ch_outsize=%d  audio_outsize=%d\n",
+			in_id, stype(in_id), rx_for_log, old_inrate, rate, old_insize, old_chout, old_aout);
+
 		pcm->xcm_inrate[in_id] = rate;
 		pcm->xcm_insize[in_id] = getbuffsize (rate);
 		SetCMRingOutsize(in_id, pcm->xcm_insize[in_id]);
@@ -597,6 +648,101 @@ void SetXcmInrate (int in_id, int rate)	// 2014-12-18:  called for streams 0, 1,
 			// PIPE - set wave recorder (leave in C# since player is there)
 			if (rx == 0) SetSiphonInsize (rx, pcm->xcm_insize[in_id]);			// PIPE - set siphon for phase2 display, RX1 only
 			SetIVACiqSizeAndRate (rx, pcm->xcm_insize[in_id], pcm->xcm_inrate[in_id]);	// PIPE - set vacOUT size and rate for IQ data
+			/* Rate changed → WDSP channel's audio out_size changed too.
+			 * rcvr[rx].ch_outsize and audio_outsize (AAMixer ring sizing)
+			 * are set once at init from the INITIAL rate and never
+			 * refreshed here. For non-integer rate ratios (SunSDR2 DX
+			 * native 312.5 / 156.25 / 78.125 kHz) the initial value is
+			 * wrong after switching to those rates, causing downstream
+			 * undersampling and VAC underflow. Recompute from the new
+			 * xcm_insize × ch_outrate / xcm_inrate. */
+			if (rate > 0)
+			{
+				int new_rcvr_outsize = (int)(((long long)pcm->xcm_insize[in_id]
+				                              * pcm->rcvr[rx].ch_outrate)
+				                             / rate);
+				if (new_rcvr_outsize > 0 && new_rcvr_outsize != pcm->rcvr[rx].ch_outsize)
+				{
+					pcm->rcvr[rx].ch_outsize = new_rcvr_outsize;
+					SetIVACaudioSize (rx, pcm->rcvr[rx].ch_outsize);
+					SetTCIRxAudioSize (rx, pcm->rcvr[rx].ch_outsize);
+					if (rx == 0 && pcm->rcvr[0].ch_outsize != pcm->audio_outsize)
+					{
+						pcm->audio_outsize = pcm->rcvr[0].ch_outsize;
+						SetAAudioRingInsize  (0, 0, pcm->audio_outsize);
+						SetAAudioRingOutsize (0, 0, pcm->audio_outsize);
+						configure_vst_rx_chain();	// VST RX chain was created for the old block size (64 -> 96 on SunSDR)
+						/* Same buffer-overrun bug class as audio[j] / ppip->rbuff,
+						 * just at coarser granularity for cmASIO. create_cmasio()
+						 * runs once at startup and caches pcma->blocksize =
+						 * pcm->audio_outsize at that moment (typically 64 for the
+						 * default 192k integer ratio). When SunSDR's SetXcmInrate
+						 * later switches to 312500, audio_outsize grows to 96 but
+						 * pcma->blocksize stays 64 — and the rmatchIN/rmatchOUT
+						 * resamplers + pcma->input/output buffers were all sized
+						 * from that stale 64. asioOUT then receives 96-sample
+						 * blocks from the mixer but xrmatchIN reads only 64,
+						 * dropping 33% of samples per block — symptom: cmASIO
+						 * runs (state=1, no overflows), but no audible audio.
+						 * Fix: tear down + recreate cmASIO so it picks up the
+						 * new audio_outsize. destroy_cmasio() bails early if
+						 * cmASIO wasn't running, so this is a no-op when no
+						 * ASIO driver is configured. */
+						destroy_cmasio();
+						create_cmasio();
+					}
+					/* CRITICAL: pipe.c::create_pipe allocated ppip->rbuff[rx]
+					 * with the ORIGINAL ch_outsize. The downstream xcmaster
+					 * audio path (pipe.c xcmaster, case 1) memcpy's
+					 * ch_outsize complex samples into ppip->rbuff[rx] every
+					 * iteration. If ch_outsize grew (initial Anan-style 64
+					 * -> SunSDR 96), the memcpy stomps 32 complex × sizeof
+					 * = 512 bytes past the rbuff[rx] allocation, corrupting
+					 * heap thousands of times per second — strong candidate
+					 * for the destroy_snba+0xdd 0xc0000374 crashes seen on
+					 * app exit and the intermittent robotic-without-NR
+					 * audio. Resize rbuff[rx] in lockstep with ch_outsize. */
+					if (ppip != NULL && ppip->rbuff != NULL && ppip->rbuff[rx] != NULL)
+					{
+						_aligned_free (ppip->rbuff[rx]);
+						ppip->rbuff[rx] = (double *) malloc0 (pcm->rcvr[rx].ch_outsize * sizeof (complex));
+					}
+					/* Same family of bug for the per-subrx audio[] buffers.
+					 * cmaster.c::create_rcvr allocates pcm->rcvr[rx].audio[j]
+					 * sized to getbuffsize(cmMAXAudioRate). At create time
+					 * cmMAXAudioRate=48000 and ch_outsize=getbuffsize(48000)=64
+					 * (integer-ratio default rates), so they match. After
+					 * SunSDR rate switch, ch_outsize grows to 96 but the
+					 * audio[] buffers are still 64 complex doubles = 1024
+					 * bytes. The WDSP RX channel writes ch_outsize complex
+					 * doubles into audio[j] every fexchange, stomping 32
+					 * complex × 16 = 512 bytes past the allocation. When the
+					 * stomped bytes land on an adjacent FIRcore plan's
+					 * fftin/fftout (NBP/SNBA/EMNR), the audio block whose
+					 * filter taps got corrupted plays back as robotic; when
+					 * they land on a heap header, the eventual free() at
+					 * exit catches it as STATUS_HEAP_CORRUPTION (seen in
+					 * deplan_fircore on the destroy_nbp path). Realloc
+					 * audio[j] for every subrx in lockstep with ch_outsize. */
+					{
+						int sub;
+						for (sub = 0; sub < pcm->cmSubRCVR; sub++)
+						{
+							if (pcm->rcvr[rx].audio[sub] != NULL)
+							{
+								_aligned_free (pcm->rcvr[rx].audio[sub]);
+								pcm->rcvr[rx].audio[sub] = (double *) malloc0 (pcm->rcvr[rx].ch_outsize * sizeof (complex));
+							}
+						}
+					}
+				}
+				sdr_logf("[RATE-CASCADE AFTER]  in_id=%d  xcm_inrate=%d  xcm_insize=%d  rcvr[%d].ch_outrate=%d  rcvr[%d].ch_outsize=%d  audio_outrate=%d  audio_outsize=%d  rbuff_resized_to=%d\n",
+					in_id, pcm->xcm_inrate[in_id], pcm->xcm_insize[in_id],
+					rx, pcm->rcvr[rx].ch_outrate,
+					rx, pcm->rcvr[rx].ch_outsize,
+					pcm->audio_outrate, pcm->audio_outsize,
+					pcm->rcvr[rx].ch_outsize);
+			}
 			break;
 		case 1:  // transmitter
 			tx = txid (in_id);
@@ -632,7 +778,14 @@ void SetCMAudioOutrate (int in_id, int rate)		// 2014-11-24:  NOT called by cons
 {													//   protocol and that is the default rate being set at creation.
 	EnterCriticalSection (&pcm->update[in_id]);
 	pcm->audio_outrate = rate;
-	pcm->audio_outsize = getbuffsize (rate);
+	/* Mirror the init-time policy in cmsetup.c:set_cmdefault_rates —
+	 * audio_outsize must match rcvr[0].ch_outsize (the per-block audio
+	 * chunk size from the DSP channel), not just getbuffsize(rate).
+	 * Required for SunSDR non-integer rate ratios. */
+	if (pcm->cmRCVR > 0 && pcm->rcvr[0].ch_outsize > 0)
+		pcm->audio_outsize = pcm->rcvr[0].ch_outsize;
+	else
+		pcm->audio_outsize = getbuffsize (rate);
 	SetAAudioOutRate     (0, 0, pcm->audio_outrate);
 	SetAAudioRingInsize  (0, 0, pcm->audio_outsize);
 	SetAAudioRingOutsize (0, 0, pcm->audio_outsize);
@@ -648,7 +801,15 @@ void SetRcvrChannelOutrate (int rcvr_id, int rate, int state)	// 2014-12-18:  NO
 	int mix_in_id;
 	EnterCriticalSection (&pcm->update[in_id]);
 	pcm->rcvr[rcvr_id].ch_outrate = rate;
-	pcm->rcvr[rcvr_id].ch_outsize = getbuffsize (rate);
+	/* Match WDSP channel's actual out_size (see comment in
+	 * cmsetup.c:set_cmdefault_rates — required for non-integer
+	 * in:out rate ratios to avoid VAC underflow). */
+	if (pcm->xcm_inrate[in_id] > 0)
+		pcm->rcvr[rcvr_id].ch_outsize = (int)(((long long)pcm->xcm_insize[in_id]
+		                                       * rate)
+		                                      / pcm->xcm_inrate[in_id]);
+	else
+		pcm->rcvr[rcvr_id].ch_outsize = getbuffsize (rate);
 	for (j = 0; j < pcm->cmSubRCVR; j++)
 	{
 		SetOutputSamplerate(chid(in_id, j), rate);							// set DSP Channel output rate (sets size too)

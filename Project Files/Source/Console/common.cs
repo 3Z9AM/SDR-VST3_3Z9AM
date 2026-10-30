@@ -27,7 +27,6 @@
 //
 //=================================================================
 // Continual modifications Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //=================================================================
 //
 //============================================================================================//
@@ -750,7 +749,7 @@ namespace Thetis
             try
             {
                 string dir = string.IsNullOrEmpty(m_sLogPath)
-                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"OpenHPSDR\SDR-VST3-x64")
+                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"OpenHPSDR\SDR-VST3-SUNSDR")
                     : m_sLogPath;
                 dir = Path.Combine(dir, "crashes");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);

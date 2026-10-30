@@ -218,7 +218,7 @@ void xtciOUT(int id, int stream, double* data)
 			xMixAudio(a->mixer, -1, 0, data);
 	}
 	else if (stream == 2)
-		xMixAudio(a->mixer, -1, 1, data);
+		xMixAudioSized(a->mixer, -1, 1, pcm->xmtr[0].ch_outsize, data);
 }
 
 PORT

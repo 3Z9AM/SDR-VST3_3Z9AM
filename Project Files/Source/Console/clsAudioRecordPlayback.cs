@@ -3201,6 +3201,18 @@ namespace Thetis
         private volatile bool _mox = false;
         private volatile float _fInverseGain = 1f;
 
+        // Pre-DSP source flags. _fInverseGain compensates for RXOutputGain
+        // attenuation applied at the end of the post-DSP audio chain — it
+        // restores "full scale" audio for the WAV. But pre-DSP IQ data has
+        // NOT been attenuated, so applying 1/RXOutputGain over-amplifies
+        // strong signals and HARD-CLIPS them to ±1.0 — turning voice IQ
+        // into square-wave samples with discrete odd-harmonic FFT (the
+        // constant carrier-like spurs seen on playback). WriteBuffer skips
+        // the gain compensation when recording the pre-DSP source for the
+        // current MOX state.
+        private readonly bool _record_rx_pre_processed;
+        private readonly bool _record_tx_pre_processed;
+
         private readonly string _file;
         private readonly Action<string, Exception> _finished;
         private Exception _failure;
@@ -3210,19 +3222,28 @@ namespace Thetis
             _id = wfw_id;
             _file = file;
             _finished = finished;
+            _record_rx_pre_processed = recordRxPreProcessed;
+            _record_tx_pre_processed = recordTxPreProcessed;
 
             WaveThing.wrecorder[_id].RxPre = recordRxPreProcessed;
             WaveThing.wrecorder[_id].TxPre = recordTxPreProcessed;
 
             if (recordRxPreProcessed)
             {
+                // Pre-processing path records IQ input — its block size equals
+                // xcm_insize (which == getbuffsize(xcm_inrate) by definition).
                 _rcvr_rate = cmaster.GetInputRate(0, _id);
                 _rcvr_size = cmaster.GetBuffSize(_rcvr_rate);
             }
             else
             {
+                // Post-processing path records audio output — block size MUST
+                // be ch_outsize (set by SetXcmInrate's recompute). For SunSDR
+                // 312500/48000 ch_outsize=96, getbuffsize(ch_outrate=48000)=64
+                // — using GetBuffSize here mis-sized the recording resampler
+                // and made WAVs play back at 1.5x speed (chipmunk/robotic).
                 _rcvr_rate = cmaster.GetChannelOutputRate(0, _id);
-                _rcvr_size = cmaster.GetBuffSize(_rcvr_rate);
+                _rcvr_size = cmaster.GetChannelOutputSize(0, _id);
             }
 
             if (recordTxPreProcessed)
@@ -3232,19 +3253,58 @@ namespace Thetis
             }
             else
             {
+                // Same fix as RX above for the TX post-processing path.
                 _xmtr_rate = cmaster.GetChannelOutputRate(1, 0);
-                _xmtr_size = cmaster.GetBuffSize(_xmtr_rate);
+                _xmtr_size = cmaster.GetChannelOutputSize(1, 0);
             }
 
-            if (wfw_id == 0) RecordGain = (float)Audio.console.radio.GetDSPRX(0, 0).RXOutputGain;
-            else if (wfw_id == 1) RecordGain = (float)Audio.console.radio.GetDSPRX(1, 0).RXOutputGain;
+            // SunSDR2 issue #40: AF / volume slider now controls the speaker
+            // mixer, not the WDSP RXA panel gain, so pipe.c hands the recorder
+            // a buffer that's already at full DSP level. Inverse compensation
+            // would now over-amplify quiet-AF recordings.
+            RecordGain = 1.0f;
 
             _channels = chan;
-            _sample_rate = samp_rate;
             _format_tag = formatTag;
             _bit_depth = bitDepth;
 
-            int outBlock = (int)Math.Ceiling(IN_BLOCK * (double)_sample_rate / (double)Math.Min(_rcvr_size, _xmtr_size));
+            // Override the user-supplied WAV sample rate when the active
+            // recording source has a non-integer ratio with it (SunSDR2 DX
+            // 312500 vs user-picked 48000 → 625:96 reduced ratio).
+            // WDSP.create_resampleFV needs an M-phase polyphase filter bank
+            // where M is the reduced numerator — for 625:96 that's 625 sub-
+            // banks, each with thousands of taps. Allocating that at runtime
+            // crashed both the app and Windows when a SunSDR user selected
+            // 312500 in the rate dropdown.
+            //
+            // Override to the source's native rate so the resampler is never
+            // created on the active side — recording is bit-exact, no runaway
+            // native allocation, and a SunSDR-native WAV can be processed by
+            // any IQ-aware tool. (Quick Playback round-trip on these WAVs is
+            // a separate problem we're not solving here.)
+            //
+            // RX Audio (post-DSP, ch_outrate=48000) and TX Mic (pre-DSP) on
+            // SunSDR have integer ratios with 48000 (M=1) so no override; the
+            // user's chosen rate is honored.
+            bool rcvrIntegerRatio = IsIntegerRatio(_rcvr_rate, samp_rate);
+            bool xmtrIntegerRatio = IsIntegerRatio(_xmtr_rate, samp_rate);
+            if (recordRxPreProcessed && !rcvrIntegerRatio)
+                samp_rate = _rcvr_rate;
+            else if (recordTxPreProcessed && !xmtrIntegerRatio)
+                samp_rate = _xmtr_rate;
+
+            _sample_rate = samp_rate;
+
+            // Bound outBlock. The natural formula is IN_BLOCK × sample_rate /
+            // smallest_source_block_size, which can balloon when the source
+            // block is very small (e.g. TX inrate=48000 → 64) and the WAV
+            // sample rate is high. Cap at 4× IN_BLOCK so the buffer is always
+            // headroom-only — the actual write loop only consumes IN_BLOCK at
+            // a time. Defense-in-depth so a future rate edge case can't
+            // allocate hundreds of MB.
+            int outBlockNatural = (int)Math.Ceiling(IN_BLOCK * (double)_sample_rate / (double)Math.Min(_rcvr_size, _xmtr_size));
+            int outBlock = Math.Min(outBlockNatural, IN_BLOCK * 4);
+
             _rb_l = new RingBufferFloat(IN_BLOCK * 16);
             _rb_r = new RingBufferFloat(IN_BLOCK * 16);
             _in_buf_l = new float[IN_BLOCK];
@@ -3257,13 +3317,25 @@ namespace Thetis
             _length_counter = 0;
             _record = true;
 
-            if (_sample_rate != _rcvr_rate)
+            // Create resamplers ONLY when the ratio is safe (integer). For
+            // non-integer ratios (M >> 1 polyphase banks), skip creation —
+            // the wrecord callback will hit the BaseRate-equals-source branch
+            // and pass samples through unchanged for the active side, or
+            // (for the inactive side that didn't get overridden) the resample
+            // path will reach a null resampler. We accept "MOX-side
+            // recording is silent if RX side was overridden to a non-integer
+            // rate" as a cost of safety — recording sessions don't normally
+            // toggle MOX during the capture, and avoiding the runaway native
+            // allocation is non-negotiable.
+            bool postRcvrIntegerRatio = IsIntegerRatio(_rcvr_rate, _sample_rate);
+            bool postXmtrIntegerRatio = IsIntegerRatio(_xmtr_rate, _sample_rate);
+
+            if (_sample_rate != _rcvr_rate && postRcvrIntegerRatio)
             {
                 _rcvr_resamp_l = WDSP.create_resampleFV(_rcvr_rate, _sample_rate);
                 _rcvr_resamp_r = WDSP.create_resampleFV(_rcvr_rate, _sample_rate);
             }
-
-            if (_sample_rate != _xmtr_rate)
+            if (_sample_rate != _xmtr_rate && postXmtrIntegerRatio)
             {
                 _xmtr_resamp_l = WDSP.create_resampleFV(_xmtr_rate, _sample_rate);
                 _xmtr_resamp_r = WDSP.create_resampleFV(_xmtr_rate, _sample_rate);
@@ -3553,6 +3625,24 @@ namespace Thetis
             return (sbyte)(sample < 0 ? (sample - 0.5f) : (sample + 0.5f));
         }
 
+        // True iff source and target rates are an integer ratio (one divides
+        // evenly into the other). Examples:
+        //   192000 / 48000 → true  (4:1 cheap polyphase, fine for WDSP)
+        //   48000 / 48000  → true
+        //   312500 / 48000 → false (625:96 reduced — needs a 625-phase bank,
+        //                          structurally too expensive for
+        //                          WDSP.create_resampleFV — has crashed app +
+        //                          Windows when allocated at runtime)
+        // Used by WaveFileWriter and WaveFileReader1 ctors to skip resampler
+        // creation on non-integer-ratio paths. Internal so both classes can
+        // share the rule without duplicating the formula.
+        internal static bool IsIntegerRatio(int source, int target)
+        {
+            if (source <= 0 || target <= 0) return false;
+            if (source == target) return true;
+            return (source % target == 0) || (target % source == 0);
+        }
+
         private static void WriteWaveHeader(ref BinaryWriter w, short channels, int sample_rate, short format_tag, short bit_depth, int data_length)
         {
             w.Write(0x46464952);
@@ -3695,7 +3785,13 @@ namespace Thetis
             xmtr_size = cmaster.GetBuffSize(xmtr_rate);
 
             IN_BLOCK = 2048;
-            OUT_BLOCK = (int)Math.Ceiling(IN_BLOCK * (double)max_rate / (double)sample_rate);
+            // Bound OUT_BLOCK at 4× IN_BLOCK. The natural formula can balloon
+            // when WAV sample_rate is much smaller than max_rate (e.g. a 48000
+            // WAV played on SunSDR at 312500). Defense-in-depth.
+            int OUT_BLOCK_natural = (sample_rate > 0)
+                ? (int)Math.Ceiling(IN_BLOCK * (double)max_rate / (double)sample_rate)
+                : IN_BLOCK;
+            OUT_BLOCK = Math.Min(OUT_BLOCK_natural, IN_BLOCK * 4);
 
             rb_l = new RingBufferFloat(16 * OUT_BLOCK);
             rb_r = new RingBufferFloat(16 * OUT_BLOCK);
@@ -3718,13 +3814,21 @@ namespace Thetis
                 io_buf_size = IN_BLOCK * 4 * source_channels;
             }
 
-            if (sample_rate != rcvr_rate)
+            // Resamplers only when the ratio is integer. Non-integer (SunSDR
+            // 312500 vs 48000) would need a 625-phase polyphase bank; the
+            // native allocation crashes the app + Windows. For native-rate
+            // WAVs (recorded by our recorder, which writes at radio's IQ
+            // rate) the ratio is always 1:1 and no resampler is needed —
+            // ProcessBuffers takes the buf_l_in.CopyTo(buf_l_out) branch.
+            // For mismatch-rate WAVs (e.g. older 48000 IQ files played on
+            // SunSDR) playback produces silence rather than crashing.
+            if (sample_rate != rcvr_rate && WaveFileWriter.IsIntegerRatio(sample_rate, rcvr_rate))
             {
                 rcvr_resamp_l = WDSP.create_resampleFV(sample_rate, rcvr_rate);
                 if (channels > 1) rcvr_resamp_r = WDSP.create_resampleFV(sample_rate, rcvr_rate);
             }
 
-            if (sample_rate != xmtr_rate)
+            if (sample_rate != xmtr_rate && WaveFileWriter.IsIntegerRatio(sample_rate, xmtr_rate))
             {
                 xmtr_resamp_l = WDSP.create_resampleFV(sample_rate, xmtr_rate);
                 if (channels > 1) xmtr_resamp_r = WDSP.create_resampleFV(sample_rate, xmtr_rate);
@@ -3954,15 +4058,28 @@ namespace Thetis
 
             int out_cnt = IN_BLOCK;
 
+            // Resampler null guards: ctor only creates resamplers for safe
+            // integer ratios. When the WAV was recorded at a non-integer
+            // ratio with the radio's source rate, the resampler is null and
+            // the playback can't honor the mismatch. Drop samples (out_cnt=0)
+            // instead of native-AV'ing on a null void* arg.
             if (!Audio.MOX)
             {
                 if (sample_rate != rcvr_rate)
                 {
-                    fixed (float* in_ptr = &buf_l_in[0], out_ptr = &buf_l_out[0])
-                        WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, rcvr_resamp_l);
+                    if (rcvr_resamp_l != null && (channels <= 1 || rcvr_resamp_r != null))
+                    {
+                        fixed (float* in_ptr = &buf_l_in[0], out_ptr = &buf_l_out[0])
+                            WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, rcvr_resamp_l);
 
-                    fixed (float* in_ptr = &buf_r_in[0], out_ptr = &buf_r_out[0])
-                        WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, rcvr_resamp_r);
+                        if (rcvr_resamp_r != null)
+                            fixed (float* in_ptr = &buf_r_in[0], out_ptr = &buf_r_out[0])
+                                WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, rcvr_resamp_r);
+                    }
+                    else
+                    {
+                        out_cnt = 0;
+                    }
                 }
                 else
                 {
@@ -3974,11 +4091,19 @@ namespace Thetis
             {
                 if (sample_rate != xmtr_rate)
                 {
-                    fixed (float* in_ptr = &buf_l_in[0], out_ptr = &buf_l_out[0])
-                        WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, xmtr_resamp_l);
+                    if (xmtr_resamp_l != null && (channels <= 1 || xmtr_resamp_r != null))
+                    {
+                        fixed (float* in_ptr = &buf_l_in[0], out_ptr = &buf_l_out[0])
+                            WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, xmtr_resamp_l);
 
-                    fixed (float* in_ptr = &buf_r_in[0], out_ptr = &buf_r_out[0])
-                        WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, xmtr_resamp_r);
+                        if (xmtr_resamp_r != null)
+                            fixed (float* in_ptr = &buf_r_in[0], out_ptr = &buf_r_out[0])
+                                WDSP.xresampleFV(in_ptr, out_ptr, IN_BLOCK, &out_cnt, xmtr_resamp_r);
+                    }
+                    else
+                    {
+                        out_cnt = 0;
+                    }
                 }
                 else
                 {

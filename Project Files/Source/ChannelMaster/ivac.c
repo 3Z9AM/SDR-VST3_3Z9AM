@@ -30,6 +30,39 @@ warren@wpratt.com
 
 __declspec (align (16))			IVAC pvac[MAX_EXT_VACS];
 
+static long vac_mix_active(IVAC a)
+{
+	// During TX the monitor clock supplies audio (or silence with MON off).
+	// During RX, require TX only for MON/CW sidetone. This also allows RX
+	// startup without waiting for the SunSDR TX keepalive to start.
+	return a->mox ? 2 : (a->mon ? 3 : 1);
+}
+
+static long vac_mix_what(IVAC a)
+{
+	return (a->mox ? 0 : 1) | (a->mon ? 2 : 0);
+}
+
+static void create_vac_mixer(int id, IVAC a)
+{
+	int inrate[2] = { a->audio_rate, a->txmon_rate };
+	a->mixer = create_aamix(-1, id, a->audio_size, a->audio_size, 2,
+		vac_mix_active(a), vac_mix_what(a), a->vac_rx_scale, 4096,
+		inrate, a->audio_rate, xvac_out, 0.0, 0.0, 0.0, 0.0);
+	SetAAudioMixVol(a->mixer, 0, 0, a->vac_af_gain);
+	SetAAudioMixVol(a->mixer, 0, 1, a->vac_mon_scale);
+}
+
+static void update_vac_mixer(IVAC a)
+{
+	long what = vac_mix_what(a);
+	// 'what' alone cannot enable a stream: inactive sources reject their
+	// samples in xMixAudio and are excluded by xaamix's active mask.
+	SetAAudioMixWhat(a->mixer, 0, 0, (what & 1) != 0);
+	SetAAudioMixWhat(a->mixer, 0, 1, (what & 2) != 0);
+	SetAAudioMixStates(a->mixer, 0, 3, vac_mix_active(a));
+}
+
 void create_resamps(IVAC a)
 {
 	a->INringsize = (int)(2 * a->mic_rate * a->in_latency);		// FROM VAC to mic
@@ -95,6 +128,9 @@ PORT void create_ivac(
 	a->initial_INvar = 1.0;
 	a->initial_OUTvar = 1.0;
 	a->swapIQout = 0;
+	a->vac_rx_scale = 1.0;
+	a->vac_af_gain = 1.0;
+	a->vac_mon_scale = 1.0;
 	a->exclusive_in = 0;
 	a->exclusive_out = 0;
 	a->vac_apply_rx_vst = 0;
@@ -103,10 +139,7 @@ PORT void create_ivac(
 	a->mono_in_to_stereo_capacity = 0;
 	InitializeCriticalSectionAndSpinCount(&a->cs_ivac, 2500);
 	create_resamps(a);
-	{
-		int inrate[2] = { a->audio_rate, a->txmon_rate };
-		a->mixer = create_aamix(-1, id, a->audio_size, a->audio_size, 2, 3, 3, 1.0, 4096, inrate, a->audio_rate, xvac_out, 0.0, 0.0, 0.0, 0.0);
-	}
+	create_vac_mixer(id, a);
 	pvac[id] = a;
 }
 
@@ -123,6 +156,7 @@ void destroy_resamps(IVAC a)
 PORT void destroy_ivac(int id)
 {
 	IVAC a = pvac[id];
+	destroy_aamix(a->mixer, 0);
 	destroy_resamps(a);
 	DeleteCriticalSection(&a->cs_ivac);
 	free (a);
@@ -153,14 +187,34 @@ PORT void xvacIN(int id, double* in_tx, int bypass)
 		_InterlockedExchange(&a->vac_feed_tx, 0);
 }
 
+extern void sdr_logf(const char* fmt, ...);
 PORT void xvacOUT(int id, int stream, double* data)
 {
 	IVAC a = pvac[id];
 	// receiver input data (iq_type) -> stream = 0
 	// receiver output data (audio)  -> stream = 1
 	// transmitter output data (mon) -> stream = 2
+
 	if (a->run)
 	{
+		EnterCriticalSection(&a->cs_ivac);
+		/* Diagnostic: log the configuration the FIRST time we actually
+		 * dispatch a real audio sample (run=1) into IVAC for each
+		 * (id, stream). Lets us see what audio_size/audio_rate/vac_size
+		 * IVAC believes it has at the moment audio first flows. */
+		static volatile int logged_first[8] = {0};
+		int slot = (id << 2) | (stream & 3);
+		if (slot >= 0 && slot < 8 && !logged_first[slot])
+		{
+			logged_first[slot] = 1;
+			sdr_logf("[IVAC FIRST AUDIO] id=%d stream=%d  iq_type=%d  audio_rate=%d audio_size=%d  vac_rate=%d vac_size=%d  iq_rate=%d iq_size=%d  txmon_rate=%d txmon_size=%d  mic_rate=%d mic_size=%d\n",
+				id, stream, a->iq_type,
+				a->audio_rate, a->audio_size,
+				a->vac_rate, a->vac_size,
+				a->iq_rate, a->iq_size,
+				a->txmon_rate, a->txmon_size,
+				a->mic_rate, a->mic_size);
+		}
 		if (!a->iq_type)
 		{	// call mixer to synchronize the two streams
 			if (stream == 1)
@@ -169,10 +223,11 @@ PORT void xvacOUT(int id, int stream, double* data)
 					xMixAudio(a->mixer, -1, 0, data);
 			}
 			else if (stream == 2)
-				xMixAudio(a->mixer, -1, 1, data);
+				xMixAudioSized(a->mixer, -1, 1, a->txmon_size, data);
 		}
 		else if (stream == 0)
 			xrmatchIN (a->rmatchOUT, data);	// i-q data from RX stream
+		LeaveCriticalSection(&a->cs_ivac);
 	}
 }
 
@@ -282,7 +337,12 @@ int CallbackIVAC(const void* input,
 	}
 
 	xrmatchOUT(a->rmatchOUT, out_ptr);
-	// if (id == 0)  WriteAudio (120.0, 48000, a->vac_size, out_ptr, 3); //
+	/* DIAGNOSTIC: WriteAudio call disabled. Tried briefly to capture
+	 * the rmatchOUT output but its 46 MB calloc on first call inside
+	 * the PortAudio callback (which has a tight ~21 ms budget at
+	 * 48 kHz/1024) was tripping MME underrun and silencing the
+	 * stream. Need a non-blocking capture mechanism instead. */
+	// if (id == 0) WriteAudio (120.0, (int)a->vac_rate, (int)a->vac_size, out_ptr, 3);
 	if (a->iq_type && a->swapIQout)
 	{
 		unsigned long count = (unsigned long)a->vac_size; // assumes vac_size is always the same as frameCount
@@ -459,10 +519,7 @@ PORT void SetIVACaudioRate(int id, int rate)
 	{
 		a->audio_rate = rate;
 		destroy_aamix(a->mixer, 0);
-		{
-			int inrate[2] = { a->audio_rate, a->txmon_rate };
-			a->mixer = create_aamix(-1, id, a->audio_size, a->audio_size, 2, 3, 3, 1.0, 4096, inrate, a->audio_rate, xvac_out, 0.0, 0.0, 0.0, 0.0);
-		}
+		create_vac_mixer(id, a);
 		destroy_resamps(a);
 		create_resamps(a);
 	}
@@ -477,10 +534,7 @@ void SetIVACtxmonRate(int id, int rate)
 	{
 		a->txmon_rate = rate;
 		destroy_aamix(a->mixer, 0);
-		{
-			int inrate[2] = { a->audio_rate, a->txmon_rate };
-			a->mixer = create_aamix(-1, id, a->audio_size, a->audio_size, 2, 3, 3, 1.0, 4096, inrate, a->audio_rate, xvac_out, 0.0, 0.0, 0.0, 0.0);
-		}
+		create_vac_mixer(id, a);
 	}
 	LeaveCriticalSection(&a->cs_ivac);
 }
@@ -534,10 +588,7 @@ PORT void SetIVACaudioSize(int id, int size)
 	EnterCriticalSection(&a->cs_ivac);
 	a->audio_size = (unsigned int)size;
 	destroy_aamix(a->mixer, 0);
-	{
-		int inrate[2] = { a->audio_rate, a->txmon_rate };
-		a->mixer = create_aamix(-1, id, a->audio_size, a->audio_size, 2, 3, 3, 1.0, 4096, inrate, a->audio_rate, xvac_out, 0.0, 0.0, 0.0, 0.0);
-	}
+	create_vac_mixer(id, a);
 	destroy_resamps(a);
 	create_resamps(a);
 	LeaveCriticalSection(&a->cs_ivac);
@@ -628,65 +679,19 @@ PORT void SetIVACvox(int id, int vox)
 PORT void SetIVACmox(int id, int mox)
 {
 	IVAC a = pvac[id];
+	EnterCriticalSection(&a->cs_ivac);
 	a->mox = mox;
-	if (!a->mox)
-	{
-		if (a->mon)
-		{
-			SetAAudioMixWhat(a->mixer, 0, 1, 1);
-			SetAAudioMixWhat(a->mixer, 0, 0, 1);
-		}
-		else
-		{
-			SetAAudioMixWhat(a->mixer, 0, 1, 0);
-			SetAAudioMixWhat(a->mixer, 0, 0, 1);
-		}
-	}
-	else
-	{
-		if (a->mon)
-		{
-			SetAAudioMixWhat(a->mixer, 0, 0, 0);
-			SetAAudioMixWhat(a->mixer, 0, 1, 1);
-		}
-		else
-		{
-			SetAAudioMixWhat(a->mixer, 0, 0, 0);
-			SetAAudioMixWhat(a->mixer, 0, 1, 0);
-		}
-	}
+	update_vac_mixer(a);
+	LeaveCriticalSection(&a->cs_ivac);
 }
 
 PORT void SetIVACmon(int id, int mon)
 {
 	IVAC a = pvac[id];
+	EnterCriticalSection(&a->cs_ivac);
 	a->mon = mon;
-	if (!a->mox)
-	{
-		if (a->mon)
-		{
-			SetAAudioMixWhat(a->mixer, 0, 1, 1);
-			SetAAudioMixWhat(a->mixer, 0, 0, 1);
-		}
-		else
-		{
-			SetAAudioMixWhat(a->mixer, 0, 1, 0);
-			SetAAudioMixWhat(a->mixer, 0, 0, 1);
-		}
-	}
-	else
-	{
-		if (a->mon)
-		{
-			SetAAudioMixWhat(a->mixer, 0, 0, 0);
-			SetAAudioMixWhat(a->mixer, 0, 1, 1);
-		}
-		else
-		{
-			SetAAudioMixWhat(a->mixer, 0, 0, 0);
-			SetAAudioMixWhat(a->mixer, 0, 1, 0);
-		}
-	}
+	update_vac_mixer(a);
+	LeaveCriticalSection(&a->cs_ivac);
 }
 
 PORT void SetIVACmonVol(int id, double vol)
@@ -707,6 +712,24 @@ PORT void SetIVACrxscale(int id, double scale)
 	IVAC a = pvac[id];
 	a->vac_rx_scale = scale;
 	SetAAudioMixVolume(a->mixer, 0, a->vac_rx_scale);
+}
+
+// Per-input AF gain on the RX audio leg of the VAC mixer (input 0).
+// Composes with vac_rx_scale (set via SetIVACrxscale from the Setup â†’
+// VAC RX Gain slider): effective gain = vac_rx_scale * af_gain.
+//
+// Wired up so the per-RX AF / volume slider on the main panel scales
+// the VAC RX feed the same way it did before v2.1.3, while leaving
+// TCI RX (which taps the audio earlier in pipe.c) at fixed DSP level
+// per issue #40. v2.1.3 broke VAC volume control by removing the AF
+// coupling everywhere; this restores it for VAC without re-coupling
+// TCI.
+PORT void SetIVACafgain(int id, double gain)
+{
+	IVAC a = pvac[id];
+	if (a == 0 || a->mixer == 0) return;
+	a->vac_af_gain = gain;
+	SetAAudioMixVol(a->mixer, 0, 0, gain);
 }
 
 PORT void SetIVACbypass(int id, int bypass)

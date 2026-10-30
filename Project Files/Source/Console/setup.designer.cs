@@ -1,5 +1,4 @@
-﻿// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
-namespace Thetis
+﻿namespace Thetis
 {
     using System.Windows.Forms;
 
@@ -109,6 +108,16 @@ namespace Thetis
             this.panelAlexRXAntControl = new System.Windows.Forms.PanelTS();
             this.chkBlockTxAnt3 = new System.Windows.Forms.CheckBoxTS();
             this.chkBlockTxAnt2 = new System.Windows.Forms.CheckBoxTS();
+            this.label2mRx = new System.Windows.Forms.LabelTS();
+            this.panel2mRx = new System.Windows.Forms.PanelTS();
+            this.radAlexR1_2 = new System.Windows.Forms.RadioButtonTS();
+            this.radAlexR2_2 = new System.Windows.Forms.RadioButtonTS();
+            this.radAlexR3_2 = new System.Windows.Forms.RadioButtonTS();
+            this.label2mTx = new System.Windows.Forms.LabelTS();
+            this.panel2mTx = new System.Windows.Forms.PanelTS();
+            this.radAlexT1_2 = new System.Windows.Forms.RadioButtonTS();
+            this.radAlexT2_2 = new System.Windows.Forms.RadioButtonTS();
+            this.radAlexT3_2 = new System.Windows.Forms.RadioButtonTS();
             this.labelTS257 = new System.Windows.Forms.LabelTS();
             this.panelAlexRXXVRTControl = new System.Windows.Forms.PanelTS();
             this.labelRXAntControl = new System.Windows.Forms.LabelTS();
@@ -6133,7 +6142,7 @@ namespace Thetis
             this.grpAlexAntCtrl.Controls.Add(this.panelAlexRXAntControl);
             this.grpAlexAntCtrl.Location = new System.Drawing.Point(6, 6);
             this.grpAlexAntCtrl.Name = "grpAlexAntCtrl";
-            this.grpAlexAntCtrl.Size = new System.Drawing.Size(426, 262);
+            this.grpAlexAntCtrl.Size = new System.Drawing.Size(426, 278);
             this.grpAlexAntCtrl.TabIndex = 0;
             this.grpAlexAntCtrl.TabStop = false;
             this.grpAlexAntCtrl.Text = "Antenna Control";
@@ -6158,6 +6167,8 @@ namespace Thetis
             this.panelAlexTXAntControl.Controls.Add(this.label9);
             this.panelAlexTXAntControl.Controls.Add(this.label8);
             this.panelAlexTXAntControl.Controls.Add(this.labelTS15);
+            this.panelAlexTXAntControl.Controls.Add(this.label2mTx);
+            this.panelAlexTXAntControl.Controls.Add(this.panel2mTx);
             this.panelAlexTXAntControl.Controls.Add(this.panel23);
             this.panelAlexTXAntControl.Controls.Add(this.panel22);
             this.panelAlexTXAntControl.Controls.Add(this.panel21);
@@ -6171,7 +6182,7 @@ namespace Thetis
             this.panelAlexTXAntControl.Controls.Add(this.panel13);
             this.panelAlexTXAntControl.Location = new System.Drawing.Point(268, 13);
             this.panelAlexTXAntControl.Name = "panelAlexTXAntControl";
-            this.panelAlexTXAntControl.Size = new System.Drawing.Size(155, 223);
+            this.panelAlexTXAntControl.Size = new System.Drawing.Size(155, 239);
             this.panelAlexTXAntControl.TabIndex = 234;
             // 
             // labelTS104
@@ -6378,7 +6389,63 @@ namespace Thetis
             this.radAlexT3_6.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             this.radAlexT3_6.UseVisualStyleBackColor = true;
             this.radAlexT3_6.CheckedChanged += new System.EventHandler(this.radAlexT_6_CheckedChanged);
-            // 
+            //
+            // label2mTx (added for VHF 2m antenna selection — GH #12)
+            //
+            this.label2mTx.Image = null;
+            this.label2mTx.Location = new System.Drawing.Point(27, 216);
+            this.label2mTx.Name = "label2mTx";
+            this.label2mTx.Size = new System.Drawing.Size(30, 16);
+            this.label2mTx.TabIndex = 260;
+            this.label2mTx.Text = "2m";
+            this.label2mTx.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            //
+            // panel2mTx
+            //
+            this.panel2mTx.AutoScrollMargin = new System.Drawing.Size(0, 0);
+            this.panel2mTx.AutoScrollMinSize = new System.Drawing.Size(0, 0);
+            this.panel2mTx.Controls.Add(this.radAlexT2_2);
+            this.panel2mTx.Controls.Add(this.radAlexT1_2);
+            this.panel2mTx.Controls.Add(this.radAlexT3_2);
+            this.panel2mTx.Location = new System.Drawing.Point(67, 216);
+            this.panel2mTx.Name = "panel2mTx";
+            this.panel2mTx.Size = new System.Drawing.Size(48, 16);
+            this.panel2mTx.TabIndex = 261;
+            //
+            // radAlexT1_2
+            //
+            this.radAlexT1_2.Image = null;
+            this.radAlexT1_2.Location = new System.Drawing.Point(0, 0);
+            this.radAlexT1_2.Name = "radAlexT1_2";
+            this.radAlexT1_2.Size = new System.Drawing.Size(16, 16);
+            this.radAlexT1_2.TabIndex = 0;
+            this.radAlexT1_2.TextAlign = System.Drawing.ContentAlignment.BottomRight;
+            this.radAlexT1_2.UseVisualStyleBackColor = true;
+            this.radAlexT1_2.CheckedChanged += new System.EventHandler(this.radAlexT_2_CheckedChanged);
+            //
+            // radAlexT2_2
+            //
+            this.radAlexT2_2.Image = null;
+            this.radAlexT2_2.Location = new System.Drawing.Point(16, 0);
+            this.radAlexT2_2.Name = "radAlexT2_2";
+            this.radAlexT2_2.Size = new System.Drawing.Size(16, 16);
+            this.radAlexT2_2.TabIndex = 1;
+            this.radAlexT2_2.UseVisualStyleBackColor = true;
+            /* 2m TX: Ant 2 = DAC path (EESDR offers A1 and DAC for 2m TX). */
+            this.radAlexT2_2.CheckedChanged += new System.EventHandler(this.radAlexT_2_CheckedChanged);
+            //
+            // radAlexT3_2
+            //
+            this.radAlexT3_2.Image = null;
+            this.radAlexT3_2.Location = new System.Drawing.Point(32, 0);
+            this.radAlexT3_2.Name = "radAlexT3_2";
+            this.radAlexT3_2.Size = new System.Drawing.Size(16, 16);
+            this.radAlexT3_2.TabIndex = 2;
+            this.radAlexT3_2.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            this.radAlexT3_2.UseVisualStyleBackColor = true;
+            this.radAlexT3_2.Enabled = false;  /* 2m has only A1 + ADC; no Ant 3 */
+            this.radAlexT3_2.CheckedChanged += new System.EventHandler(this.radAlexT_2_CheckedChanged);
+            //
             // panel22
             // 
             this.panel22.AutoScrollMargin = new System.Drawing.Size(0, 0);
@@ -6844,6 +6911,8 @@ namespace Thetis
             this.panelAlexRXAntControl.Controls.Add(this.labelTS14);
             this.panelAlexRXAntControl.Controls.Add(this.labelTS56);
             this.panelAlexRXAntControl.Controls.Add(this.labelTS22);
+            this.panelAlexRXAntControl.Controls.Add(this.label2mRx);
+            this.panelAlexRXAntControl.Controls.Add(this.panel2mRx);
             this.panelAlexRXAntControl.Controls.Add(this.panel11);
             this.panelAlexRXAntControl.Controls.Add(this.panel9);
             this.panelAlexRXAntControl.Controls.Add(this.panel10);
@@ -6856,14 +6925,14 @@ namespace Thetis
             this.panelAlexRXAntControl.Controls.Add(this.panel2);
             this.panelAlexRXAntControl.Location = new System.Drawing.Point(6, 13);
             this.panelAlexRXAntControl.Name = "panelAlexRXAntControl";
-            this.panelAlexRXAntControl.Size = new System.Drawing.Size(260, 243);
+            this.panelAlexRXAntControl.Size = new System.Drawing.Size(260, 259);
             this.panelAlexRXAntControl.TabIndex = 233;
             // 
             // chkBlockTxAnt3
             // 
             this.chkBlockTxAnt3.AutoSize = true;
             this.chkBlockTxAnt3.Image = null;
-            this.chkBlockTxAnt3.Location = new System.Drawing.Point(118, 220);
+            this.chkBlockTxAnt3.Location = new System.Drawing.Point(118, 236);
             this.chkBlockTxAnt3.Name = "chkBlockTxAnt3";
             this.chkBlockTxAnt3.Size = new System.Drawing.Size(15, 14);
             this.chkBlockTxAnt3.TabIndex = 236;
@@ -6874,7 +6943,7 @@ namespace Thetis
             // 
             this.chkBlockTxAnt2.AutoSize = true;
             this.chkBlockTxAnt2.Image = null;
-            this.chkBlockTxAnt2.Location = new System.Drawing.Point(102, 220);
+            this.chkBlockTxAnt2.Location = new System.Drawing.Point(102, 236);
             this.chkBlockTxAnt2.Name = "chkBlockTxAnt2";
             this.chkBlockTxAnt2.Size = new System.Drawing.Size(15, 14);
             this.chkBlockTxAnt2.TabIndex = 237;
@@ -6885,7 +6954,7 @@ namespace Thetis
             // 
             this.labelTS257.AutoSize = true;
             this.labelTS257.Image = null;
-            this.labelTS257.Location = new System.Drawing.Point(18, 220);
+            this.labelTS257.Location = new System.Drawing.Point(18, 236);
             this.labelTS257.Name = "labelTS257";
             this.labelTS257.Size = new System.Drawing.Size(58, 13);
             this.labelTS257.TabIndex = 238;
@@ -7555,6 +7624,61 @@ namespace Thetis
             this.radAlexR3_6.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             this.radAlexR3_6.UseVisualStyleBackColor = true;
             this.radAlexR3_6.CheckedChanged += new System.EventHandler(this.radAlexR_6_CheckedChanged);
+            //
+            // label2mRx (added for VHF 2m antenna selection — GH #12)
+            //
+            this.label2mRx.Image = null;
+            this.label2mRx.Location = new System.Drawing.Point(26, 216);
+            this.label2mRx.Name = "label2mRx";
+            this.label2mRx.Size = new System.Drawing.Size(30, 16);
+            this.label2mRx.TabIndex = 260;
+            this.label2mRx.Text = "2m";
+            this.label2mRx.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            //
+            // panel2mRx
+            //
+            this.panel2mRx.AutoScrollMargin = new System.Drawing.Size(0, 0);
+            this.panel2mRx.AutoScrollMinSize = new System.Drawing.Size(0, 0);
+            this.panel2mRx.Controls.Add(this.radAlexR2_2);
+            this.panel2mRx.Controls.Add(this.radAlexR1_2);
+            this.panel2mRx.Controls.Add(this.radAlexR3_2);
+            this.panel2mRx.Location = new System.Drawing.Point(86, 216);
+            this.panel2mRx.Name = "panel2mRx";
+            this.panel2mRx.Size = new System.Drawing.Size(48, 16);
+            this.panel2mRx.TabIndex = 261;
+            //
+            // radAlexR1_2
+            //
+            this.radAlexR1_2.Image = null;
+            this.radAlexR1_2.Location = new System.Drawing.Point(0, 0);
+            this.radAlexR1_2.Name = "radAlexR1_2";
+            this.radAlexR1_2.Size = new System.Drawing.Size(16, 16);
+            this.radAlexR1_2.TabIndex = 0;
+            this.radAlexR1_2.TextAlign = System.Drawing.ContentAlignment.BottomRight;
+            this.radAlexR1_2.UseVisualStyleBackColor = true;
+            this.radAlexR1_2.CheckedChanged += new System.EventHandler(this.radAlexR_2_CheckedChanged);
+            //
+            // radAlexR2_2
+            //
+            this.radAlexR2_2.Image = null;
+            this.radAlexR2_2.Location = new System.Drawing.Point(16, 0);
+            this.radAlexR2_2.Name = "radAlexR2_2";
+            this.radAlexR2_2.Size = new System.Drawing.Size(16, 16);
+            this.radAlexR2_2.TabIndex = 1;
+            this.radAlexR2_2.UseVisualStyleBackColor = true;
+            this.radAlexR2_2.CheckedChanged += new System.EventHandler(this.radAlexR_2_CheckedChanged);
+            //
+            // radAlexR3_2
+            //
+            this.radAlexR3_2.Image = null;
+            this.radAlexR3_2.Location = new System.Drawing.Point(32, 0);
+            this.radAlexR3_2.Name = "radAlexR3_2";
+            this.radAlexR3_2.Size = new System.Drawing.Size(16, 16);
+            this.radAlexR3_2.TabIndex = 2;
+            this.radAlexR3_2.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            this.radAlexR3_2.UseVisualStyleBackColor = true;
+            this.radAlexR3_2.Enabled = false;  /* 2m has only A1 + ADC; no Ant 3 */
+            this.radAlexR3_2.CheckedChanged += new System.EventHandler(this.radAlexR_2_CheckedChanged);
             // 
             // panel9
             // 
@@ -8684,7 +8808,9 @@ namespace Thetis
             "ANAN-G2",
             "ANAN-G2-1K",
             "ANVELINA-PRO3",
-            "RED-PITAYA"});
+            "RED-PITAYA",
+            "SUNSDR2-DX",
+            "SUNSDR2-PRO"});
             this.comboRadioModel.Location = new System.Drawing.Point(6, 19);
             this.comboRadioModel.Name = "comboRadioModel";
             this.comboRadioModel.Size = new System.Drawing.Size(136, 23);
@@ -49533,10 +49659,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF13.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF13.Name = "nudVHF13";
             this.nudVHF13.Size = new System.Drawing.Size(48, 20);
             this.nudVHF13.TabIndex = 163;
@@ -49574,10 +49700,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF12.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF12.Name = "nudVHF12";
             this.nudVHF12.Size = new System.Drawing.Size(48, 20);
             this.nudVHF12.TabIndex = 161;
@@ -49615,10 +49741,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF11.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF11.Name = "nudVHF11";
             this.nudVHF11.Size = new System.Drawing.Size(48, 20);
             this.nudVHF11.TabIndex = 159;
@@ -49656,10 +49782,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF10.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF10.Name = "nudVHF10";
             this.nudVHF10.Size = new System.Drawing.Size(48, 20);
             this.nudVHF10.TabIndex = 157;
@@ -49697,10 +49823,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF9.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF9.Name = "nudVHF9";
             this.nudVHF9.Size = new System.Drawing.Size(48, 20);
             this.nudVHF9.TabIndex = 155;
@@ -49738,10 +49864,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF8.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF8.Name = "nudVHF8";
             this.nudVHF8.Size = new System.Drawing.Size(48, 20);
             this.nudVHF8.TabIndex = 153;
@@ -49779,10 +49905,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF7.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF7.Name = "nudVHF7";
             this.nudVHF7.Size = new System.Drawing.Size(48, 20);
             this.nudVHF7.TabIndex = 151;
@@ -49820,10 +49946,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF6.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF6.Name = "nudVHF6";
             this.nudVHF6.Size = new System.Drawing.Size(48, 20);
             this.nudVHF6.TabIndex = 149;
@@ -49861,10 +49987,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF5.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF5.Name = "nudVHF5";
             this.nudVHF5.Size = new System.Drawing.Size(48, 20);
             this.nudVHF5.TabIndex = 147;
@@ -49902,10 +50028,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF4.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF4.Name = "nudVHF4";
             this.nudVHF4.Size = new System.Drawing.Size(48, 20);
             this.nudVHF4.TabIndex = 145;
@@ -49943,10 +50069,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF3.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF3.Name = "nudVHF3";
             this.nudVHF3.Size = new System.Drawing.Size(48, 20);
             this.nudVHF3.TabIndex = 143;
@@ -49984,10 +50110,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF2.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF2.Name = "nudVHF2";
             this.nudVHF2.Size = new System.Drawing.Size(48, 20);
             this.nudVHF2.TabIndex = 141;
@@ -50025,10 +50151,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF1.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF1.Name = "nudVHF1";
             this.nudVHF1.Size = new System.Drawing.Size(48, 20);
             this.nudVHF1.TabIndex = 139;
@@ -50066,10 +50192,10 @@ namespace Thetis
             0,
             0});
             this.nudVHF0.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nudVHF0.Name = "nudVHF0";
             this.nudVHF0.Size = new System.Drawing.Size(48, 20);
             this.nudVHF0.TabIndex = 137;
@@ -50096,10 +50222,10 @@ namespace Thetis
             0,
             0});
             this.nud6M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud6M.Name = "nud6M";
             this.nud6M.Size = new System.Drawing.Size(48, 20);
             this.nud6M.TabIndex = 136;
@@ -50148,10 +50274,10 @@ namespace Thetis
             0,
             0});
             this.nud10M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud10M.Name = "nud10M";
             this.nud10M.Size = new System.Drawing.Size(48, 20);
             this.nud10M.TabIndex = 133;
@@ -50189,10 +50315,10 @@ namespace Thetis
             0,
             0});
             this.nud12M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud12M.Name = "nud12M";
             this.nud12M.Size = new System.Drawing.Size(48, 20);
             this.nud12M.TabIndex = 131;
@@ -50230,10 +50356,10 @@ namespace Thetis
             0,
             0});
             this.nud15M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud15M.Name = "nud15M";
             this.nud15M.Size = new System.Drawing.Size(48, 20);
             this.nud15M.TabIndex = 129;
@@ -50271,10 +50397,10 @@ namespace Thetis
             0,
             0});
             this.nud17M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud17M.Name = "nud17M";
             this.nud17M.Size = new System.Drawing.Size(48, 20);
             this.nud17M.TabIndex = 127;
@@ -50312,10 +50438,10 @@ namespace Thetis
             0,
             0});
             this.nud20M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud20M.Name = "nud20M";
             this.nud20M.Size = new System.Drawing.Size(48, 20);
             this.nud20M.TabIndex = 125;
@@ -50353,10 +50479,10 @@ namespace Thetis
             0,
             0});
             this.nud30M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud30M.Name = "nud30M";
             this.nud30M.Size = new System.Drawing.Size(48, 20);
             this.nud30M.TabIndex = 123;
@@ -50394,10 +50520,10 @@ namespace Thetis
             0,
             0});
             this.nud40M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud40M.Name = "nud40M";
             this.nud40M.Size = new System.Drawing.Size(48, 20);
             this.nud40M.TabIndex = 121;
@@ -50435,10 +50561,10 @@ namespace Thetis
             0,
             0});
             this.nud60M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud60M.Name = "nud60M";
             this.nud60M.Size = new System.Drawing.Size(48, 20);
             this.nud60M.TabIndex = 119;
@@ -50476,10 +50602,10 @@ namespace Thetis
             0,
             0});
             this.nud80M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud80M.Name = "nud80M";
             this.nud80M.Size = new System.Drawing.Size(48, 20);
             this.nud80M.TabIndex = 117;
@@ -50517,10 +50643,10 @@ namespace Thetis
             0,
             0});
             this.nud160M.Minimum = new decimal(new int[] {
-            388,
             0,
             0,
-            65536});
+            0,
+            0});
             this.nud160M.Name = "nud160M";
             this.nud160M.Size = new System.Drawing.Size(48, 20);
             this.nud160M.TabIndex = 115;
@@ -75345,6 +75471,16 @@ namespace Thetis
         private System.Windows.Forms.LabelTS label8;
         private System.Windows.Forms.LabelTS labelTS15;
         private System.Windows.Forms.PanelTS panel23;
+        private System.Windows.Forms.LabelTS label2mRx;
+        private System.Windows.Forms.PanelTS panel2mRx;
+        private System.Windows.Forms.RadioButtonTS radAlexR1_2;
+        private System.Windows.Forms.RadioButtonTS radAlexR2_2;
+        private System.Windows.Forms.RadioButtonTS radAlexR3_2;
+        private System.Windows.Forms.LabelTS label2mTx;
+        private System.Windows.Forms.PanelTS panel2mTx;
+        private System.Windows.Forms.RadioButtonTS radAlexT1_2;
+        private System.Windows.Forms.RadioButtonTS radAlexT2_2;
+        private System.Windows.Forms.RadioButtonTS radAlexT3_2;
         private System.Windows.Forms.RadioButtonTS radAlexT2_6;
         private System.Windows.Forms.RadioButtonTS radAlexT1_6;
         private System.Windows.Forms.RadioButtonTS radAlexT3_6;

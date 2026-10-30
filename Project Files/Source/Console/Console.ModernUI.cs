@@ -1,21 +1,3 @@
-//  Console.ModernUI.cs
-//
-//  Copyright (C) 2026 Daniel Poznanski, 3Z9AM
-//
-//  This program is free software; you can redistribute it and/or
-//  modify it under the terms of the GNU General Public License
-//  as published by the Free Software Foundation; either version 2
-//  of the License, or (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program; if not, write to the Free Software
-//  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -135,7 +117,7 @@ namespace Thetis
 
         private ToolStripRenderer _skinStatusRenderer;
         private ToolStripRenderMode _skinStatusRenderMode;
-        private ToolStripStatusLabel _modernRadioLabel, _modernVac1Label, _modernVac2Label, _modernDivLabel, _modernMicLabel;
+        private ToolStripStatusLabel _modernRadioLabel, _modernVac1Label, _modernVac2Label, _modernMicLabel;
         private Timer _modernStatusTimer;
         private readonly Dictionary<int, Bitmap> _modernDots = new Dictionary<int, Bitmap>();
 
@@ -148,14 +130,11 @@ namespace Thetis
                     _modernRadioLabel = modernStatusLabel("RADIO", "Radio: green = running");
                     _modernVac1Label = modernStatusLabel("VAC1", "VAC1: grey = off, green = running, yellow = recent under/overflow");
                     _modernVac2Label = modernStatusLabel("VAC2", "VAC2: grey = off, green = running, yellow = recent under/overflow");
-                    _modernDivLabel = modernStatusLabel("DIV", "Diversity: grey = off; RADAR = one weight from the radar, RX1/RX2 = one receiver only,\n" +
-                        "green = per-section mode (sections; F = fine FFT) - needs the Diversity window open");
                     _modernMicLabel = modernStatusLabel("MIC", "TX audio source: MIC = radio mic, VAC1/VAC2, TCI, MODEM (WSJT-X/fldigi),\n" +
                         "SONOBUS = the SonoBus window; /VST = through the TX VST chain too");
                     int at = statusStripMain.Items.IndexOf(toolStripStatusLabel_N1MM);
                     if (at < 0) at = statusStripMain.Items.Count;
                     statusStripMain.Items.Insert(at, _modernMicLabel);
-                    statusStripMain.Items.Insert(at, _modernDivLabel);
                     statusStripMain.Items.Insert(at, _modernVac2Label);
                     statusStripMain.Items.Insert(at, _modernVac1Label);
                     statusStripMain.Items.Insert(at, _modernRadioLabel);
@@ -165,14 +144,14 @@ namespace Thetis
                 _skinStatusRenderMode = statusStripMain.RenderMode;
                 _skinStatusRenderer = statusStripMain.Renderer;
                 statusStripMain.Renderer = new ModernStatusRenderer(this);
-                _modernRadioLabel.Visible = _modernVac1Label.Visible = _modernVac2Label.Visible = _modernDivLabel.Visible = _modernMicLabel.Visible = true;
+                _modernRadioLabel.Visible = _modernVac1Label.Visible = _modernVac2Label.Visible = _modernMicLabel.Visible = true;
                 updateModernStatus();
                 _modernStatusTimer.Start();
             }
             else if (_modernRadioLabel != null)
             {
                 _modernStatusTimer.Stop();
-                _modernRadioLabel.Visible = _modernVac1Label.Visible = _modernVac2Label.Visible = _modernDivLabel.Visible = _modernMicLabel.Visible = false;
+                _modernRadioLabel.Visible = _modernVac1Label.Visible = _modernVac2Label.Visible = _modernMicLabel.Visible = false;
                 if (_skinStatusRenderMode == ToolStripRenderMode.Custom) statusStripMain.Renderer = _skinStatusRenderer;
                 else statusStripMain.RenderMode = _skinStatusRenderMode;
             }
@@ -219,21 +198,9 @@ namespace Thetis
             if (!ModernTheme.Enabled || _modernRadioLabel == null || IsDisposed) return;
             if (Display.ModernPanelShadowRects == null) modernStep(updateModernPanelShadows);   // first time after the window exists
             setModernStatus(_modernRadioLabel, PowerOn ? ModernTheme.Ok : ModernTheme.TextDisabled, PowerOn);
-            updateModernDivStatus();
             updateModernMicStatus();
             setModernStatus(_modernVac1Label, !VACEnabled ? ModernTheme.TextDisabled : ucVAC1UnderOver.ShowingIssue ? ModernTheme.Warn : ModernTheme.Ok, VACEnabled);
             setModernStatus(_modernVac2Label, !VAC2Enabled ? ModernTheme.TextDisabled : ucVAC2UnderOver.ShowingIssue ? ModernTheme.Warn : ModernTheme.Ok, VAC2Enabled);
-        }
-
-        // what RX1 gets from diversity: off, one receiver, the radar's one weight or a per-section mode
-        private void updateModernDivStatus()
-        {
-            DiversityForm df = diversityForm;
-            bool on = df != null && !df.IsDisposed && Diversity2;
-            string sec = on && df.EXTDIVOutput == 2 ? df.SectionCaption : null;
-            string text = !on ? "DIV" : df.EXTDIVOutput == 0 ? "DIV RX1" : df.EXTDIVOutput == 1 ? "DIV RX2" : "DIV " + (sec ?? "RADAR");
-            if (_modernDivLabel.Text != text) _modernDivLabel.Text = text;
-            setModernStatus(_modernDivLabel, !on ? ModernTheme.TextDisabled : sec != null ? ModernTheme.Ok : ModernTheme.Accent, on);
         }
 
         // where the transmitter takes its audio from (cmaster.c GetTXAudioSource); SonoBus replaces the mic in the

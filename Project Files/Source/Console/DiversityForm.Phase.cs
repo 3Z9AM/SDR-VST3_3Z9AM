@@ -1,23 +1,3 @@
-//  DiversityForm.Phase.cs
-//
-//  Diversity: phase meter, per-section diversity controls (max-SINR, clean, AUTO per bin), recording
-//
-//  Copyright (C) 2026 Daniel Poznanski, 3Z9AM
-//
-//  This program is free software; you can redistribute it and/or
-//  modify it under the terms of the GNU General Public License
-//  as published by the Free Software Foundation; either version 2
-//  of the License, or (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program; if not, write to the Free Software
-//  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -70,42 +50,26 @@ namespace Thetis
             inv.CheckedChanged += delegate { Display.PhaseViewRx1Lead = inv.Checked; };
             Controls.Add(inv);
 
-            // per-section diversity (wdsp/secdiv.c): every control in the radar's corners, outside the circle (user: room
-            // there; the strip above RX Source was full - mode cut short, Rec under On Top); named so Common.RestoreForm keeps them
-            int rw = picRadar.Width, rh = picRadar.Height;
-            var sec = new ComboBoxTS { Name = "comboSectionDiv", DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(2, 2), Size = new Size(84, 21), DropDownWidth = 130 };
+            var rec = new ButtonTS { Text = "Rec 30 s", Location = new Point(238, 1), Size = new Size(68, 20) };
+            toolTip1.SetToolTip(rec, "Record 30 s of RX1+RX2 IQ (4-channel float WAV in the data folder) for tools/divtest");
+            rec.Click += delegate { _recRequest = true; };
+            Controls.Add(rec);
+
+            // per-section diversity (wdsp/secdiv.c), in the free strip above RX Source; named so
+            // Common.RestoreForm keeps them
+            var sec = new ComboBoxTS { Name = "comboSectionDiv", DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(93, 0), Size = new Size(105, 21) };
             sec.Items.AddRange(SectionModeItems);
             _secCombo = sec;
             sec.SelectedIndex = 0;
             toolTip1.SetToolTip(sec, "Diversity per frequency section instead of the radar weight (Enable + RX1+RX2 mix):\n" +
                 "MRC - RX2 phased onto RX1 and weighted by its signal share\nco-phase - RX2 phased onto RX1 and raised to its level in every section (antennas of similar strength)\nnull - RX2 as a noise antenna: its noise subtracted from RX1 per section\nmax-SINR - per section the best signal to noise+interference (acts as MRC, null or co-phase as the noise needs), background stays at the RX1 noise floor\nadds one FFT of delay (~21 ms)");
             sec.SelectedIndexChanged += delegate { _secMode = sec.SelectedIndex; };
-            picRadar.Controls.Add(sec);
-            var secN = new NumericUpDownTS { Name = "udSectionDiv", Minimum = 1, Maximum = 60, Value = 20, Location = new Point(2, 26), Size = new Size(42, 20) };
-            toolTip1.SetToolTip(secN, "Sections across the RX1 filter (1 = one weight; bins are ~47 Hz, fine ~12 Hz)");
+            panelDivControls.Controls.Add(sec);
+            var secN = new NumericUpDownTS { Name = "udSectionDiv", Minimum = 1, Maximum = 60, Value = 20, Location = new Point(204, 0), Size = new Size(45, 20) };
+            toolTip1.SetToolTip(secN, "Sections across the RX1 filter (1 = one weight; bins are ~47 Hz)");
             secN.ValueChanged += delegate { _secSections = (int)secN.Value; };
-            picRadar.Controls.Add(secN);
-
-            var dots = new CheckBoxTS { Name = "chkSectionDots", Text = "dots", AutoSize = true, Checked = true, BackColor = Color.Transparent,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            toolTip1.SetToolTip(dots, "Per-section weights on the radar (also the console mini radar): one dot per filter bin");
-            dots.CheckedChanged += delegate { _secDots = dots.Checked; picRadar.Invalidate(); };
-            picRadar.Controls.Add(dots);
-            dots.Location = new Point(rw - dots.PreferredSize.Width - 2, 2);
-            var secF = new CheckBoxTS { Name = "chkSectionDivFine", Text = "fine", AutoSize = true, BackColor = Color.Transparent,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            toolTip1.SetToolTip(secF, "FFT 4x longer: ~12 Hz bins and 4x the sections (60 = every bin);\n" +
-                "offline +0.3..1.1 dB S/N with max-SINR, but ~85 ms of delay instead of ~21 ms");
-            secF.CheckedChanged += delegate { _secFine = secF.Checked ? 1 : 0; };
-            picRadar.Controls.Add(secF);
-            secF.Location = new Point(rw - secF.PreferredSize.Width - 2, 26);
-
-            var rec = new ButtonTS { Text = "Rec 30 s", Size = new Size(68, 20), Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
-            toolTip1.SetToolTip(rec, "Record 30 s of RX1+RX2 IQ (4-channel float WAV in the data folder) for tools/divtest\n" +
-                "Shift + click: 5 min around the RX1 filter, 24 kHz (~115 MB)");
-            rec.Click += delegate { _recLong = (ModifierKeys & Keys.Shift) == Keys.Shift; _recRequest = true; };
-            picRadar.Controls.Add(rec);
-            rec.Location = new Point(rw - rec.Width - 2, rh - rec.Height - 2);
+            panelDivControls.Controls.Add(secN);
+            panelDivControls.Controls.Add(new LabelTS { Text = "sect.", AutoSize = true, Location = new Point(252, 3) });
             FormClosed += delegate { _secMode = 0; };
 
             Display.ExactGpuNative.CM_WaterfallIQ_Init(PhaseRing, 1 << 20);
@@ -197,12 +161,6 @@ namespace Thetis
                     if (Environment.TickCount64 - lastPaint >= 100 && IsHandleCreated && !IsDisposed)
                     {
                         lastPaint = Environment.TickCount64;
-                        if (_secMode > 0)
-                        {
-                            var w = new double[3 * SectionWeightsMax];
-                            _secWeights = Tuple.Create(w, WDSP.GetEXTDIVSectionsWeights(w, SectionWeightsMax));
-                        }
-                        else _secWeights = null;
                         BeginInvoke(new Action(() => picRadar.Invalidate()));   // also repaints the console mini radar
                     }
                 }
@@ -216,7 +174,7 @@ namespace Thetis
             pushSections(rate);                                 // _secMode is 0 once the form closed
         }
 
-        private volatile int _secMode, _secSections = 20, _secFine, _secFineSent = -1, _secClean, _secCleanSent = -1;
+        private volatile int _secMode, _secSections = 20;
         private ComboBox _secCombo;
 
         // also offered in the console's Audio drawer (Console.NewGUI.cs)
@@ -226,22 +184,6 @@ namespace Thetis
             get => _secCombo.SelectedIndex;
             set { if (value >= 0 && value < _secCombo.Items.Count) _secCombo.SelectedIndex = value; }
         }
-        // max-SINR clean share 0..100 % (the DSP drawer slider on the console)
-        public int SectionClean
-        {
-            get => _secClean;
-            set { _secClean = Math.Max(-1, Math.Min(100, value)); if (_secClean >= 0) _secCleanPct = _secClean; }     // -1 = auto per bin
-        }
-        public int SectionCleanPct => _secCleanPct;         // the manual share, kept while auto is on
-        // auto: how readily a bin counts as station (50 = default thresholds, more = clean sooner)
-        public int SectionCleanSens
-        {
-            get => _secSens;
-            set => _secSens = Math.Max(0, Math.Min(100, value));
-        }
-        // mean clean share auto gave the filter bins in the last frame, 0..1 (-1 = off)
-        public double SectionCleanShare => WDSP.GetEXTDIVSectionsCleanShare();
-        private volatile int _secCleanPct, _secSens = 50, _secSensSent = -1;
         private int _secSent = -1, _secSentN, _secSentRate, _secSentLo, _secSentHi;
         private const double SectionTau = 0.2;              // weight averaging, s (offline: 0.1-0.4 alike)
 
@@ -263,10 +205,6 @@ namespace Thetis
             long centre = Display.RX1IqOffsetToHz(0);
             if (centre != _secCentre) { _secCentre = centre; WDSP.SetEXTDIVSectionsReset(); }
 
-            if (_secFine != _secFineSent) { _secFineSent = _secFine; WDSP.SetEXTDIVSectionsFine(_secFine); }
-            if (_secClean != _secCleanSent) { _secCleanSent = _secClean; WDSP.SetEXTDIVSectionsClean(_secClean); }
-            if (_secSens != _secSensSent) { _secSensSent = _secSens; WDSP.SetEXTDIVSectionsCleanSens(_secSens); }
-
             Display.RX1FilterIqOffsets(out int lo, out int hi);
             int m = _phaseRun ? _secMode : 0, n = _secSections;
             if (m == _secSent && n == _secSentN && rate == _secSentRate && lo == _secSentLo && hi == _secSentHi) return;
@@ -276,10 +214,8 @@ namespace Thetis
 
         // Raw ring 5 as a 4-channel float WAV: I1, Q1, I2, Q2 as read (the panadapter frame is Q + jI).
         // Name: centre RF Hz, rate, VFO A and RX1 filter edges as IQ offsets - all tools/divtest needs.
-        private const int RecordSeconds = 30, LongRecordSeconds = 300, LongRecordRate = 24000;
-        private volatile bool _recRequest, _recLong;
-        // long recording: decimated to LongRecordRate around the filter (DiversityDecimator); null = raw ring as read
-        private DiversityDecimator _recDecim;
+        private const int RecordSeconds = 30;
+        private volatile bool _recRequest;
         private System.IO.FileStream _rec;
         private long _recLeft;
         private int _recRate, _recLo, _recHi, _recVfo;
@@ -289,18 +225,12 @@ namespace Thetis
         {
             stopRecording(null);
             _recVfo = Display.RX1VfoIqOffset();
-            bool lng = _recLong && rate % LongRecordRate == 0;
-            int dec = lng ? rate / LongRecordRate : 1;
-            // name in the shifted frame, divtest reads it as is; shortcut: its IQ DC guess (-vfo) is then off by sh,
-            // the occupied-bin check of divtest O drops the spur anyway - put sh in the name if that ever matters
-            int sh = lng ? (lo + hi) / 2 : 0;
             string path = System.IO.Path.Combine(console.AppDataPath, "Diversity_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
-                + "_" + Display.RX1IqOffsetToHz(sh) + "Hz_" + rate / dec + "_vfo" + (_recVfo - sh) + "_f" + (lo - sh) + "_" + (hi - sh) + ".wav");
+                + "_" + Display.RX1IqOffsetToHz(0) + "Hz_" + rate + "_vfo" + _recVfo + "_f" + lo + "_" + hi + ".wav");
             _rec = new System.IO.FileStream(path, System.IO.FileMode.Create, System.IO.FileAccess.Write);
             _rec.Write(new byte[44], 0, 44);                    // header written on close
-            _recLeft = (long)(rate / dec) * (lng ? LongRecordSeconds : RecordSeconds);
-            _recRate = rate / dec; _recLo = lo; _recHi = hi;
-            _recDecim = lng ? new DiversityDecimator(rate, dec, sh) : null;
+            _recLeft = (long)rate * RecordSeconds;
+            _recRate = rate; _recLo = lo; _recHi = hi;
             recStatus("recording...");
         }
 
@@ -309,7 +239,6 @@ namespace Thetis
         {
             if (Audio.MOX) { stopRecording("stopped by TX"); return; }
             if (lo != _recLo || hi != _recHi || Display.RX1VfoIqOffset() != _recVfo) { stopRecording("stopped by retune"); return; }
-            if (_recDecim != null) { writeDecimated(bi, bq, n); return; }
             int m = (int)Math.Min(n / 2, _recLeft);
             if (_recBuf.Length < m * 16) _recBuf = new byte[m * 16];
             for (int k = 0; k < m; k++)
@@ -321,24 +250,6 @@ namespace Thetis
             }
             _rec.Write(_recBuf, 0, m * 16);
             _recLeft -= m;
-            if (_recLeft <= 0) stopRecording("saved");
-        }
-
-        private void writeDecimated(float[] bi, float[] bq, int n)
-        {
-            int outs = 0;
-            if (_recBuf.Length < (n / 2 + 1) * 16) _recBuf = new byte[(n / 2 + 1) * 16];
-            for (int k = 0; k < n / 2 && _recLeft > 0; k++)
-            {
-                if (!_recDecim.Push(bi[2 * k], bq[2 * k], bi[2 * k + 1], bq[2 * k + 1], out float i1, out float q1, out float i2, out float q2)) continue;
-                int o = 16 * outs++;
-                BitConverter.TryWriteBytes(new Span<byte>(_recBuf, o, 4), i1);
-                BitConverter.TryWriteBytes(new Span<byte>(_recBuf, o + 4, 4), q1);
-                BitConverter.TryWriteBytes(new Span<byte>(_recBuf, o + 8, 4), i2);
-                BitConverter.TryWriteBytes(new Span<byte>(_recBuf, o + 12, 4), q2);
-                _recLeft--;
-            }
-            _rec.Write(_recBuf, 0, outs * 16);
             if (_recLeft <= 0) stopRecording("saved");
         }
 
@@ -369,64 +280,16 @@ namespace Thetis
 
         // console mini radar: small caption of the per-section mode, low inside the circle (the panel is an ellipse)
         private static readonly string[] SectionModeNames = { null, "MRC", "CO-PHASE", "NULL", "MAX-SINR" };
-
-        // "MAX-SINR 60 F" while a per-section mode runs (also the console status bar), else null
-        public string SectionCaption
-        {
-            get
-            {
-                int m = _phaseRun ? _secMode : 0;
-                if (m <= 0 || m >= SectionModeNames.Length) return null;
-                return SectionModeNames[m] + " " + _secSections + (_secFine != 0 ? " F" : "") + (_secClean != 0 && m == 4 ? " C" + (_secClean < 0 ? "A" : _secClean < 100 ? _secClean.ToString() : "") : "");
-            }
-        }
         private void drawSectionModeMini(Graphics g, int size)
         {
-            string s = SectionCaption;
-            if (s == null) return;
+            int m = _secMode;
+            if (m <= 0 || m >= SectionModeNames.Length) return;
+            string s = SectionModeNames[m] + " " + _secSections;
             using (Font f = new Font("Segoe UI", Math.Max(7f, size / 14f), FontStyle.Bold, GraphicsUnit.Pixel))
             {
                 SizeF sz = g.MeasureString(s, f);
                 g.DrawString(s, f, Brushes.Yellow, (size - sz.Width) / 2, size * 0.80f - sz.Height / 2);
             }
-        }
-
-        // per-section weights on the radar, one dot per RX1 filter bin, refreshed with the radar (100 ms):
-        // angle = arg w (radar maths; w is native I + jQ, the arrow the conjugate panadapter frame, so MRC dots sit
-        // on the arrow), distance = RX2 share |w| / (v1 + |w|) -
-        // centre RX1 alone, middle ring both alike, edge RX2 alone; colour = place in the filter, blue = left
-        // (low) edge of the panadapter, red = right. MRC/co-phase gather at the station phase, a null sits
-        // opposite the noise phase, a bin with no learning yet stays in the centre.
-        private const int SectionWeightsMax = 2048;
-        private volatile Tuple<double[], int> _secWeights;
-        private volatile bool _secDots = true;
-        private void drawSectionWeights(Graphics g, int size)
-        {
-            var sw = _secWeights;
-            if (!_secDots || sw == null || sw.Item2 <= 0 || SectionCaption == null) return;
-            double[] w = sw.Item1;
-            int n = sw.Item2;
-            float d = Math.Max(2.5f, Math.Min(5f, size / 50f)), h = size / 2f;
-            for (int j = 0; j < n; j++)
-            {
-                double v1 = w[3 * j], wr = w[3 * j + 1], wi = w[3 * j + 2], m = Math.Sqrt(wr * wr + wi * wi);
-                double r = v1 + m > 0 ? m / (v1 + m) : 0, a = -Math.Atan2(wi, wr);
-                float x = (float)(h + r * Math.Cos(a) * h), y = (float)(h + r * Math.Sin(a) * h);
-                // native bins run against the panadapter (it mirrors I + jQ): j = 0 is its right edge
-                double t = n > 1 ? 1.0 - (double)j / (n - 1) : 0.5;
-                using (SolidBrush b = new SolidBrush(hueColour(240 * (1 - t))))
-                    g.FillEllipse(b, x - d / 2, y - d / 2, d, d);
-            }
-        }
-
-        // hue 0..360 at full saturation, value 1
-        private static Color hueColour(double hue)
-        {
-            double hh = (hue % 360) / 60, x = 1 - Math.Abs(hh % 2 - 1);
-            double r = 0, gg = 0, b = 0;
-            switch ((int)hh) { case 0: r = 1; gg = x; break; case 1: r = x; gg = 1; break; case 2: gg = 1; b = x; break;
-                               case 3: gg = x; b = 1; break; case 4: r = x; b = 1; break; default: r = 1; b = x; break; }
-            return Color.FromArgb(220, (int)(r * 255), (int)(gg * 255), (int)(b * 255));
         }
 
         private void drawPhaseArrow(Graphics g, int size, bool showLabels)

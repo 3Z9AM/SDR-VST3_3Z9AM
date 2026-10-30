@@ -137,6 +137,7 @@
     <ClInclude Include="ivac.h" />
     <ClInclude Include="nanotimer.h" />
     <ClInclude Include="network.h" />
+    <ClInclude Include="sunsdr.h" />
     <ClInclude Include="obbuffs.h" />
     <ClInclude Include="pipe.h" />
     <ClInclude Include="pro.h" />
@@ -177,6 +178,7 @@
     <ClCompile Include="ivac.c" />
     <ClCompile Include="nanotime.c" />
     <ClCompile Include="netInterface.c" />
+    <ClCompile Include="sunsdr.c" />
     <ClCompile Include="network.c" />
     <ClCompile Include="networkproto1.c" />
     <ClCompile Include="obbuffs.c" />

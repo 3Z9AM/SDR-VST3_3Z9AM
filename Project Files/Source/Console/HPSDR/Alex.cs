@@ -119,7 +119,14 @@ namespace Thetis
 			} 
 			int idx = (int)band - (int)Band.B160M; 
 			TxAnt[idx] = ant;
-		} 
+
+            // Do NOT push to the wire here. SunSDR2 DX uses opcode 0x15 for
+            // both RX and TX antenna, so writing TX ant while the radio is
+            // in RX mode physically switches the live antenna and the user
+            // loses their current RX. Wire writes now go through the
+            // direction-and-MOX-aware paths in Setup (ProcessAlexAntRadioButton),
+            // band-change handlers, and UpdateAlexAntSelection on MOX edges.
+		}
 
         public static Band AntBandFromFreq(double freq)
         {
@@ -323,11 +330,29 @@ namespace Thetis
 		private int m_nOld_rx_out = -99;
 		private bool m_bOld_tx = false;
 		private bool m_bOld_alex_enabled = false;
+
+		// Reset the antenna-selection cache so the next UpdateAlexAntSelection
+		// call ALWAYS sends fresh wire values to the radio. Used during SunSDR
+		// Power-On: after app restart + DB load, the per-band RxAnt[idx]/
+		// TxAnt[idx] values are populated from the database, but no band-
+		// change handler may fire before Power-On to push them through —
+		// leaving the radio on its hardware default antenna (A2 on HF, since
+		// sunsdr.c::sdr.currentRxAntenna initialises to 1 which maps to wire
+		// 0x01 = A2). Calling this before UpdateAlexAntSelection at Power-On
+		// guarantees the saved selection actually reaches the wire.
+		public void InvalidateAntennaCache()
+		{
+			m_nOld_rx_only_ant = -99;
+			m_nOld_trx_ant = -99;
+			m_nOld_tx_ant = -99;
+			m_nOld_rx_out = -99;
+		}
         public void UpdateAlexAntSelection(Band band, bool tx, bool alex_enabled, bool xvtr) 
 		{
 			if ( !alex_enabled ) 
 			{
-                NetworkIO.SetAntBits(0, 0, 0, 0, false);
+                if (NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                    NetworkIO.SetAntBits(0, 0, 0, 0, false);
                 m_bOld_alex_enabled = alex_enabled;
                 return;
 			}            
@@ -413,8 +438,40 @@ namespace Thetis
 				m_nOld_rx_out != rx_out ||
 				m_bOld_tx != tx ||
                 m_bOld_alex_enabled != alex_enabled)
-			{                             
-				NetworkIO.SetAntBits(rx_only_ant, trx_ant, tx_ant, rx_out, tx);
+			{
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    // SunSDR2 DX uses a single antenna selector (0x15) for
+                    // both RX and TX; the radio applies whatever we last
+                    // wrote. Drive it from the direction (MOX) so the
+                    // live antenna matches the stored RX ant while in RX
+                    // and matches the stored TX ant while in TX. Use the
+                    // per-band RxAnt[idx] / TxAnt[idx] values directly —
+                    // NOT the Alex-derived `trx_ant`, which cross-couples
+                    // RX to TX via the legacy TRxAnt flag.
+                    //
+                    // Stored bytes ARE SunSdrAntenna enum values (1=A1,
+                    // 2=A2, 3=A3), translated to the wire value through
+                    // SunSdrAntennaSpec.WireValueFor.
+                    if (tx)
+                    {
+                        SunSdrAntenna ant = (SunSdrAntenna)TxAnt[idx];
+                        int wire = SunSdrAntennaSpec.WireValueFor(ant, band, true);
+                        if (wire > 0)
+                            NetworkIO.nativeSunSDRSetTxAntenna(wire);
+                    }
+                    else
+                    {
+                        SunSdrAntenna ant = (SunSdrAntenna)RxAnt[idx];
+                        int wire = SunSdrAntennaSpec.WireValueFor(ant, band, false);
+                        if (wire > 0)
+                            NetworkIO.nativeSunSDRSetAntenna(wire);
+                    }
+                }
+                else
+                {
+				    NetworkIO.SetAntBits(rx_only_ant, trx_ant, tx_ant, rx_out, tx);
+                }
 
 				System.Console.WriteLine("Ant idx: " + idx + "(" + ((Band)idx + (int)Band.B160M).ToString() + ")");
                 System.Console.WriteLine("Ant Rx Only {0} , TRx Ant {1}, Tx Ant {2}, Rx Out {3}, TX {4}", rx_only_ant.ToString(), trx_ant.ToString(), tx_ant.ToString(), rx_out.ToString(), tx.ToString());

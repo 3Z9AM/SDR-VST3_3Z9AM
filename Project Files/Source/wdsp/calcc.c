@@ -3,7 +3,6 @@
 This file is part of a program that implements a Software-Defined Radio.
 
 Copyright (C) 2013, 2014, 2016, 2019, 2023 Warren Pratt, NR0V
-Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License

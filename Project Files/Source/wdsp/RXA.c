@@ -3,7 +3,6 @@
 This file is part of a program that implements a Software-Defined Radio.
 
 Copyright (C) 2013, 2014, 2015, 2016, 2023, 2025, 2026 Warren Pratt, NR0V
-Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -54,6 +53,8 @@ void create_rxa (int channel)
 		ch[channel].dsp_insize,
 		(complex_t *)(void*)rxa[channel].inbuff,
 		(complex_t*)(void*)rxa[channel].midbuff);
+	rxa[channel].rsmpin.f = create_resample (0, ch[channel].dsp_insize, rxa[channel].inbuff, rxa[channel].midbuff,
+		ch[channel].in_rate, ch[channel].dsp_rate, 0.0, 0, 1.0);
 
 	// signal generator
 	rxa[channel].gen0.p = create_gen (
@@ -626,6 +627,7 @@ void destroy_rxa (int channel)
 	destroy_meter (rxa[channel].adcmeter.p);
 	destroy_gen (rxa[channel].gen0.p);
 	destroy_HBResampler(rxa[channel].rsmpin.p);
+	destroy_resample (rxa[channel].rsmpin.f);
 	destroy_shift (rxa[channel].shift.p);
 	_aligned_free (rxa[channel].midbuff);
 	_aligned_free (rxa[channel].outbuff);
@@ -639,6 +641,7 @@ void flush_rxa (int channel)
 	memset (rxa[channel].midbuff, 0, 2 * ch[channel].dsp_size    * sizeof (complex));
 	flush_shift (rxa[channel].shift.p);
 	flush_HBResampler(rxa[channel].rsmpin.p);
+	flush_resample (rxa[channel].rsmpin.f);
 	flush_gen (rxa[channel].gen0.p);
 	flush_meter (rxa[channel].adcmeter.p);
 	flush_nbp (rxa[channel].nbp0.p);
@@ -675,7 +678,8 @@ void flush_rxa (int channel)
 void xrxa (int channel)
 {
 	xshift (rxa[channel].shift.p);
-	xHBResampler(rxa[channel].rsmpin.p);
+	if (rxa[channel].rsmpin.f->run) xresample (rxa[channel].rsmpin.f);
+	else xHBResampler(rxa[channel].rsmpin.p);
 	xgen (rxa[channel].gen0.p);
 	xmeter (rxa[channel].adcmeter.p);
 	xbpsnbain (rxa[channel].bpsnba.p, 0);
@@ -736,6 +740,9 @@ void setInputSamplerate_rxa (int channel)
 	setBuffers_HBResampler(rxa[channel].rsmpin.p, (complex_t*)(void*)rxa[channel].inbuff, (complex_t*)(void*)rxa[channel].midbuff);
 	setSize_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_insize);
 	setInRate_HBResampler(rxa[channel].rsmpin.p, ch[channel].in_rate);
+	setBuffers_resample (rxa[channel].rsmpin.f, rxa[channel].inbuff, rxa[channel].midbuff);
+	setSize_resample (rxa[channel].rsmpin.f, ch[channel].dsp_insize);
+	setInRate_resample (rxa[channel].rsmpin.f, ch[channel].in_rate);
 	RXAResCheck (channel);
 }
 
@@ -764,6 +771,9 @@ void setDSPSamplerate_rxa (int channel)
 	setBuffers_HBResampler(rxa[channel].rsmpin.p, (complex_t*)(void*)rxa[channel].inbuff, (complex_t*)(void*)rxa[channel].midbuff);
 	setSize_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_insize);
 	setOutRate_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_rate);
+	setBuffers_resample (rxa[channel].rsmpin.f, rxa[channel].inbuff, rxa[channel].midbuff);
+	setSize_resample (rxa[channel].rsmpin.f, ch[channel].dsp_insize);
+	setOutRate_resample (rxa[channel].rsmpin.f, ch[channel].dsp_rate);
 	// dsp_rate blocks
 	setSamplerate_gen (rxa[channel].gen0.p, ch[channel].dsp_rate);
 	setSamplerate_meter (rxa[channel].adcmeter.p, ch[channel].dsp_rate);
@@ -819,6 +829,8 @@ void setDSPBuffsize_rxa (int channel)
 	// input resampler
 	setBuffers_HBResampler(rxa[channel].rsmpin.p, (complex_t*)(void*)rxa[channel].inbuff, (complex_t*)(void*)rxa[channel].midbuff);
 	setSize_HBResampler(rxa[channel].rsmpin.p, ch[channel].dsp_insize);
+	setBuffers_resample (rxa[channel].rsmpin.f, rxa[channel].inbuff, rxa[channel].midbuff);
+	setSize_resample (rxa[channel].rsmpin.f, ch[channel].dsp_insize);
 	// dsp_size blocks
 	setBuffers_gen (rxa[channel].gen0.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_gen (rxa[channel].gen0.p, ch[channel].dsp_size);
@@ -948,7 +960,8 @@ void SetRXAMode (int channel, int mode)
 
 void RXAResCheck (int channel)
 {	
-	// HBResampler (rsmpin) turns OFF/ON automatically for this situation.
+	// HBResampler (rsmpin) turns OFF/ON automatically for this situation; ratios it lacks go to the polyphase fallback.
+	rxa[channel].rsmpin.f->run = ch[channel].in_rate != ch[channel].dsp_rate && !rxa[channel].rsmpin.p->run;
 	RESAMPLE b = rxa[channel].rsmpout.p;
 	if (ch[channel].dsp_rate != ch[channel].out_rate)	b->run = 1;
 	else												b->run = 0;

@@ -28,28 +28,150 @@ warren@wpratt.com
 
 struct _ch ch[MAX_CHANNELS];
 
+/* _beginthreadex_proc adapter: _beginthreadex requires unsigned __stdcall,
+ * but wdspmain is void __cdecl. Wrap so we can use _beginthreadex (which
+ * returns a real handle owned by the caller — _beginthread's handle is
+ * owned by the CRT and invalid for synchronization). */
+static unsigned __stdcall wdspmain_thread_proc (void *p)
+{
+	wdspmain (p);
+	return 0;
+}
+
 void start_thread (int channel)
 {
-	HANDLE handle = (HANDLE) _beginthread(wdspmain, 0, (void *)(uintptr_t)channel);
-	//SetThreadPriority(handle, THREAD_PRIORITY_HIGHEST);
+	uintptr_t h = _beginthreadex (NULL, 0, wdspmain_thread_proc,
+		(void *)(uintptr_t)channel, 0, NULL);
+	ch[channel].h_wdsp_thread = (HANDLE) h;
+	//SetThreadPriority((HANDLE) h, THREAD_PRIORITY_HIGHEST);
+}
+
+/* For non-integer input:dsp rate ratios (SunSDR2 DX native rates), the
+ * downstream `rsmpin` polyphase resampler produces a deterministic number
+ * of output samples per call ONLY when its input block length is a whole
+ * multiple of M (= in_rate / gcd(in_rate, dsp_rate)) AND the matching
+ * output length equals k*L (= k * dsp_rate / gcd(...)).
+ *
+ * `dsp_size` is the block length the DSP chain processes per iteration at
+ * dsp_rate. For rsmpin's phase accumulator to return to its initial state
+ * at every block boundary, dsp_size MUST be a multiple of L — otherwise
+ * rsmpin emits 95 samples on one iteration and 97 on the next, leaving
+ * stale or overwriting samples in midbuff and producing a one-sample
+ * discontinuity once per DSP iteration (audible as heavy buzzing near the
+ * iteration rate).
+ *
+ * For every integer-ratio case (Anan/HL2) L==1 and every dsp_size trivially
+ * qualifies — no behaviour change. Only SunSDR rates (L=96 at 312.5 kHz,
+ * L=192 at 156.25 kHz, L=384 at 78.125 kHz, all vs 48 kHz DSP) round up.
+ *
+ * Round UP (never down): a block smaller than L cannot cover one full
+ * polyphase cycle. Caller-requested sizes under L are bumped; multiples of
+ * L are kept.
+ */
+static int adjust_L_for (int in_r, int dsp_r)
+{
+	int a, b, t;
+	if (in_r <= 0 || dsp_r <= 0) return 1;
+	a = in_r; b = dsp_r;
+	while (b) { t = b; b = a % b; a = t; }
+	return dsp_r / a;
+}
+
+static int aligned_dsp_size (int channel, int req)
+{
+	int in_r = ch[channel].in_rate;
+	int dsp_r = ch[channel].dsp_rate;
+	int L_now, L_48, L_192, L_required, a, b, t;
+	if (in_r <= 0 || dsp_r <= 0) return req;
+
+	L_now = adjust_L_for (in_r, dsp_r);
+	if (L_now <= 1) return req;  /* integer ratio; Anan/HL2 unchanged */
+
+	/* For SunSDR non-integer ratios, dsp_rate changes on mode switches
+	 * (FM uses 192 kHz DSP vs 48 kHz for other modes). If the L factor
+	 * differs across dsp_rates, dsp_size would need to change on every
+	 * mode switch — which forces WDSP to recompute every FFTW_PATIENT
+	 * plan in the chain (bandpass, firmin, cfcomp, etc.), taking
+	 * multi-second blocks that Windows flags as "not responding" and
+	 * terminates via WER. The observed 3.7 s freeze + crash on 40 m →
+	 * 2 m (which switches to NFM, bumping dsp_rate 48 k → 192 k) was
+	 * exactly this.
+	 *
+	 * Fix: round dsp_size up to a value compatible with L at BOTH
+	 * common dsp_rates (48 kHz for most modes, 192 kHz for FM). Pick
+	 * LCM(L_48, L_192). When the mode later switches, dsp_size is
+	 * already aligned for the new L, so the adjust is a no-op and the
+	 * FFTW plans don't need to be rebuilt.
+	 *
+	 * For in_rate=312500: L_48=96, L_192=384, LCM=384.
+	 * For in_rate=156250: L_48=192, L_192=768, LCM=768.
+	 * For in_rate=78125:  L_48=384, L_192=1536, LCM=1536.
+	 *
+	 * Anan/HL2 integer-ratio rates: L at every dsp_rate is 1, LCM=1,
+	 * no change. */
+	L_48 = adjust_L_for (in_r, 48000);
+	L_192 = adjust_L_for (in_r, 192000);
+
+	/* LCM(L_48, L_192). */
+	a = L_48; b = L_192;
+	while (b) { t = b; b = a % b; a = t; }
+	if (a <= 0) a = 1;
+	L_required = (L_48 / a) * L_192;
+
+	/* Also ensure compatibility with the currently-active rate, even if
+	 * it's neither 48 k nor 192 k (defensive). */
+	if (L_now > 1)
+	{
+		a = L_required; b = L_now;
+		while (b) { t = b; b = a % b; a = t; }
+		if (a > 0)
+			L_required = (L_required / a) * L_now;
+	}
+
+	return ((req + L_required - 1) / L_required) * L_required;
 }
 
 void pre_main_build (int channel)
 {
-	if (ch[channel].in_rate  >= ch[channel].dsp_rate)
-		ch[channel].dsp_insize  = ch[channel].dsp_size * (ch[channel].in_rate  / ch[channel].dsp_rate);
-	else
-		ch[channel].dsp_insize  = ch[channel].dsp_size / (ch[channel].dsp_rate /  ch[channel].in_rate);
+	ch[channel].dsp_size = aligned_dsp_size (channel, ch[channel].dsp_size);
 
-	if (ch[channel].out_rate >= ch[channel].dsp_rate)
-		ch[channel].dsp_outsize = ch[channel].dsp_size * (ch[channel].out_rate / ch[channel].dsp_rate);
-	else
-		ch[channel].dsp_outsize = ch[channel].dsp_size / (ch[channel].dsp_rate / ch[channel].out_rate);
+	/* Block-size relationship (each row represents the same block
+	 * duration at its own rate):
+	 *     dsp_insize  * dsp_rate = dsp_size * in_rate
+	 *     dsp_outsize * dsp_rate = dsp_size * out_rate
+	 *     out_size    * in_rate  = in_size  * out_rate
+	 *
+	 * The original implementation split these into two branches
+	 * (in_rate >= dsp_rate vs in_rate < dsp_rate) and did the
+	 * integer division of the rate ratio BEFORE multiplying. That
+	 * truncates to floor for non-integer ratios — fine for Anan/HL2
+	 * where every supported rate is an integer multiple of
+	 * dsp_rate=48 kHz, wrong for the SunSDR2 DX native rates
+	 * (312.5 / 156.25 / 78.125 kHz) where the ratio is fractional.
+	 *
+	 * Example (in_rate=312500, dsp_rate=48000, dsp_size=64):
+	 *     old: dsp_size * (in_rate/dsp_rate) = 64 * 6 = 384
+	 *     new: (dsp_size * in_rate) / dsp_rate = 20000000/48000 = 416
+	 * The old value made WDSP process each block as if the input
+	 * rate were 288 kHz instead of 312.5 kHz — an 8% rate
+	 * mis-scaling through every FFT, filter and demod, producing
+	 * heavily garbled audio.
+	 *
+	 * Multiply first, then divide. 64-bit intermediate because at
+	 * dsp_size=4096 and in_rate=1.536 MHz the 32-bit product would
+	 * overflow.
+	 *
+	 * For every integer-ratio use case this produces the same result
+	 * as before (multiplication and division are associative over
+	 * rationals; truncation only bites when the ratio has a
+	 * remainder). Only the non-integer SunSDR path changes. */
+	long long in_prod  = (long long)ch[channel].dsp_size * ch[channel].in_rate;
+	long long out_prod = (long long)ch[channel].dsp_size * ch[channel].out_rate;
+	long long xfer     = (long long)ch[channel].in_size  * ch[channel].out_rate;
 
-	if (ch[channel].in_rate  >= ch[channel].out_rate)
-		ch[channel].out_size    = ch[channel].in_size  / (ch[channel].in_rate  / ch[channel].out_rate);
-	else
-		ch[channel].out_size    = ch[channel].in_size  * (ch[channel].out_rate /  ch[channel].in_rate);
+	ch[channel].dsp_insize  = (int)(in_prod  / ch[channel].dsp_rate);
+	ch[channel].dsp_outsize = (int)(out_prod / ch[channel].dsp_rate);
+	ch[channel].out_size    = (int)(xfer     / ch[channel].in_rate);
 
 	InitializeCriticalSectionAndSpinCount ( &ch[channel].csDSP, 2500 );
 	InitializeCriticalSectionAndSpinCount ( &ch[channel].csEXCH,  2500 );
@@ -107,7 +229,93 @@ void pre_main_destroy (int channel)
 	InterlockedBitTestAndReset (&ch[channel].run, 0);
 	InterlockedBitTestAndSet (&ch[channel].iob.pc->exec_bypass, 0);
 	ReleaseSemaphore (a->Sem_BuffReady, 1, 0);
-	Sleep (25);
+
+	/* Properly join the wdspmain worker thread before our caller
+	 * (CloseChannel -> destroy_main -> destroy_rxa/destroy_txa) starts
+	 * freeing the DSP buffers the worker is reading and writing. The
+	 * legacy Sleep(25) here was a hope: if xrxa()/xtxa() was mid-block
+	 * when run was zeroed, the destruction proceeded while the worker
+	 * was still touching SNBA/EMNR/AGC/etc memory, manifesting on app
+	 * exit as 0xc0000374 in destroy_snba+0xdd / destroy_rxa.
+	 *
+	 * Wake the worker more aggressively — release several semaphore
+	 * counts so the worker iterates through any built-up backlog and
+	 * observes run==0 quickly — then short-timeout wait. A worker
+	 * iteration is well under a millisecond when exec_bypass is set.
+	 * 250 ms is comfortably more than the worst case but bounded so
+	 * app exit doesn't visibly hang on 4 channels (250 ms × 4 = 1 s).
+	 *
+	 * Also drain Sem_BuffReady the same way we just did so any other
+	 * pre/post_main_destroy callers in this method-chain (e.g. from
+	 * SetInputSamplerate) get the same treatment. */
+	if (ch[channel].h_wdsp_thread)
+	{
+		int extra;
+		for (extra = 0; extra < 8; extra++)
+			ReleaseSemaphore (a->Sem_BuffReady, 1, 0);
+
+		DWORD wait_rc = WaitForSingleObject (ch[channel].h_wdsp_thread, 250);
+		if (wait_rc == WAIT_OBJECT_0)
+		{
+			CloseHandle (ch[channel].h_wdsp_thread);
+		}
+		/* If wait_rc == WAIT_TIMEOUT, the worker is still running for some
+		 * unknown reason. Don't CloseHandle (leaks one HANDLE on shutdown,
+		 * acceptable). Don't Sleep here — caller proceeds with destroy and
+		 * we accept the residual race rather than hanging the UI. */
+		ch[channel].h_wdsp_thread = NULL;
+	}
+	else
+	{
+		/* Fallback for callers that pre-date the handle capture
+		 * (defence in depth — should never fire on current build). */
+		Sleep (25);
+	}
+
+	/* ALSO stop the flushChannel worker thread BEFORE caller proceeds
+	 * to destroy_main. flushChannel is a SEPARATE thread (started in
+	 * iobuffs.c::create_iobuffs) that grabs csDSP and calls flush_main()
+	 * — i.e. touches the NBP/FIRcore/SNBA state destroy_main is about
+	 * to free. Without this stop, destroy_main races against in-flight
+	 * flushChannel work → 0xc0000374 detected during free of those
+	 * filter buffers (crash dump 27208: destroy_fircore+0x32 via
+	 * destroy_nbp+0x46 via destroy_rxa+0x6b3).
+	 *
+	 * The legacy destroy_iobuffs (called LATER by post_main_destroy)
+	 * also stops flushChannel via flush_bypass+sem, but by then the
+	 * damage is done — destroy_main has already run. Stopping it here
+	 * closes the race. */
+	{
+		int flush_spin;
+		InterlockedBitTestAndSet (&a->flush_bypass, 0);
+		ReleaseSemaphore (a->Sem_Flush, 1, 0);
+		for (flush_spin = 0; flush_spin < 250; flush_spin++)
+		{
+			/* flushChannel sets flush_bypass back to 0 on exit. */
+			if (!InterlockedAnd (&a->flush_bypass, 0xffffffff))
+				break;
+			Sleep (1);
+		}
+		/* If it didn't exit in 250 ms, accept the leak rather than hang. */
+	}
+
+	/* Synchronization barrier: flushChannel takes csDSP while inside
+	 * flush_main() (which calls destroy_/calc_-style work that touches
+	 * the very FIRcore / NBP / SNBA / EMNR state destroy_main is about
+	 * to free). If our flush_bypass-spin above timed out (flushChannel
+	 * was mid-flush_main and didn't get to its run-state check in time),
+	 * flushChannel still holds csDSP. Acquiring it briefly here blocks
+	 * until flush_main returns AND flushChannel has released the lock
+	 * — guaranteeing destroy_main below doesn't race against in-flight
+	 * filter / FFT-plan touching. Same logic for csEXCH which fexchange0
+	 * and flushChannel both grab. Releasing immediately is safe: by this
+	 * point both wdspmain and flushChannel are signaled to exit, so
+	 * nothing should be re-entering. Crash dump 3868 (destroy_fircore
+	 * +0x32 via destroy_nbp+0x46 via destroy_rxa) was this race. */
+	EnterCriticalSection (&ch[channel].csDSP);
+	LeaveCriticalSection (&ch[channel].csDSP);
+	EnterCriticalSection (&ch[channel].csEXCH);
+	LeaveCriticalSection (&ch[channel].csEXCH);
 }
 
 void post_main_destroy (int channel)
@@ -147,6 +355,28 @@ void flushChannel (void* p)
 	InterlockedBitTestAndReset(&a->flush_bypass, 0);
 }
 
+/* Synchronous, immediate flush of all channel state (iobuffs + RXA/TXA
+ * DSP chain). Mirrors the flushChannel worker's critical work under the
+ * same locks. Safe to call while ch[channel].state == 1; buffers are
+ * zeroed in place. Intended for callers that need a one-shot flush on
+ * transition boundaries (e.g., SUNSDR PTT-on, where carrying TX DSP
+ * state from a previous attempt can cause audible transients).
+ * Does NOT touch state/slew flags — the caller remains responsible for
+ * channel state management via SetChannelState. */
+PORT
+void FlushChannelNow (int channel)
+{
+	IOB a = ch[channel].iob.pc;
+	EnterCriticalSection(&ch[channel].csDSP);
+	EnterCriticalSection(&ch[channel].csEXCH);
+	flush_iobuffs(channel);
+	InterlockedBitTestAndSet(&a->exec_bypass, 0);
+	flush_main(channel);
+	InterlockedBitTestAndReset(&a->exec_bypass, 0);
+	LeaveCriticalSection(&ch[channel].csEXCH);
+	LeaveCriticalSection(&ch[channel].csDSP);
+}
+
 /********************************************************************************************************
 *																										*
 *										Channel Properties												*
@@ -180,6 +410,8 @@ void SetInputBuffsize (int channel, int in_size)
 PORT
 void SetDSPBuffsize (int channel, int dsp_size)
 {
+	// compare the aligned size: SunSDR requests 64 but runs 384, so a raw compare rebuilt the channel on every mode change
+	dsp_size = aligned_dsp_size (channel, dsp_size);
 	if (dsp_size != ch[channel].dsp_size)
 	{
 		int oldstate = SetChannelState (channel, 0, 1);

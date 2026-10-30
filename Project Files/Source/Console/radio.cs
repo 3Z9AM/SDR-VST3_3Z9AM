@@ -5,7 +5,6 @@
 // Copyright (C) 2004-2009  FlexRadio Systems
 // Copyright (C) 2010-2020  Doug Wigley
 // Copyright (C) 2019-2026  Richard Samphire
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -1189,19 +1188,43 @@ namespace Thetis
 				{
                     if (value != rx_output_gain_dsp || force)
 					{
-                        WDSP.SetRXAPanelGain1(WDSP.id(thread, subrx), value);
+                        // SunSDR2 issue #40 (and follow-up #41 + RobbiePh on
+                        // #40): AF / volume slider drives both the speaker
+                        // mixer and each VAC's RX input gain, while WDSP's
+                        // RX panel gain stays pinned at 1.0. That keeps the
+                        // pre-v2.1.3 muscle-memory ("AF slider = volume")
+                        // for both speaker and VAC listeners, while leaving
+                        // TCI at fixed DSP level (TCI taps the audio earlier
+                        // in pipe.c, so it doesn't pick up the per-VAC
+                        // mixer scaling — decoders on TCI keep working at
+                        // any AF setting, the issue #40 fix is preserved).
+                        //
+                        // VAC mapping: chid 0 = RX1 main → VAC1 (id 0);
+                        // chid 2 = RX2 main → VAC2 (id 1). SubRx (chid 1
+                        // and 3) drives the speaker mixer for sub-RX
+                        // balance only — the VAC mixer input gain follows
+                        // the main RX slider, which is the typical
+                        // single-subRx VAC workflow.
+                        int channel_id = WDSP.id(thread, subrx);
+                        cmaster.SetRXOutputGain(channel_id, value);
+                        WDSP.SetRXAPanelGain1(channel_id, 1.0);
+                        if (channel_id == 0) ivac.SetIVACafgain(0, value);
+                        else if (channel_id == 2) ivac.SetIVACafgain(1, value);
 						rx_output_gain_dsp = value;
 
-                        //[2.10.3.5]MW0LGE wave recorder volume normalise
-                        switch(WDSP.id(thread, subrx))
+                        // Wave recorder pulls from pipe.c's rbuff which is
+                        // now full-DSP-level; the recorder's internal inverse
+                        // gain stays at 1.0 so quiet-AF recordings don't get
+                        // over-amplified.
+                        switch(channel_id)
                         {
                             case 0: //rx1 sub0
                                 if (WaveThing.wave_file_writer[0] != null)
-                                    WaveThing.wave_file_writer[0].RecordGain = (float)value;
+                                    WaveThing.wave_file_writer[0].RecordGain = 1.0f;
                                 break;
                             case 2: //rx2 sub0
                                 if (WaveThing.wave_file_writer[1] != null)
-                                    WaveThing.wave_file_writer[1].RecordGain = (float)value;
+                                    WaveThing.wave_file_writer[1].RecordGain = 1.0f;
                                 break;
                         }
                     }
@@ -3171,7 +3194,7 @@ namespace Thetis
 		public double TXAMCarrierLevel
 		{
 			get { return tx_am_carrier_level; }
-			set 
+			set
 			{
 				tx_am_carrier_level = value;
 				if(update)

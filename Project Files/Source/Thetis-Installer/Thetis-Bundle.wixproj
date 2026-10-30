@@ -81,6 +81,6 @@
       <Pattern>^(\d+.\d+.\d+.\d+)</Pattern>
       <AssemblyVersion>$([System.Text.RegularExpressions.Regex]::Match($(In), $(Pattern)))</AssemblyVersion>
     </PropertyGroup>
-    <Move SourceFiles="..\..\bin\Installers\$(OutputName).exe" DestinationFiles="..\..\bin\Installers\SDR-VST3-v$(AssemblyVersion)-GUI.$(Platform).exe" />
+    <Move SourceFiles="..\..\bin\Installers\$(OutputName).exe" DestinationFiles="..\..\bin\Installers\SDR-VST3-v$(AssemblyVersion)-sunsdr.$(Platform).exe" />
   </Target>
 </Project>

@@ -38,9 +38,6 @@
 // its original terms and is not affected by this dual-licensing statement in any way.        //
 // Richard Samphire can be reached by email at :  mw0lge@grange-lane.co.uk                    //
 //============================================================================================//
-//
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM: per-section diversity (max-SINR,
-// clean, AUTO per bin) state saved with the form - see DiversityForm.Phase.cs, wdsp/secdiv.c.
 
 using System;
 using System.Diagnostics;
@@ -1531,14 +1528,9 @@ namespace Thetis
                 }
             }
 
-            // a per-section mode replaces the radar's one weight: its handle would show what is not applied
-            drawSectionWeights(g, L);
-            if (SectionCaption == null)
-            {
-                pp = getControlHandlePoint(L); // MW0LGE_21c
-                g.FillEllipse(Brushes.White, pp.X - 4, pp.Y - 4, 8, 8);
-                g.DrawLine(pen3, new Point((int)(size / 2), (int)(size / 2)), new Point(pp.X, pp.Y));
-            }
+            pp = getControlHandlePoint(L); // MW0LGE_21c
+            g.FillEllipse(Brushes.White, pp.X - 4, pp.Y - 4, 8, 8);
+            g.DrawLine(pen3, new Point((int)(size / 2), (int)(size / 2)), new Point(pp.X, pp.Y));
 
             drawPhaseArrow(g, L, showLabels);
 
@@ -1984,8 +1976,7 @@ namespace Thetis
 
             // minimized: SaveForm stored the -32000 icon position, keep the normal bounds and reopen minimized
             bool minimized = WindowState == FormWindowState.Minimized;
-            var vars = new System.Collections.Generic.List<string> { "Minimized/" + minimized, "SectionClean/" + SectionClean,
-                "SectionCleanPct/" + SectionCleanPct, "SectionCleanSens/" + SectionCleanSens };
+            var vars = new System.Collections.Generic.List<string> { "Minimized/" + minimized };
             if (minimized)
             {
                 Rectangle r = RestoreBounds;
@@ -2719,15 +2710,6 @@ namespace Thetis
             // the HUD colours with the Modern UI (system colours here, themed by Console.modernFormsIdle), else dark grey
             DarkMode = !ModernTheme.Enabled;
             if (ModernTheme.Enabled) picRadar.BackColor = ModernColours.Back;
-
-            // max-SINR clean share / auto (-1) from the DSP drawer
-            foreach (string s in DB.GetVars("DiversityForm"))
-            {
-                if (s.StartsWith("SectionCleanPct/") && int.TryParse(s.Substring(16), out int c)) SectionClean = c;
-                else if (s.StartsWith("SectionCleanSens/") && int.TryParse(s.Substring(17), out c)) SectionCleanSens = c;
-            }
-            foreach (string s in DB.GetVars("DiversityForm"))   // after the manual share: -1 (auto) keeps it
-                if (s.StartsWith("SectionClean/") && int.TryParse(s.Substring(13), out int c)) SectionClean = c;
 
             if (DB.GetVars("DiversityForm").Contains("Minimized/True"))
                 WindowState = FormWindowState.Minimized;

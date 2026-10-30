@@ -6,7 +6,6 @@ This code/file can be found on GitHub : https://github.com/nubbyless/Thetis-Plus
 
 Copyright (C) 2026 ChasingCoffee
 Copyright (C) 2026 nubbyless <nubbyless@yahoo.com>
-Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License

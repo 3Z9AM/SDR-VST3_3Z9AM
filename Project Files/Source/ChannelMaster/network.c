@@ -1,7 +1,6 @@
 /*
  * network.c
  * Copyright (C) 2015-2020 Doug Wigley (W5WC)
- * Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,6 +26,7 @@
 #endif
 
 #include "network.h" 
+#include "sunsdr.h"
 #include "../p2rx/p2rx.h"
 #include <Iphlpapi.h>
 
@@ -100,6 +100,24 @@ int nativeInitMetis(char* netaddr, int port, char* localaddr, int localport, int
 
 	RadioProtocol = protocol;
 	HPSDRModel = model_id;
+
+	/* SunSDR native protocol — bypass HPSDR socket setup entirely.
+	 *
+	 * Honour the radio's configured control port (from the Setup
+	 * `Fixed listen port` field or the discovered RadioInfo) so
+	 * operators who changed the port from the default can still connect.
+	 * Stream port is control port + 1, matching the original SunSDR2 DX
+	 * 50001/50002 pairing convention. Closes issue #15.
+	 *
+	 * Prefer the explicit UI-selected model when choosing defaults so DX
+	 * and PRO each get their own bootstrap profile and default port pair. */
+	if (protocol == SUNSDR) {
+		int default_ctrl = (model_id == HPSDRModel_SUNSDR2PRO) ? 50002 : SUNSDR_CONTROL_PORT;
+		int default_stream = (model_id == HPSDRModel_SUNSDR2PRO) ? 50003 : SUNSDR_STREAM_PORT;
+		int sunsdr_ctrl = (port > 0) ? port : default_ctrl;
+		int sunsdr_stream = (port > 0) ? (port + 1) : default_stream;
+		return SunSDRInit(netaddr, sunsdr_ctrl, sunsdr_stream, model_id);
+	}
 
 	prn->base_outbound_port = port;
 
@@ -382,6 +400,11 @@ int SendStop(void) {
 int StartReadThread(void) {
 	int myrc = 0;
 
+	/* SunSDR: power on and start IQ threads */
+	if (RadioProtocol == SUNSDR) {
+		return SunSDRPowerOn();
+	}
+
 	do {
 
 		if (SendStart() != 0) {
@@ -401,6 +424,10 @@ void StopReadThread() {
 	PrintTimeHack();
 	printf("- StopReadThread()\n");
 	fflush(stdout);
+	if (RadioProtocol == SUNSDR) {
+		SunSDRPowerOff();
+		return;
+	}
 	if (RadioProtocol == ETH) SendStop();
 	else SendStopToMetis();
 	DeInitMetisSockets();
@@ -1236,7 +1263,7 @@ void sendOutbound(int id, double* out)
 	//// convert from complex to byte
 	//// big-endian
 
-	if (RadioProtocol == ETH)
+	if (RadioProtocol == ETH || RadioProtocol == SUNSDR)
 	{
 		EnterCriticalSection(&prn->udpOUT);
 		if (id == 1)
@@ -1471,4 +1498,127 @@ DWORD WINAPI KeepAliveMain(LPVOID n) {
 	KeepAliveLoop();
 
 	return 0;
+}
+
+/* ========== SunSDR native protocol wrappers ========== */
+
+PORT int nativeSunSDRInit(char* radioIP, int ctrlPort, int streamPort)
+{
+	return SunSDRInit(radioIP, ctrlPort, streamPort, HPSDRModel);
+}
+
+PORT void nativeSunSDRDestroy(void)
+{
+	SunSDRDestroy();
+}
+
+PORT int nativeSunSDRPowerOn(void)
+{
+	return SunSDRPowerOn();
+}
+
+PORT void nativeSunSDRPowerOff(void)
+{
+	SunSDRPowerOff();
+}
+
+PORT void nativeSunSDRSetFreq(int receiver, int freqHz, int isTx)
+{
+	SunSDRSetFreq(receiver, freqHz, isTx);
+}
+
+PORT void nativeSunSDRSetMode(int mode)
+{
+	SunSDRSetMode(mode);
+}
+
+PORT void nativeSunSDRSetPTT(int ptt)
+{
+	SunSDRSetPTT(ptt);
+}
+
+PORT void nativeSunSDRSetRX2(int enabled)
+{
+	SunSDRSetRX2(enabled);
+}
+
+PORT void nativeSunSDRSetTune(int tune)
+{
+	SunSDRSetTune(tune);
+}
+
+PORT void nativeSunSDRSetPreampAtt(int state)
+{
+	SunSDRSetPreampAtt(state);
+}
+
+PORT void nativeSunSDRSetMicSource(int state)
+{
+	SunSDRSetMicSource(state);
+}
+
+PORT int nativeSunSDRGetHwPttState(void)
+{
+	return SunSDRGetHwPttState();
+}
+
+PORT int nativeSunSDRGetAdcOverload(void)
+{
+	return SunSDRGetAdcOverload();
+}
+
+PORT void nativeSunSDRLogTuneState(char* label, int chk_tun, int chk_mox, int tuning, int mox,
+	int tx_dsp_mode, int current_dsp_mode, int postgen_run, int postgen_mode,
+	double tone_freq, double tone_mag, int pulse_enabled, int pulse_on,
+	int tune_drive_source, int pwr, int new_pwr)
+{
+	SunSDRLogTuneState(label, chk_tun, chk_mox, tuning, mox,
+		tx_dsp_mode, current_dsp_mode, postgen_run, postgen_mode,
+		tone_freq, tone_mag, pulse_enabled, pulse_on,
+		tune_drive_source, pwr, new_pwr);
+}
+
+PORT void nativeSunSDRLogTrace(char* msg)
+{
+	SunSDRLogTrace(msg);
+}
+
+PORT void nativeSunSDRSetDrive(int raw)
+{
+	SunSDRSetDrive(raw);
+}
+
+PORT void nativeSunSDRSetAntenna(int antenna)
+{
+	SunSDRSetAntenna(antenna);
+}
+
+PORT void nativeSunSDRSetTxAntenna(int antenna)
+{
+    SunSDRSetTxAntenna(antenna);
+}
+
+PORT void nativeSunSDRSetPA(int enabled)
+{
+    SunSDRSetPA(enabled);
+}
+
+PORT void nativeSunSDRSetRxWdspReady(int ready)
+{
+    SunSDRSetRxWdspReady(ready);
+}
+
+PORT int nativeSunSDRGetVersionText(char* buffer, int maxlen)
+{
+    return SunSDRGetVersionText(buffer, maxlen);
+}
+
+PORT int nativeSunSDRGetProtocolText(char* buffer, int maxlen)
+{
+    return SunSDRGetProtocolText(buffer, maxlen);
+}
+
+PORT int nativeSunSDRGetSerialText(char* buffer, int maxlen)
+{
+    return SunSDRGetSerialText(buffer, maxlen);
 }

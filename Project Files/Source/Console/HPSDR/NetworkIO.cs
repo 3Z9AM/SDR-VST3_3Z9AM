@@ -1,8 +1,31 @@
+//=================================================================
+// NetworkIO.cs
+//=================================================================
+// OpenHPSDR / Thetis network I/O layer — HPSDR Ethernet discovery,
+// protocol selection, and IQ/control socket management. Heritage from
+// PowerSDR (FlexRadio Systems) and upstream Thetis (Richard Samphire MW0LGE
+// and prior OpenHPSDR contributors).
+//
+// Modified for ArtemisSDR by Kosta Kanchev (K0KOZ) — added SunSDR2 DX
+// native-protocol branch, SunSDR firmware/serial/protocol version plumbing,
+// and related routing-order fixes. See MODIFICATIONS.md for scope.
+//
+// Copyright (C) 2004-2009 FlexRadio Systems
+// Copyright (C) 2010-2019 Doug Wigley (W5WC)
+// Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
+// Copyright (C) 2026      Kosta Kanchev (K0KOZ)
+//
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of the GNU General Public License version 2 as published
+// by the Free Software Foundation. Distributed WITHOUT ANY WARRANTY.
+//=================================================================
+
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.NetworkInformation;
+using System.Text;
 using System.Windows.Forms;
 
 namespace Thetis
@@ -22,6 +45,9 @@ namespace Thetis
         public static bool FWVersionsChecked { get; set; } = false;
         public static string GetFWVersionErrorMsg { get; set; } = "";
         public static string BoardMismatch { get; set; } = "";
+        public static string SunSDRVersionText { get; private set; } = "Unknown";
+        public static string SunSDRProtocolText { get; private set; } = "SunSDR Native";
+        public static string SunSDRSerialText { get; private set; } = "Unknown";
 
         public static int InitRadio()
         {
@@ -37,6 +63,7 @@ namespace Thetis
             // -104 invalid host IP
             // -105 no nic currently selected
             // -106 no radio currently selected
+            // -110 SunSDR pre-flight reachability check failed (not powered/unreachable)
 
             Console c = Console.getConsole();
             if (c.IsSetupFormNull) return -1;
@@ -70,6 +97,48 @@ namespace Thetis
             int hostPort = c.SetupForm.ListenToRadioOnUDPPort; // will be any os available port if 0, or specific if set
             int model_id = (int)HardwareSpecific.Model;
             int protocol = ri.Protocol == RadioDiscoveryRadioProtocol.P1 ? 0 : 1;
+
+            // SunSDR native protocol — skip HPSDR discovery, init directly.
+            //
+            // Ordering: CurrentRadioProtocol and CMLoadRouterAll run BEFORE
+            // nativeInitMetis starts the IQ stream, because the router must
+            // be wired for SUNSDR before any IQ packet flows through it.
+            // At cold Thetis launch, comboRadioModel_SelectedIndexChanged
+            // (the only other caller of CMLoadRouterAll) is suppressed by
+            // the setup form's `initializing` flag during DB restore, so
+            // without this explicit call the router is never SUNSDR-aware
+            // and the first IQ packets feed the wrong WDSP inputs.
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                // Pre-flight reachability check. nativeInitMetis just opens
+                // UDP sockets (UDP is connectionless — always "succeeds"),
+                // and the SunSDRPowerOn macro fires ~22 control packets
+                // with 200 ms select-timeouts each, ignoring the return
+                // value of every send-and-recv. With a dead radio this
+                // burns ~9 seconds in silent timeouts and then falsely
+                // returns success — operator sees Artemis "running" with
+                // no IQ, no audio, no error. Two-step pre-flight here
+                // gates that flow with a hard ~2 sec ceiling, so we fail
+                // fast and surface the right error to the operator.
+                if (!CheckSunSDRReachable(radioIP, ratioPort))
+                    return -110;  // SunSDR not reachable (pre-flight failed)
+
+                protocol = (int)RadioProtocol.SUNSDR;
+                CurrentRadioProtocol = RadioProtocol.SUNSDR;
+                cmaster.CMLoadRouterAll(HardwareSpecific.Model);
+
+                ret = nativeInitMetis(radioIP, ratioPort, hostIP, hostPort, protocol, model_id);
+                if (ret == 0)
+                {
+                    BoardID = HPSDRHW.SunSDR;
+                    FWCodeVersion = 0;
+                    BetaVersion = 0;
+                    Protocol2VersionSupported = 0;
+                    RefreshSunSDRVersionInfo();
+                    BoardMismatch = "";
+                }
+                return ret;
+            }
 
             if (!ri.IsCustom && perform_search)
             {
@@ -189,6 +258,191 @@ namespace Thetis
             return ret;
         }
 
+        // Public wrapper used by chkPower_CheckedChanged to do the
+        // SunSDR pre-flight BEFORE any Power-On state changes (rate
+        // cascade, analyzer init, VFO setup). Without the early check,
+        // the rate cascade in console.cs triggers specRX.initAnalyzer
+        // which starts drawing empty FFT pixels (visible as a noise-
+        // floor "green band" in the panadapter) — even though we
+        // ultimately fail the pre-flight inside InitRadio. Calling
+        // this first means no UI / analyzer state changes if the
+        // radio isn't there.
+        //
+        // Returns true if reachable OR if the setup form / radio list
+        // isn't available (in which case InitRadio's own pre-flight
+        // is the safety net).
+        public static bool TrySunSDRPreflightFromSetup()
+        {
+            try
+            {
+                Console c = Console.getConsole();
+                if (c.IsSetupFormNull) return true;
+                ucRadioList rl = c.SetupForm.SelectedRadioList;
+                if (rl == null) return true;
+                RadioInfo ri = rl.SelectedRadioDetails;
+                if (ri == null) return true;
+                string radioIP = ri.IpAddress.ToString();
+                int ctrlPort = ri.DiscoveryPortBase;
+                return CheckSunSDRReachable(radioIP, ctrlPort);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"TrySunSDRPreflightFromSetup: defaulted to true after {ex.GetType().Name}: {ex.Message}");
+                return true;
+            }
+        }
+
+        // Two-step pre-flight reachability check for SunSDR.
+        //   Step 1: ICMP ping to the radio's IP (1 sec timeout). The
+        //           SunSDR has its own NIC inside the radio — when the PSU
+        //           is off, the NIC is off, so ping fails fast.
+        //   Step 2: UDP firmware-manager query (0x1A opcode, 18 bytes) to
+        //           the control port. Same packet that
+        //           sunsdr_query_firmware_manager_version sends from the
+        //           native side. Wait 1 sec for any reply.
+        // Both steps must succeed for the radio to be considered reachable.
+        // Hard ceiling is ~2 sec before failure, vs. ~9 sec of silent
+        // timeouts in the SunSDRPowerOn macro path with no error feedback.
+        // Operator sees a single "No radio detected" message and chkPower
+        // un-checks itself.
+        private static bool CheckSunSDRReachable(string radioIP, int ctrlPort)
+        {
+            // Step 1: ICMP ping.
+            try
+            {
+                using (Ping ping = new Ping())
+                {
+                    PingReply reply = ping.Send(radioIP, 1000);
+                    if (reply.Status != IPStatus.Success)
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            $"SunSDR pre-flight: ping failed ({reply.Status}) for {radioIP}");
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"SunSDR pre-flight: ping threw {ex.GetType().Name}: {ex.Message}");
+                return false;
+            }
+
+            // Step 2: UDP firmware-manager query (18-byte 0x1A opcode).
+            // Radio reliably replies with a 0x1A response containing FW
+            // version. Any reply at all = radio is alive and listening.
+            //
+            // Multi-family probe: send the 0x1A query for every known
+            // SunSDR2 family byte (DX = 0x32, PRO = 0x01, plus siblings
+            // 0x42 / 0x22 / 0x12 / 0x03 reserved per the discovery code
+            // in clsSunSDRDiscovery.cs::QueryFamilyBytes). The radio
+            // ignores probes whose first byte doesn't match its family;
+            // it replies to the one that does. We only need one reply
+            // to know the radio is alive.
+            //
+            // Why we have to do this: the native sunsdr.c equivalent
+            // (sunsdr_query_firmware_manager_version at sunsdr.c:4901)
+            // builds the packet with placeholder 0x32 then calls
+            // sunsdr_patch_magic() to rewrite the first byte to the
+            // connected radio's actual family. The pre-flight check
+            // here runs BEFORE the native side has set up its profile,
+            // so we don't know the family from the C side. Multi-probe
+            // is robust to that ordering and to future siblings.
+            //
+            // Issue #38 (PRO users "No radio detected" on Power-On)
+            // was caused by the prior single-family 0x32 probe — PRO
+            // radios ignored it and the pre-flight timed out.
+            try
+            {
+                using (UdpClient udp = new UdpClient())
+                {
+                    udp.Client.ReceiveTimeout = 1000;
+                    // Match clsSunSDRDiscovery.cs::QueryFamilyBytes.
+                    byte[] familyBytes = new byte[] { 0x32, 0x01, 0x42, 0x22, 0x12, 0x03 };
+                    foreach (byte familyByte in familyBytes)
+                    {
+                        byte[] probe = new byte[]
+                        {
+                            familyByte, 0xff, 0x1a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                        };
+                        udp.Send(probe, probe.Length, radioIP, ctrlPort);
+                    }
+                    IPEndPoint sender = null;
+                    udp.Receive(ref sender);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"SunSDR pre-flight: UDP probe threw {ex.GetType().Name}: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static void RefreshSunSDRVersionInfo()
+        {
+            StringBuilder version = new StringBuilder(64);
+            StringBuilder protocol = new StringBuilder(32);
+            StringBuilder serial = new StringBuilder(64);
+
+            SunSDRVersionText = "Unknown";
+            SunSDRProtocolText = "SunSDR Native";
+            SunSDRSerialText = "Unknown";
+
+            try
+            {
+                if (nativeSunSDRGetVersionText(version, version.Capacity) > 0 && !string.IsNullOrWhiteSpace(version.ToString()))
+                {
+                    SunSDRVersionText = version.ToString().Trim();
+                }
+
+                if (nativeSunSDRGetProtocolText(protocol, protocol.Capacity) > 0 && !string.IsNullOrWhiteSpace(protocol.ToString()))
+                {
+                    SunSDRProtocolText = protocol.ToString().Trim();
+                }
+
+                if (nativeSunSDRGetSerialText(serial, serial.Capacity) > 0 && !string.IsNullOrWhiteSpace(serial.ToString()))
+                {
+                    SunSDRSerialText = serial.ToString().Trim();
+                }
+            }
+            catch
+            {
+                SunSDRVersionText = "Unknown";
+                SunSDRProtocolText = "SunSDR Native";
+                SunSDRSerialText = "Unknown";
+            }
+        }
+
+        public static string GetSunSDRVersionText()
+        {
+            return string.IsNullOrWhiteSpace(SunSDRVersionText) ? "Unknown" : SunSDRVersionText;
+        }
+
+        public static string GetSunSDRProtocolText()
+        {
+            return string.IsNullOrWhiteSpace(SunSDRProtocolText) ? "SunSDR Native" : SunSDRProtocolText;
+        }
+
+        public static string GetSunSDRSerialText()
+        {
+            return string.IsNullOrWhiteSpace(SunSDRSerialText) ? "Unknown" : SunSDRSerialText;
+        }
+
+        public static string GetSunSDRTitleVersionString()
+        {
+            string title = "FW " + GetSunSDRVersionText() + " " + GetSunSDRProtocolText();
+            string serial = GetSunSDRSerialText();
+            if (!string.Equals(serial, "Unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                title += " SN " + serial;
+            }
+            return title;
+        }
+
         private static float _swr_protect = 1.0f;
         public static float SWRProtect
         {
@@ -207,18 +461,69 @@ namespace Thetis
                 f = 1.0F;
             }
 
-            int i = (int)(255 * f * _swr_protect);
+            int i = (int)Math.Round(255 * f * _swr_protect);
+            if (f > 0.0F && i == 0)
+                i = 1;
             SetOutputPowerFactor(i);
+            // SunSDR drive must follow the same calibrated power path as every
+            // other radio, not the raw UI slider percentage.
+            if (CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                nativeSunSDRSetDrive(i);
         }
 
         private static double[][] _lastVFOfreq = new double[2][] { new double[] { 0.0, 0.0, 0.0, 0.0 }, new double[] { 0.0 } };
+
+        // When non-zero, this Hz offset is ADDED to the TX frequency on every
+        // SunSDR tx=1 write. Set by the MOX/PTT handler when TUNE is engaged
+        // in SSB mode so the PostGen tone lands AT the dial frequency
+        // instead of being offset by cw_pitch. Cleared to 0 on TUNE-off and
+        // on PTT-off to restore normal voice/CW behavior.
+        private static int _sunsdr_tune_freq_offset_hz = 0;
+        public static int SunSDRTuneFreqOffsetHz
+        {
+            get { return _sunsdr_tune_freq_offset_hz; }
+            set { _sunsdr_tune_freq_offset_hz = value; }
+        }
+
         unsafe public static void VFOfreq(int id, double f, int tx)
         {
             _lastVFOfreq[tx][id] = f;
             int f_freq;
             f_freq = (int)((f * 1e6) * _freq_correction_factor);
             if (f_freq >= 0)
-                if (CurrentRadioProtocol == RadioProtocol.USB)
+                if (CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    /*
+                     * SunSDR currently exposes one live RX IQ stream to Thetis.
+                     * The native layer synthesizes the required companion writes
+                     * for RX1 internally, so HPSDR-style extra DDC/VFO ids must
+                     * not be forwarded. In particular, forwarding RX2/VFOB here
+                     * retunes the only live SunSDR stream underneath RX1.
+                     */
+                    if (tx != 0)
+                    {
+                        if (id == 0)
+                        {
+                            int tx_hz = f_freq + _sunsdr_tune_freq_offset_hz;
+                            nativeSunSDRSetFreq(0, tx_hz, tx);   // TX frequency
+                        }
+                    }
+                    else
+                    {
+                        /*
+                         * Thetis HPSDR id mapping for RX differs by model family.
+                         * On the SunSDR path we follow the default multi-DDC layout:
+                         *   id 0 = RX1 primary tuning context
+                         *   id 1,2 = RX1 companion DDC writes
+                         *   id 3 = RX2 tuning context
+                         */
+                        if (id == 0)
+                            nativeSunSDRSetFreq(0, f_freq, tx);   // RX1 / VFO A
+                        else if (id == 3)
+                            nativeSunSDRSetFreq(1, f_freq, tx);   // RX2 / VFO B
+                    }
+                }
+                else if (CurrentRadioProtocol == RadioProtocol.USB)
                     SetVFOfreq(id, f_freq, tx);                  // sending freq Hz to firmware
                 else SetVFOfreq(id, Freq2PhaseWord(f_freq), tx);   // sending phaseword to firmware
         }

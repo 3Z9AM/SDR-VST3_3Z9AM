@@ -131,6 +131,12 @@ namespace Thetis
         [DllImport("ChannelMaster.dll", EntryPoint = "SetIVACrxscale", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetIVACrxscale(int id, double scale);
 
+        // Per-input AF gain on the VAC RX leg — restores the AF slider's
+        // hold on VAC volume that v2.1.3 inadvertently broke. Composes
+        // with SetIVACrxscale (the Setup → VAC RX Gain slider).
+        [DllImport("ChannelMaster.dll", EntryPoint = "SetIVACafgain", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetIVACafgain(int id, double gain);
+
         [DllImport("ChannelMaster.dll", EntryPoint = "SetIVACcombine", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetIVACcombine(int id, int combine);
 

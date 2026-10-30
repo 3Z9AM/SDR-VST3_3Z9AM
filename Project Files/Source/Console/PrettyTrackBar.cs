@@ -4,7 +4,6 @@
 // PrettyTrackBar implements a TrackBar with a background and thumb
 // image for improved aesthetics compared to the .NET TrackBar.
 // Copyright (C) 2009  FlexRadio Systems
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License

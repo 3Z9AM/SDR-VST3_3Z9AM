@@ -223,7 +223,7 @@ void upslew2 (IOB a, INREAL* pIin, INREAL* pQin)
 	}
 }
 
-void downslew0 (IOB a, double* pout)
+void downslew0 (IOB a, double* pout, double* monitor)
 {
 	int i;
 	double *pin;
@@ -231,6 +231,14 @@ void downslew0 (IOB a, double* pout)
 	pin = a->r2_baseptr + 2 * a->r2_outidx;
 	for (i = 0; i < a->out_size; i++)
 	{
+		if (monitor)
+		{
+			double gain = a->slew.dstate == DOWNSLEW
+				? a->slew.cdown[a->slew.ntdown - a->slew.dcount]
+				: (a->slew.dstate == ZERO || a->slew.dstate == OFF ? 0.0 : 1.0);
+			monitor[2 * i] *= gain;
+			monitor[2 * i + 1] *= gain;
+		}
 		I = pin[2 * i + 0];
 		Q = pin[2 * i + 1];
 		switch (a->slew.dstate)
@@ -381,6 +389,38 @@ void downslew2 (IOB a, OUTREAL* pIout, OUTREAL* pQout)
 *																										*
 ********************************************************************************************************/
 
+/* Ring-buffer sizing must satisfy BOTH producer step (in_size / out_size)
+ * and consumer step (r1_outsize / r2_insize) dividing the active buffer
+ * size exactly, because the wrap check below uses `(idx += step) == buffsize`.
+ * For integer sample-rate ratios (Anan 48/96/192/384/768/1536 kHz vs WDSP
+ * dsp_rate=48 kHz) the two steps are always equal, so max() was sufficient
+ * and the ring wraps cleanly. For SunSDR2 DX's 312.5 / 156.25 / 78.125 kHz
+ * native rates the ratio to dsp_rate=48 kHz is not an integer, so in_size
+ * and r1_outsize differ (e.g. 416 vs 384 at 312.5 kHz). In that case max()
+ * yields a buffer size that is not a common multiple and the wrap check
+ * never triggers at the right index, walking the pointer past the malloc
+ * allocation on subsequent reads. Use LCM to size the ring to the smallest
+ * buffer that is a clean multiple of both steps. For integer ratios LCM
+ * reduces to max() (no behaviour change on Anan/HL2); for the SunSDR
+ * non-integer ratios it produces a slightly larger but correct ring. */
+static int iob_gcd (int a, int b)
+{
+	while (b != 0) {
+		int t = b;
+		b = a % b;
+		a = t;
+	}
+	return a;
+}
+
+static int iob_lcm (int a, int b)
+{
+	/* Degenerate inputs: preserve legacy max() behaviour. */
+	if (a <= 0) return b;
+	if (b <= 0) return a;
+	return (a / iob_gcd (a, b)) * b;
+}
+
 void create_iobuffs (int channel)
 {
 	int n;
@@ -389,20 +429,19 @@ void create_iobuffs (int channel)
 	a->channel = channel;
 	a->in_size = ch[channel].in_size;
 	a->r1_outsize = ch[channel].dsp_insize;
-	if (a->r1_outsize > a->in_size)
-		a->r1_size = a->r1_outsize;
-	else
-		a->r1_size = a->in_size;
+	a->r1_size = iob_lcm (a->r1_outsize, a->in_size);
 	a->out_size = ch[channel].out_size;
 	a->r2_insize = ch[channel].dsp_outsize;
-	if (a->out_size > a->r2_insize)
-		a->r2_size = a->out_size;
-	else
-		a->r2_size = a->r2_insize;
+	a->r2_size = iob_lcm (a->r2_insize, a->out_size);
 	a->r1_active_buffsize = DSP_MULT * a->r1_size;
 	a->r2_active_buffsize = DSP_MULT * a->r2_size;
 	a->r1_baseptr = (double*) malloc0 (a->r1_active_buffsize * sizeof (complex));
 	a->r2_baseptr = (double*) malloc0 (a->r2_active_buffsize * sizeof (complex));
+	if (ch[channel].type == 1)
+	{
+		a->r1_monptr = (double*)malloc0(a->r1_active_buffsize * sizeof(complex));
+		a->r2_monptr = (double*)malloc0(a->r2_active_buffsize * sizeof(complex));
+	}
 	a->r1_inidx = 0;
 	a->r1_outidx = 0;
 	a->r1_unqueuedsamps = 0;
@@ -426,9 +465,20 @@ void destroy_iobuffs (int channel)
 {
 	IOB a = ch[channel].iob.pc;
 
-	InterlockedBitTestAndSet(&a->flush_bypass, 0);
-	ReleaseSemaphore(a->Sem_Flush, 1, 0);
-	while (InterlockedAnd(&a->flush_bypass, 0xffffffff)) Sleep(1);
+	/* The flushChannel worker is now stopped earlier in
+	 * pre_main_destroy (channel.c) so DSP teardown can run without
+	 * racing flush_main(). The original handshake here:
+	 *
+	 *     InterlockedBitTestAndSet(&a->flush_bypass, 0);   // signal stop (=1)
+	 *     ReleaseSemaphore(a->Sem_Flush, 1, 0);             // wake thread
+	 *     while (InterlockedAnd(&a->flush_bypass, 0xffffffff)) Sleep(1);
+	 *
+	 * is incompatible with flushChannel having already exited:
+	 * flushChannel's exit clears flush_bypass back to 0, then setting
+	 * it to 1 again here with no thread to clear it produces an
+	 * infinite while-Sleep(1) hang on app exit. Skip the handshake
+	 * since pre_main_destroy already did it; just close the
+	 * semaphore handle. */
 	CloseHandle(a->Sem_Flush);
 
 	destroy_slews (a);
@@ -436,6 +486,8 @@ void destroy_iobuffs (int channel)
 	CloseHandle (a->Sem_BuffReady);
 	DeleteCriticalSection(&a->r2_ControlSection);
 	_aligned_free (a->r2_baseptr);
+	_aligned_free (a->r2_monptr);
+	_aligned_free (a->r1_monptr);
 	_aligned_free (a->r1_baseptr);
 	_aligned_free (a);
 }
@@ -446,6 +498,10 @@ void flush_iobuffs (int channel)
 	IOB a = ch[channel].iob.pf;
 	memset (a->r1_baseptr, 0, a->r1_active_buffsize * sizeof (complex));
 	memset (a->r2_baseptr, 0, a->r2_active_buffsize * sizeof (complex));
+	if (a->r2_monptr)
+		memset(a->r2_monptr, 0, a->r2_active_buffsize * sizeof(complex));
+	if (a->r1_monptr)
+		memset(a->r1_monptr, 0, a->r1_active_buffsize * sizeof(complex));
 	a->r1_inidx = 0;
 	a->r1_outidx = 0;
 	a->r1_unqueuedsamps = 0;
@@ -464,14 +520,24 @@ void flush_iobuffs (int channel)
 PORT	//double, interleaved I/Q
 void fexchange0 (int channel, double* in, double* out, int* error)
 {
+	fexchange0WithMonitor(channel, in, out, 0, 0, error);
+}
+
+PORT
+void fexchange0WithMonitor(int channel, double* in, double* out, double* pre, double* monitor, int* error)
+{
 	int n;
 	int doit = 0;
 	IOB a;
 	*error = 0;
+	// A stopped TX channel must never replay the last microphone block.
+	if (monitor) memset(monitor, 0, ch[channel].out_size * sizeof(complex));
 	if (_InterlockedAnd (&ch[channel].exchange, 1))
 	{
 		EnterCriticalSection (&ch[channel].csEXCH);
 		a = ch[channel].iob.pe;
+		if (a->r1_monptr)
+			memcpy(a->r1_monptr + 2 * a->r1_inidx, pre ? pre : in, a->in_size * sizeof(complex));
 		if (_InterlockedAnd (&a->slew.upflag, 1))
 			upslew0 (a, in);
 		else
@@ -493,9 +559,12 @@ void fexchange0 (int channel, double* in, double* out, int* error)
 		LeaveCriticalSection (&a->r2_ControlSection);
 		if (a->bfo) WaitForSingleObject (a->Sem_OutReady, INFINITE);
 		if (a->bfo || doit)
+		{
+			if (monitor && a->r2_monptr)
+				memcpy(monitor, a->r2_monptr + 2 * a->r2_outidx, a->out_size * sizeof(complex));
 			if (_InterlockedAnd (&a->slew.downflag, 1))
 			{
-				downslew0 (a, out);
+				downslew0 (a, out, monitor);
 				if (!_InterlockedAnd (&a->slew.downflag, 1))
 				{
 					InterlockedBitTestAndReset (&ch[channel].exchange, 0);
@@ -504,6 +573,7 @@ void fexchange0 (int channel, double* in, double* out, int* error)
 			}
 			else
 				memcpy (out, a->r2_baseptr + 2 * a->r2_outidx, a->out_size * sizeof (complex));
+		}
 		else
 		{
 			memset (out, 0, a->out_size * sizeof (complex));
@@ -590,6 +660,8 @@ void dexchange (int channel, double* in, double* out)
 	a->r2_havesamps += a->r2_insize;
 	LeaveCriticalSection (&a->r2_ControlSection);
 	memcpy (a->r2_baseptr + 2 * a->r2_inidx, in, a->r2_insize * sizeof (complex));
+	if (a->r2_monptr)
+		memcpy(a->r2_monptr + 2 * a->r2_inidx, txa[channel].monout, a->r2_insize * sizeof(complex));
 	if ((a->r2_inidx += a->r2_insize) == a->r2_active_buffsize)
 		a->r2_inidx = 0;
 	if (a->bfo && (a->r2_unqueuedsamps += a->r2_insize) >= a->out_size)
@@ -599,6 +671,8 @@ void dexchange (int channel, double* in, double* out)
 		a->r2_unqueuedsamps -= n * a->out_size;
 	}
 	memcpy (out, a->r1_baseptr + 2 * a->r1_outidx, a->r1_outsize * sizeof (complex));
+	if (a->r1_monptr)
+		memcpy(txa[channel].moninput, a->r1_monptr + 2 * a->r1_outidx, a->r1_outsize * sizeof(complex));
 	if ((a->r1_outidx += a->r1_outsize) == a->r1_active_buffsize)
 		a->r1_outidx = 0;
 }

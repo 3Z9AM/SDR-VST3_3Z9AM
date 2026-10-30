@@ -253,6 +253,7 @@ namespace Thetis
                 monitor_volume = value;
                 cmaster.CMSetAudioVolume(value);
                 ivac.SetIVACmonVol(0, monitor_volume);
+                ivac.SetIVACmonVol(1, monitor_volume);
                 cmaster.SetTCIRxAudioMonVol(0, monitor_volume);
                 cmaster.SetTCIRxAudioMonVol(1, monitor_volume);
             }
@@ -282,7 +283,11 @@ namespace Thetis
         public static bool RX2Enabled
         {
             get { return rx2_enabled; }
-            set { rx2_enabled = value; }
+            set
+            {
+                rx2_enabled = value;
+                if (mon) setupIVACforMon();
+            }
         }
 
         private static volatile bool wave_playback = false;
@@ -543,6 +548,7 @@ namespace Thetis
                     cmaster.SetTCIRxAudioMox(1, 0);
                 }
 
+                setupIVACforMon();
                 WaveThing.UpdateMox();
             }
         }
@@ -551,9 +557,11 @@ namespace Thetis
         {
             if (mon)
             {
-                ivac.SetIVACmon(0, 1);
-                ivac.SetIVACmon(1, 0);
+                bool txOnB = rx2_enabled && vfob_tx;
+                ivac.SetIVACmon(0, txOnB ? 0 : 1);
+                ivac.SetIVACmon(1, txOnB ? 1 : 0);
                 ivac.SetIVACmonVol(0, monitor_volume);
+                ivac.SetIVACmonVol(1, monitor_volume);
                 cmaster.SetTCIRxAudioMon(0, 1);
                 cmaster.SetTCIRxAudioMon(1, 1);
                 cmaster.SetTCIRxAudioMonVol(0, monitor_volume);
@@ -567,12 +575,24 @@ namespace Thetis
                 cmaster.SetTCIRxAudioMon(1, 0);
             }
         }
+        private static bool monitor_pre;
+        public static bool MonitorPre
+        {
+            get { return monitor_pre; }
+            set
+            {
+                monitor_pre = value;
+                WDSP.SetTXAMonitorPre(WDSP.id(1, 0), value ? 1 : 0);
+            }
+        }
+
         private static bool mon;
         public static bool MON
         {
             set
             {
                 mon = value;
+                WDSP.SetTXAMonitorPre(WDSP.id(1, 0), monitor_pre ? 1 : 0);
 
                 setupIVACforMon();
 
@@ -600,6 +620,7 @@ namespace Thetis
             set
             {
                 vfob_tx = value;
+                if (mon) setupIVACforMon();
             }
             get
             {
@@ -1508,34 +1529,33 @@ namespace Thetis
             }
         }
 
+        // SetOutCount* — compute OutCount* = block_size_in * out_rate / sample_rate_in.
+        // Using a single long-arithmetic multiply-then-divide preserves exactness
+        // for non-integer-ratio rates (SunSDR2 DX 312500 input / 48000 output:
+        // 625 * 48000 / 312500 = 96, matching the actual rcvr.ch_outsize set by
+        // SetXcmInrate). The legacy split (multiply if up-rate, integer-divide if
+        // down-rate) lost the fractional ratio for non-integer cases — produced
+        // OutCount=104 for SunSDR while ch_outsize was 96 → 8-sample over-read
+        // every block in cmaster.cs::wscope (and any other consumer that reads
+        // Audio.OutCount as the deswizzle size). For Anan/HL2 integer ratios the
+        // long form gives the same answer as the legacy form.
         private static void SetOutCount()
         {
-            if (out_rate >= sample_rate1)
-                OutCount = block_size1 * (out_rate / sample_rate1);
-            else
-                OutCount = block_size1 / (sample_rate1 / out_rate);
+            if (sample_rate1 > 0)
+                OutCount = (int)((long)block_size1 * out_rate / sample_rate1);
         }
 
         private static void SetOutCountRX2()
         {
-            if (out_rate_rx2 >= sample_rate_rx2)
-                OutCountRX2 = block_size_rx2 * (out_rate_rx2 / sample_rate_rx2);
-            else
-                OutCountRX2 = block_size_rx2 / (sample_rate_rx2 / out_rate_rx2);
+            if (sample_rate_rx2 > 0)
+                OutCountRX2 = (int)((long)block_size_rx2 * out_rate_rx2 / sample_rate_rx2);
         }
 
         private static void SetOutCountTX()
         {
-            //if (out_rate_tx >= sample_rate_tx)
-            //    OutCountTX = block_size1 * (out_rate_tx / sample_rate_tx);
-            //else
-            //    OutCountTX = block_size1 / (sample_rate_tx / out_rate_tx);
-
             //[2.10.3.4]MW0LGE changed to use tx block size
-            if (out_rate_tx >= sample_rate_tx)
-                OutCountTX = block_size_tx * (out_rate_tx / sample_rate_tx);
-            else
-                OutCountTX = block_size_tx / (sample_rate_tx / out_rate_tx);
+            if (sample_rate_tx > 0)
+                OutCountTX = (int)((long)block_size_tx * out_rate_tx / sample_rate_tx);
         }
 
         private static int out_count = 1024;
@@ -1804,10 +1824,18 @@ namespace Thetis
                     ivac.SetIVACinitialVars(0, vac1_oldVarIn, vac1_oldVarOut);
                     //
 
+                    // Sync the VAC1 mixer's RX input gain to the current RX1
+                    // AF slider position (issue #40 follow-up). Without this,
+                    // VAC1 starts at full mixer gain regardless of where the
+                    // AF slider sits, and the user has to nudge the slider
+                    // before the volume catches up.
+                    if (console != null && console.radio != null)
+                        ivac.SetIVACafgain(0, console.radio.GetDSPRX(0, 0).RXOutputGain);
+
                     try
                     {
                         retval = ivac.StartAudioIVAC(0) == 1;
-                        if (retval && console.PowerOn)
+                        if (retval)
                             ivac.SetIVACrun(0, 1);
                     }
                     catch (Exception)
@@ -1884,10 +1912,16 @@ namespace Thetis
                     ivac.SetIVACinitialVars(1, vac2_oldVarIn, vac2_oldVarOut);
                     //
 
+                    // Sync the VAC2 mixer's RX input gain to the current RX2
+                    // AF slider position (issue #40 follow-up). See EnableVAC1
+                    // for the rationale.
+                    if (console != null && console.radio != null)
+                        ivac.SetIVACafgain(1, console.radio.GetDSPRX(1, 0).RXOutputGain);
+
                     try
                     {
                         retval = ivac.StartAudioIVAC(1) == 1;
-                        if (retval && console.PowerOn)
+                        if (retval)
                             ivac.SetIVACrun(1, 1);
 
                     }
@@ -1943,12 +1977,20 @@ namespace Thetis
 
             if (rc != 0)
             {
-                if (rc == -101) // firmware version error; 
+                if (rc == -101) // firmware version error;
                 {
                     string fw_err = NetworkIO.GetFWVersionErrorMsg;
                     MessageBox.Show(fw_err, "Firmware Error",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
+                    return false;
+                }
+                else if (rc == -110) // SunSDR pre-flight reachability check failed
+                {
+                    MessageBox.Show("No radio detected.\n\nCheck that the radio is powered on and reachable.",
+                                    "SDR-VST3",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, Common.MB_TOPMOST);
                     return false;
                 }
                 else
@@ -2001,6 +2043,13 @@ namespace Thetis
 
             if(!c.IsSetupFormNull && c.SetupForm.SelectedRadioList != null)
             {
+                if (retval && NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    NetworkIO.RefreshSunSDRVersionInfo();
+                    c.SetupForm.SelectedRadioList.RefreshSelectedLiveState();
+                    c.Text = c.BasicTitleBar;
+                }
+
                 if (retval)
                     c.SetupForm.SelectedRadioList.RadioConnected();
                 else

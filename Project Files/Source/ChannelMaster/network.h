@@ -422,7 +422,8 @@ enum HPSDRHW
 	HermesLite = 6,     // MI0BOT
 	Saturn = 10,        // ANAN-G2: added G8NJJ
 	SaturnMKII = 11,    // ANAN-G2: MKII board?
-	HermesC10 = 20      // ANAN-G2E //N1GP G2E added (HermesC10)
+	HermesC10 = 20,     // ANAN-G2E //N1GP G2E added (HermesC10)
+	SunSDR = 21         // SunSDR2 DX/PRO native (Artemis uses 20, taken by HermesC10 here)
 };
 
 enum _HPSDRModel //from enums.cs
@@ -443,13 +444,16 @@ enum _HPSDRModel //from enums.cs
 	HPSDRModel_ANVELINAPRO3 = 13,
 	HPSDRModel_HERMESLITE = 14,
 	HPSDRModel_REDPITAYA = 15,
-	HPSDRModel_ANAN_G2E = 16 //N1GP G2E added
+	HPSDRModel_ANAN_G2E = 16, //N1GP G2E added
+	HPSDRModel_SUNSDR2DX = 17,
+	HPSDRModel_SUNSDR2PRO = 18
 } HPSDRModel;
 
 enum _RadioProtocol
 {
 	USB = 0,  // Protocol USB (P1)
-	ETH = 1   // Protocol ETH (P2)
+	ETH = 1,  // Protocol ETH (P2)
+	SUNSDR = 2 // SunSDR native protocol
 } RadioProtocol;
 
 // Protocol 1 USB
@@ -474,3 +478,31 @@ DWORD WINAPI  sendProtocol1Samples(LPVOID n);
  unsigned char SampleRateIn2Bits;
  int mic_decimation_factor;
  int mic_decimation_count;
+
+// SunSDR native protocol
+extern __declspec(dllexport) int nativeSunSDRInit(char* radioIP, int ctrlPort, int streamPort);
+extern __declspec(dllexport) void nativeSunSDRDestroy(void);
+extern __declspec(dllexport) int nativeSunSDRPowerOn(void);
+extern __declspec(dllexport) void nativeSunSDRPowerOff(void);
+extern __declspec(dllexport) void nativeSunSDRSetFreq(int receiver, int freqHz, int isTx);
+extern __declspec(dllexport) void nativeSunSDRSetMode(int mode);
+extern __declspec(dllexport) void nativeSunSDRSetPTT(int ptt);
+extern __declspec(dllexport) void nativeSunSDRSetRX2(int enabled);
+extern __declspec(dllexport) void nativeSunSDRSetTune(int tune);
+extern __declspec(dllexport) void nativeSunSDRSetPreampAtt(int state);
+extern __declspec(dllexport) void nativeSunSDRSetMicSource(int state);
+extern __declspec(dllexport) int nativeSunSDRGetHwPttState(void);
+extern __declspec(dllexport) int nativeSunSDRGetAdcOverload(void);
+extern __declspec(dllexport) void nativeSunSDRLogTuneState(char* label, int chk_tun, int chk_mox, int tuning, int mox,
+	int tx_dsp_mode, int current_dsp_mode, int postgen_run, int postgen_mode,
+	double tone_freq, double tone_mag, int pulse_enabled, int pulse_on,
+	int tune_drive_source, int pwr, int new_pwr);
+extern __declspec(dllexport) void nativeSunSDRLogTrace(char* msg);
+extern __declspec(dllexport) void nativeSunSDRSetDrive(int raw);
+extern __declspec(dllexport) void nativeSunSDRSetAntenna(int antenna);
+extern __declspec(dllexport) void nativeSunSDRSetTxAntenna(int antenna);
+extern __declspec(dllexport) void nativeSunSDRSetPA(int enabled);
+extern __declspec(dllexport) void nativeSunSDRSetRxWdspReady(int ready);
+extern __declspec(dllexport) int nativeSunSDRGetVersionText(char* buffer, int maxlen);
+extern __declspec(dllexport) int nativeSunSDRGetProtocolText(char* buffer, int maxlen);
+extern __declspec(dllexport) int nativeSunSDRGetSerialText(char* buffer, int maxlen);

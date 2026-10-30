@@ -1454,10 +1454,20 @@ void DestroyAnalyzer(int disp)
 {
 	DP a = pdisp[disp];
 	int i, j;
+	int spin_count = 0;
+	const int spin_limit = 200;	// 200 * Sleep(1) ~= 200ms max wait
 
 	a->end_dispatcher = 1;
-	while (InterlockedAnd(&a->dispatcher, 1))
+	while (InterlockedAnd(&a->dispatcher, 1) && spin_count < spin_limit)
+	{
 		Sleep(1);
+		spin_count++;
+	}
+	/* If we time out, the dispatcher thread didn't clear its flag —
+	 * either it was never started, or it's truly wedged. Proceed
+	 * anyway; the worst case is a small leak of analyzer state, but
+	 * that's strictly better than hanging app exit forever (5+ min
+	 * hang reported on a build that contained this loop unbounded). */
 
 	for (i = 0; i < a->max_stitch; i++)
 		for (j = 0; j < a->max_num_fft; j++)
@@ -1674,7 +1684,7 @@ void OpenBuffer(int disp, int ss, int LO, void **Ipointer, void **Qpointer)
 	LeaveCriticalSection(&a->SetAnalyzerSection);
 }
 
-PORT   
+PORT
 void CloseBuffer(int disp, int ss, int LO)
 {
 	DP a = pdisp[disp];
@@ -1690,8 +1700,12 @@ void CloseBuffer(int disp, int ss, int LO)
 		if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 			InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 	LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
-	if((a->IQin_index[ss][LO] += a->buff_size) >= a->bsize)	//REQUIRES buff_size IS A SUB-MULTIPLE OF SIZE OF INPUT SAMPLE BUFFS!
-		a->IQin_index[ss][LO] = 0;
+	// Modular wrap (matches Spectrum0/Spectrum/Spectrum2 fix). Caller of
+	// OpenBuffer/CloseBuffer is responsible for wrapping their own write
+	// across the buffer boundary if they fetched a pointer near the end
+	// of the ring — same circular-buffer rules as the inline writers
+	// above. See Spectrum0 comment for the SunSDR non-integer-ratio bug.
+	a->IQin_index[ss][LO] = (a->IQin_index[ss][LO] + a->buff_size) % a->bsize;
 
 	if (!InterlockedAnd(&a->dispatcher, 1))
 	{
@@ -1706,16 +1720,34 @@ void CloseBuffer(int disp, int ss, int LO)
 PORT
 void Spectrum(int disp, int ss, int LO, dINREAL* pI, dINREAL* pQ)
 {
-	dINREAL *Ipointer;
-	dINREAL *Qpointer;
+	dINREAL *Ibase;
+	dINREAL *Qbase;
+	int write_idx;
+	int samples_to_end;
 	DP a = pdisp[disp];
 	EnterCriticalSection(&a->SetAnalyzerSection);
-	Ipointer = &((a->I_samples[ss][LO])[a->IQin_index[ss][LO]]);
-	Qpointer = &((a->Q_samples[ss][LO])[a->IQin_index[ss][LO]]);
+	Ibase = a->I_samples[ss][LO];
+	Qbase = a->Q_samples[ss][LO];
+	write_idx = a->IQin_index[ss][LO];
 	LeaveCriticalSection(&a->SetAnalyzerSection);
 
-	memcpy(Ipointer, pI, a->buff_size * sizeof(dINREAL));
-	memcpy(Qpointer, pQ, a->buff_size * sizeof(dINREAL));
+	// Circular-buffer write — see comment in Spectrum0 above for the bug
+	// this guards against (buffer-overflow on non-integer-ratio sample
+	// rates such as SunSDR2 DX 312500 Hz where bsize % buff_size != 0).
+	samples_to_end = a->bsize - write_idx;
+	if (samples_to_end >= a->buff_size)
+	{
+		memcpy(Ibase + write_idx, pI, a->buff_size * sizeof(dINREAL));
+		memcpy(Qbase + write_idx, pQ, a->buff_size * sizeof(dINREAL));
+	}
+	else
+	{
+		int remaining = a->buff_size - samples_to_end;
+		memcpy(Ibase + write_idx, pI, samples_to_end * sizeof(dINREAL));
+		memcpy(Qbase + write_idx, pQ, samples_to_end * sizeof(dINREAL));
+		memcpy(Ibase, pI + samples_to_end, remaining * sizeof(dINREAL));
+		memcpy(Qbase, pQ + samples_to_end, remaining * sizeof(dINREAL));
+	}
 
 	EnterCriticalSection(&a->SetAnalyzerSection);
 	EnterCriticalSection(&(a->BufferControlSection[ss][LO]));
@@ -1729,8 +1761,7 @@ void Spectrum(int disp, int ss, int LO, dINREAL* pI, dINREAL* pQ)
 		if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 			InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 	LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
-	if((a->IQin_index[ss][LO] += a->buff_size) >= a->bsize)	//REQUIRES buff_size IS A SUB-MULTIPLE OF SIZE OF INPUT SAMPLE BUFFS!
-		a->IQin_index[ss][LO] = 0;
+	a->IQin_index[ss][LO] = (write_idx + a->buff_size) % a->bsize;
 
 	if (!InterlockedAnd(&a->dispatcher, 1))
 	{
@@ -1748,18 +1779,40 @@ void Spectrum2(int run, int disp, int ss, int LO, dINREAL* pbuff)
 	if (run)
 	{
 		int i;
-		dINREAL *Ipointer;
-		dINREAL *Qpointer;
+		dINREAL *Ibase;
+		dINREAL *Qbase;
+		int write_idx;
+		int samples_to_end;
 		DP a = pdisp[disp];
 		EnterCriticalSection(&a->SetAnalyzerSection);
-		Ipointer = &((a->I_samples[ss][LO])[a->IQin_index[ss][LO]]);
-		Qpointer = &((a->Q_samples[ss][LO])[a->IQin_index[ss][LO]]);
+		Ibase = a->I_samples[ss][LO];
+		Qbase = a->Q_samples[ss][LO];
+		write_idx = a->IQin_index[ss][LO];
 		LeaveCriticalSection(&a->SetAnalyzerSection);
 
-		for (i = 0; i < a->buff_size; i++)
+		// Circular-buffer write — see Spectrum0 above for the rationale.
+		samples_to_end = a->bsize - write_idx;
+		if (samples_to_end >= a->buff_size)
 		{
-			Ipointer[i] = pbuff[2 * i + 1];
-			Qpointer[i] = pbuff[2 * i + 0];
+			for (i = 0; i < a->buff_size; i++)
+			{
+				Ibase[write_idx + i] = pbuff[2 * i + 1];
+				Qbase[write_idx + i] = pbuff[2 * i + 0];
+			}
+		}
+		else
+		{
+			int remaining = a->buff_size - samples_to_end;
+			for (i = 0; i < samples_to_end; i++)
+			{
+				Ibase[write_idx + i] = pbuff[2 * i + 1];
+				Qbase[write_idx + i] = pbuff[2 * i + 0];
+			}
+			for (i = 0; i < remaining; i++)
+			{
+				Ibase[i] = pbuff[2 * (samples_to_end + i) + 1];
+				Qbase[i] = pbuff[2 * (samples_to_end + i) + 0];
+			}
 		}
 
 		EnterCriticalSection(&a->SetAnalyzerSection);
@@ -1774,8 +1827,7 @@ void Spectrum2(int run, int disp, int ss, int LO, dINREAL* pbuff)
 			if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 				InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 		LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
-		if((a->IQin_index[ss][LO] += a->buff_size) >= a->bsize)	//REQUIRES buff_size IS A SUB-MULTIPLE OF SIZE OF INPUT SAMPLE BUFFS!
-			a->IQin_index[ss][LO] = 0;
+		a->IQin_index[ss][LO] = (write_idx + a->buff_size) % a->bsize;
 
 		if (!InterlockedAnd(&a->dispatcher, 1))
 		{
@@ -1794,18 +1846,53 @@ void Spectrum0(int run, int disp, int ss, int LO, double* pbuff)
 	if (run)
 	{
 		int i;
-		dINREAL *Ipointer;
-		dINREAL *Qpointer;
+		dINREAL *Ibase;
+		dINREAL *Qbase;
+		int write_idx;
+		int samples_to_end;
 		DP a = pdisp[disp];
 		EnterCriticalSection(&a->SetAnalyzerSection);
-		Ipointer = &((a->I_samples[ss][LO])[a->IQin_index[ss][LO]]);
-		Qpointer = &((a->Q_samples[ss][LO])[a->IQin_index[ss][LO]]);
+		Ibase = a->I_samples[ss][LO];
+		Qbase = a->Q_samples[ss][LO];
+		write_idx = a->IQin_index[ss][LO];
 		LeaveCriticalSection(&a->SetAnalyzerSection);
 
-		for (i = 0; i < a->buff_size; i++)
+		// Circular-buffer write that handles non-integer-ratio cases
+		// where buff_size does not divide bsize evenly (e.g. SunSDR2 DX
+		// at 312500 Hz native rate where buff_size=625 and bsize=524288
+		// — 524288/625 is non-integer). The original code wrote
+		// buff_size samples linearly from write_idx and then RESET the
+		// index to 0 if it overshot bsize, but the linear write itself
+		// overflowed the buffer when write_idx + buff_size > bsize.
+		// That overflow corrupted adjacent allocations (Q_samples,
+		// other channels' state) and over time produced FFT artifacts
+		// resembling a "replay of the last second" in the panadapter.
+		// Fixed by splitting the write at the buffer boundary and
+		// using modular arithmetic for the index wrap.
+		samples_to_end = a->bsize - write_idx;
+		if (samples_to_end >= a->buff_size)
 		{
-			Ipointer[i] = (dINREAL)pbuff[2 * i + 1];
-			Qpointer[i] = (dINREAL)pbuff[2 * i + 0];
+			// Fits before the wrap point — single contiguous write.
+			for (i = 0; i < a->buff_size; i++)
+			{
+				Ibase[write_idx + i] = (dINREAL)pbuff[2 * i + 1];
+				Qbase[write_idx + i] = (dINREAL)pbuff[2 * i + 0];
+			}
+		}
+		else
+		{
+			// Crosses the wrap boundary — split into two writes.
+			int remaining = a->buff_size - samples_to_end;
+			for (i = 0; i < samples_to_end; i++)
+			{
+				Ibase[write_idx + i] = (dINREAL)pbuff[2 * i + 1];
+				Qbase[write_idx + i] = (dINREAL)pbuff[2 * i + 0];
+			}
+			for (i = 0; i < remaining; i++)
+			{
+				Ibase[i] = (dINREAL)pbuff[2 * (samples_to_end + i) + 1];
+				Qbase[i] = (dINREAL)pbuff[2 * (samples_to_end + i) + 0];
+			}
 		}
 
 		EnterCriticalSection(&a->SetAnalyzerSection);
@@ -1820,8 +1907,10 @@ void Spectrum0(int run, int disp, int ss, int LO, double* pbuff)
 			if ((a->have_samples[ss][LO] += a->buff_size) >= a->size)
 				InterlockedBitTestAndSet(&(a->buff_ready[ss][LO]), 0);
 		LeaveCriticalSection(&(a->BufferControlSection[ss][LO]));
-		if((a->IQin_index[ss][LO] += a->buff_size) >= a->bsize)	//REQUIRES buff_size IS A SUB-MULTIPLE OF SIZE OF INPUT SAMPLE BUFFS!
-			a->IQin_index[ss][LO] = 0;
+		// Modular wrap (matches IQout_index behaviour at line 1086 of
+		// sendbuf above) — works correctly regardless of whether
+		// buff_size divides bsize evenly.
+		a->IQin_index[ss][LO] = (write_idx + a->buff_size) % a->bsize;
 
 		if (!InterlockedAnd(&a->dispatcher, 1))
 		{

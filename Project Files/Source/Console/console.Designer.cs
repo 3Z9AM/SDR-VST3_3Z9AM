@@ -1,5 +1,4 @@
-﻿// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
-namespace Thetis
+﻿namespace Thetis
 {
     using System.Windows.Forms;
 
@@ -5639,17 +5638,17 @@ namespace Thetis
             this.toolStripStatusLabel_CatSerial.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
             this.toolStripStatusLabel_CatSerial.Name = "toolStripStatusLabel_CatSerial";
             this.toolStripStatusLabel_CatSerial.Overflow = System.Windows.Forms.ToolStripItemOverflow.Never;
-            // 
+            //
             // toolStripStatusLabel_CMstatus
-            // 
+            //
             resources.ApplyResources(this.toolStripStatusLabel_CMstatus, "toolStripStatusLabel_CMstatus");
             this.toolStripStatusLabel_CMstatus.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
             this.toolStripStatusLabel_CMstatus.Image = global::Thetis.Properties.Resources.cm_red;
             this.toolStripStatusLabel_CMstatus.Name = "toolStripStatusLabel_CMstatus";
             this.toolStripStatusLabel_CMstatus.Overflow = System.Windows.Forms.ToolStripItemOverflow.Never;
-            // 
+            //
             // toolStripStatusLabel_timer
-            // 
+            //
             resources.ApplyResources(this.toolStripStatusLabel_timer, "toolStripStatusLabel_timer");
             this.toolStripStatusLabel_timer.ForeColor = System.Drawing.SystemColors.ControlLightLight;
             this.toolStripStatusLabel_timer.Image = global::Thetis.Properties.Resources.timer_on;
@@ -6170,13 +6169,15 @@ namespace Thetis
             this.btnHidden.Selectable = true;
             // 
             // radBand2
-            // 
+            //
             resources.ApplyResources(this.radBand2, "radBand2");
             this.radBand2.FlatAppearance.BorderSize = 0;
             this.radBand2.ForeColor = System.Drawing.SystemColors.ControlLightLight;
             this.radBand2.Name = "radBand2";
             this.radBand2.TabStop = true;
             this.radBand2.UseVisualStyleBackColor = true;
+            this.radBand2.CheckedChanged += new System.EventHandler(this.radBand_CheckedChanged);
+            this.radBand2.Click += new System.EventHandler(this.radBand2_Click);
             // 
             // panelModeSpecificPhone
             // 
@@ -7805,7 +7806,9 @@ namespace Thetis
             // 
             this.comboFMMemory.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(46)))), ((int)(((byte)(46)))));
             this.comboFMMemory.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboFMMemory.DropDownWidth = 96;
+            this.comboFMMemory.DropDownWidth = 360;
+            this.comboFMMemory.IntegralHeight = false;
+            this.comboFMMemory.MaxDropDownItems = 20;
             resources.ApplyResources(this.comboFMMemory, "comboFMMemory");
             this.comboFMMemory.ForeColor = System.Drawing.SystemColors.ControlLightLight;
             this.comboFMMemory.Name = "comboFMMemory";

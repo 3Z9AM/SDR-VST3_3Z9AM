@@ -72,7 +72,16 @@ typedef struct _cmasio
 	void* rmatchOUT;
 	double* input;
 	double* output;
-	int blocksize;
+	int blocksize;	// RX-side block size = pcm->audio_outsize. ASIO buffer
+					// fill matches this. asioOUT pushes blocksize samples
+					// per call (RX audio to MOTU).
+	int out_size;	// mixer block pushed by asioOUT = pcm->audio_outsize (96 on SunSDR); blocksize stays the driver's power-of-2 size, rmatchOUT bridges them
+	int tx_size;	// TX-side block size = xcm_insize for the TX stream.
+					// On Anan/HL2 integer-ratio rates this equals blocksize.
+					// On SunSDR (312.5k IQ vs 48k audio non-integer ratio)
+					// audio_outsize=96 but TX xcm_insize=64. Without a
+					// separate field cmASIO drained rmatchIN at 750×96/s
+					// against a 500×96/s supply → underrun → robotic TX.
 	int run;
 	void* bufferFull;
 	void* bufferEmpty;

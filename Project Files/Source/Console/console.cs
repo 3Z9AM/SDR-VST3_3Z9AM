@@ -33,7 +33,6 @@
 // Modifications for using the new database import function.  W2PA, 29 May 2017
 // Support QSK, possible with Protocol-2 firmware v1.7 (Orion-MkI and Orion-MkII), and later.  W2PA, 5 April 2019 
 // Modfied heavily - Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 // ApacheLabs G2E support added throughout Thetis in various files, all changes marked  //N1GP G2E added
 //
 //============================================================================================//
@@ -91,7 +90,7 @@ namespace Thetis
         //private float _full_auto_att_running_mag = 0;
         ////
 
-        public const bool CHECK_DEV_VERSION = true; // this will check github for dev versions, set to false when performing a release
+        public const bool CHECK_DEV_VERSION = false; // this will check github for dev versions, set to false when performing a release
 
         public const int MAX_FPS = 640;              
 
@@ -689,7 +688,7 @@ namespace Thetis
             {
                 if (Environment.Is64BitProcess)
                     app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-                    + "\\OpenHPSDR\\SDR-VST3-x64\\";
+                    + "\\OpenHPSDR\\SDR-VST3-SUNSDR\\";
                 else
                     app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
                         + "\\OpenHPSDR\\SDR-VST3\\";
@@ -753,6 +752,8 @@ namespace Thetis
             initNR5Menus();
             initDiversityMini();
             createModernSMeter(); // early, so its saved panel position is restored like the others
+            chkMON.AutoCheck = false;
+            chkMON.Click += chkMON_Click;
             Common.DoubleBufferAll(this, true);
 
             // '3D Pan' toggle button in the display toolbar — sits below Peak,
@@ -1459,6 +1460,8 @@ namespace Thetis
             Exception ex = e.ExceptionObject as Exception;
             Debug.WriteLine(ex?.Message);
             if (ex != null) Common.LogException(ex);
+            // release the WASAPI/PortAudio endpoint before dying, otherwise the next launch may come up without audio (ArtemisSDR)
+            try { PA19.PA_Terminate(); } catch { }
             string path = Common.SaveCrashReport(ex);
             ShowCrashDialog(path);
         }
@@ -1589,7 +1592,7 @@ namespace Thetis
                     + "\\OpenHPSDR\\SDR-VST3\\";
                 if (Environment.Is64BitProcess)
                     app_data_path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-                    + "\\OpenHPSDR\\SDR-VST3-x64\\";
+                    + "\\OpenHPSDR\\SDR-VST3-SUNSDR\\";
 
 #if(DEBUG)
                 app_data_path += "Debug\\";
@@ -2231,6 +2234,12 @@ namespace Thetis
             RX2PreampMode = rx2_preamp_by_band[(int)rx2_band];
             RX2AttenuatorData = getRX2stepAttenuatorForBand(rx2_band);
             initializing = true;
+
+            // SetupForHPSDRModel only fires when the user changes the radio
+            // in Setup. On a normal startup where SunSDR was already the
+            // saved radio, our SunSDR-specific UI overrides (MaxFreq=146,
+            // 2m button enable, PS-A lockouts) would otherwise never run.
+            ApplySunSDRSpecificUI();
 
             ptbDisplayZoom_Scroll(this, EventArgs.Empty);
             ptbRX2DisplayZoom_Scroll(this, EventArgs.Empty); // MW0LGE_22x
@@ -4126,13 +4135,42 @@ namespace Thetis
                         RX1DisplayCalOffset = float.Parse(val);
                         break;
                     case "rx1_meter_cal_offset":
-                        RX1MeterCalOffset = float.Parse(val);
+                        {
+                            float loaded = float.Parse(val);
+                            // One-time migration for SunSDR2 family. Two legacy
+                            // values trip the upgrade: the pre-v2.0.7 fall-
+                            // through default of 0.98 dB, and the v2.0.7 DX
+                            // coarse-anchor value of 6.98 dB (which turned
+                            // out to still be ~12 dB low vs EESDR3 on DX).
+                            // Both get lifted to whatever the current model
+                            // default is. Customised values outside these
+                            // two known-bad points are left alone. Applies
+                            // to both SUNSDR2DX and SUNSDR2PRO via
+                            // IsCurrentSunSDRModel.
+                            if (HardwareSpecific.IsCurrentSunSDRModel
+                                && (Math.Abs(loaded - 0.98f) < 0.01f
+                                    || Math.Abs(loaded - 6.98f) < 0.01f))
+                            {
+                                loaded = HardwareSpecific.RXMeterCalbrationOffsetDefaults(HardwareSpecific.Model);
+                            }
+                            RX1MeterCalOffset = loaded;
+                        }
                         break;
                     case "rx2_display_cal_offset":
                         RX2DisplayCalOffset = float.Parse(val);
                         break;
                     case "rx2_meter_cal_offset":
-                        RX2MeterCalOffset = float.Parse(val);
+                        {
+                            float loaded = float.Parse(val);
+                            if (HardwareSpecific.IsCurrentSunSDRModel
+                                && (Math.Abs(loaded - 0.98f) < 0.01f
+                                    || Math.Abs(loaded - 6.98f) < 0.01f))
+                            {
+                                loaded = HardwareSpecific.RXMeterCalbrationOffsetDefaults(HardwareSpecific.Model);
+                                System.Diagnostics.Debug.WriteLine("[SunSDR migration] rx2_meter_cal_offset legacy -> " + loaded);
+                            }
+                            RX2MeterCalOffset = loaded;
+                        }
                         break;
                     case "panelBandHF.Visible": //added by w3sz
                         {
@@ -5075,9 +5113,23 @@ namespace Thetis
                         //This assumes the new radio model is added to the end of the HPSDRModel list. If a model is remove this will cause issues.
                         if (numVals <= (int)HPSDRModel.LAST)  //-W2PA  The number of rig types in the imported DB matches the number in this version
                         {
+                            int sunsdrIdx = (int)HPSDRModel.SUNSDR2DX;
+                            float sunsdrNew = HardwareSpecific.RXMeterCalbrationOffsetDefaults(HPSDRModel.SUNSDR2DX);
                             for (int i = 0; i < numVals; i++)
                             {
-                                rx_meter_cal_offset_by_radio[i] = float.Parse(list[i]);
+                                float v = float.Parse(list[i]);
+                                // One-time migration for the SUNSDR2DX slot of
+                                // this per-radio array. Both known-bad legacy
+                                // defaults get upgraded to the current SunSDR
+                                // default: 0.98 (pre-v2.0.7 fall-through) and
+                                // 6.98 (v2.0.7 coarse anchor that turned out
+                                // still ~12 dB low vs EESDR3). Customised values
+                                // outside these points are left alone.
+                                if (i == sunsdrIdx
+                                    && (Math.Abs(v - 0.98f) < 0.01f
+                                        || Math.Abs(v - 6.98f) < 0.01f))
+                                    v = sunsdrNew;
+                                rx_meter_cal_offset_by_radio[i] = v;
                             }
                         }  //-W2PA  else the number has changed so don't import, leave the defaults alone
                         break;
@@ -5632,6 +5684,54 @@ namespace Thetis
                             }
                             preset[m].LastFilter = Filter.F5;
                             break;
+                        case (int)DSPMode.FM:
+                            // Upstream Thetis never defined FM filter presets,
+                            // leaving the 10 preset slots blank for this mode.
+                            // Typical ham 2m/10m NFM deviation is 2.5-5 kHz so
+                            // the IF needs roughly 2*dev + audio BW: ~11-25 kHz.
+                            // Ladder from wide (for broadcast-adjacent reception)
+                            // down to tight (for weak-signal NBFM).
+                            switch (f)
+                            {
+                                case Filter.F1:
+                                    preset[m].SetFilter(f, -12500, 12500, "25k");
+                                    break;
+                                case Filter.F2:
+                                    preset[m].SetFilter(f, -10000, 10000, "20k");
+                                    break;
+                                case Filter.F3:
+                                    preset[m].SetFilter(f, -8000, 8000, "16k");
+                                    break;
+                                case Filter.F4:
+                                    preset[m].SetFilter(f, -6000, 6000, "12k");
+                                    break;
+                                case Filter.F5:
+                                    preset[m].SetFilter(f, -5000, 5000, "10k");
+                                    break;
+                                case Filter.F6:
+                                    preset[m].SetFilter(f, -4000, 4000, "8k");
+                                    break;
+                                case Filter.F7:
+                                    preset[m].SetFilter(f, -3000, 3000, "6k");
+                                    break;
+                                case Filter.F8:
+                                    preset[m].SetFilter(f, -2500, 2500, "5k");
+                                    break;
+                                case Filter.F9:
+                                    preset[m].SetFilter(f, -2000, 2000, "4k");
+                                    break;
+                                case Filter.F10:
+                                    preset[m].SetFilter(f, -1500, 1500, "3k");
+                                    break;
+                                case Filter.VAR1:
+                                    preset[m].SetFilter(f, -7500, 7500, "Var 1");
+                                    break;
+                                case Filter.VAR2:
+                                    preset[m].SetFilter(f, -7500, 7500, "Var 2");
+                                    break;
+                            }
+                            preset[m].LastFilter = Filter.F3;
+                            break;
                         case (int)DSPMode.DSB:
                             switch (f)
                             {
@@ -5845,11 +5945,16 @@ namespace Thetis
 
         private void EnableAllBands()
         {
+            bool sunsdr = HardwareSpecific.IsCurrentSunSDRModel;
             foreach (Control c in panelBandHF.Controls)
             {
                 if (c is RadioButtonTS b)
                 {
-                    b.Enabled = c != radBand2 || XVTRPresent;
+                    // Upstream gated radBand2 on XVTRPresent (legacy 2m was
+                    // only reachable via external transverter). SunSDR2 DX
+                    // has native 2m, so keep the 2 button enabled for it
+                    // regardless of XVTR state.
+                    b.Enabled = c != radBand2 || XVTRPresent || sunsdr;
 
                     if (b.BackColor == vfo_text_dark_color)
                         b.BackColor = button_selected_color;
@@ -6590,6 +6695,395 @@ namespace Thetis
             return bfd.band;
         }
 
+        // PureSignal, 2-Tone and DUP are not supported on SunSDR2 DX — the
+        // protocol has no PS feedback loop, 2-Tone is part of the PS-A IMD
+        // cal, and MOX on SunSDR shuts down the RX LO so duplex receive is
+        // structurally impossible. Also: SunSDR2 DX supports 2m natively so
+        // we enable radBand2 (upstream Thetis gated it on XVTR presence),
+        // give it a visible label, and lift MaxFreq to cover 2m.
+        //
+        // Runs both on model-change (from Setup combo) AND during console
+        // startup so a saved SunSDR model takes effect even though
+        // SetupForHPSDRModel is not called on plain startup.
+        private void ApplySunSDRSpecificUI()
+        {
+            // Family-level gate. SunSDR-family hardening below is safe for any
+            // SunSDR variant; only the DX-specific 2m band and MaxFreq settings
+            // stay gated on the precise model further down.
+            if (!HardwareSpecific.IsCurrentSunSDRModel) return;
+
+            // ─── SunSDR family-wide UI hardening (any SunSDR radio) ──────────
+
+            // PS-A: PureSignal pre-distorter is Anan-only (requires the radio's
+            // bidirectional ADC feedback path); SunSDR wire protocol has no
+            // equivalent. Hide entirely on any SunSDR.
+            if (chkFWCATUBypass.Checked)
+                chkFWCATUBypass.Checked = false;
+            chkFWCATUBypass.Enabled = false;
+            chkFWCATUBypass.Visible = false;
+
+            // ATT-on-TX: Anan/HPSDR Alex-board 0-31 dB step attenuator that
+            // SunSDR doesn't have. Without this clear, the main-UI ATT
+            // label flips to "[S-ATT]" with value 31 in red during TX —
+            // a permanent false alarm. The setter (above) hard-rejects
+            // re-enabling on SunSDR, so this is a one-shot clear that
+            // also handles a saved-DB state where ATTOnTX was true.
+            ATTOnTX = false;
+            if (psform != null)
+            {
+                psform.AutoCalEnabled = false;
+                psform.PSEnabled = false;
+            }
+            // 2TON: requires PS-A path; not supported on any SunSDR.
+            if (chk2TONE.Checked)
+                chk2TONE.Checked = false;
+            chk2TONE.Enabled = false;
+            chk2TONE.Visible = false;
+            // The native monitor now carries synchronized PRE/POST audio.
+            chkMON.Enabled = true;
+            UpdateMONButton();
+            // PS-A is dead on SunSDR — repurpose the InfoBar's FB / Pure-Signal2
+            // labels (top-right of the panadapter strip) as the ADC-overload (OVL)
+            // lamp. lblFB is hidden, lblPS becomes the OVL display.
+            if (infoBar != null)
+                infoBar.EnterSunSDROvlMode();
+            // DUP: inert on SunSDR family (the radio's MOX shutdown bypass and
+            // RX LO suppression don't expose a duplex path through the wire
+            // protocol).
+            if (chkRX2SR.Checked)
+                chkRX2SR.Checked = false;
+            chkRX2SR.Enabled = false;
+            chkRX2SR.Visible = false;
+
+            // With 2TON/DUP/PS-A hidden, compact the panelOptions button stack:
+            //   row 1 (y=7)  MON | TUN          (unchanged)
+            //   row 2 (y=30) MOX | xPA          (xPA moved up from y=76)
+            //   row 3 (y=53) REC | PLAY         (moved up from y=99)
+            chkExternalPA.Location = new System.Drawing.Point(59, 30);
+            ckQuickRec.Location   = new System.Drawing.Point(8,  53);
+            ckQuickPlay.Location  = new System.Drawing.Point(59, 53);
+
+            // Hide Anan-only Hardware Options (Mic Tip/Ring, Bias, XLR/3.5mm,
+            // Alex matrix, Apollo). PTT Off/On stays visible — reserved for
+            // SunSDR hardware-PTT support. None of these have analogues in
+            // any SunSDR variant.
+            if (!IsSetupFormNull)
+                SetupForm.SetAnanHardwareOptionsVisible(false);
+
+            // InitFilterPresets seeds FM filter presets, but a saved database
+            // from a pre-fix build can have blank FM entries that the DB-load
+            // path copies back over the defaults. Restore the FM presets if
+            // they came back blank. Mode-dependent, applies to any SunSDR on FM.
+            EnsureFMFilterPresets(rx1_filters);
+            EnsureFMFilterPresets(rx2_filters);
+            if (_rx1_dsp_mode == DSPMode.FM)
+                RefreshFMFilterButtonLabels(true);
+            if (_rx2_dsp_mode == DSPMode.FM)
+                RefreshFMFilterButtonLabels(false);
+
+            UpdateFMButtonLabels();
+
+            // ─── SunSDR2 DX / PRO: 2 m (VHF) on antenna A1 ──
+
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                // 2m band button — DX has VHF on antenna A1. Pro band coverage
+                // differs and will be set in its own model branch when added.
+                radBand2.Text = "2";
+                radBand2.Enabled = true;
+                // MaxFreq is the hard VFO ceiling — limits how high you can
+                // tune RX, NOT TX (TX gated separately). SunSDR2 DX is spec'd
+                // for RX on antenna A1 up to 420 MHz. Pro has a different
+                // RX ceiling and will get its own constant.
+                if (MaxFreq < SUNSDR_MAX_RX_FREQ_MHZ)
+                    MaxFreq = SUNSDR_MAX_RX_FREQ_MHZ;
+            }
+        }
+
+        private void RefreshFMFilterButtonLabels(bool rx1)
+        {
+            FilterPreset[] preset = rx1 ? rx1_filters : rx2_filters;
+            int fm = (int)DSPMode.FM;
+            if (preset[fm] == null) return;
+
+            if (rx1)
+            {
+                radFilter1.Text  = preset[fm].GetName(Filter.F1);
+                radFilter2.Text  = preset[fm].GetName(Filter.F2);
+                radFilter3.Text  = preset[fm].GetName(Filter.F3);
+                radFilter4.Text  = preset[fm].GetName(Filter.F4);
+                radFilter5.Text  = preset[fm].GetName(Filter.F5);
+                radFilter6.Text  = preset[fm].GetName(Filter.F6);
+                radFilter7.Text  = preset[fm].GetName(Filter.F7);
+                radFilter8.Text  = preset[fm].GetName(Filter.F8);
+                radFilter9.Text  = preset[fm].GetName(Filter.F9);
+                radFilter10.Text = preset[fm].GetName(Filter.F10);
+                radFilterVar1.Text = preset[fm].GetName(Filter.VAR1);
+                radFilterVar2.Text = preset[fm].GetName(Filter.VAR2);
+            }
+            else
+            {
+                // RX2 filter panel only exposes F1-F7 plus Var1/Var2.
+                radRX2Filter1.Text  = preset[fm].GetName(Filter.F1);
+                radRX2Filter2.Text  = preset[fm].GetName(Filter.F2);
+                radRX2Filter3.Text  = preset[fm].GetName(Filter.F3);
+                radRX2Filter4.Text  = preset[fm].GetName(Filter.F4);
+                radRX2Filter5.Text  = preset[fm].GetName(Filter.F5);
+                radRX2Filter6.Text  = preset[fm].GetName(Filter.F6);
+                radRX2Filter7.Text  = preset[fm].GetName(Filter.F7);
+                radRX2FilterVar1.Text = preset[fm].GetName(Filter.VAR1);
+                radRX2FilterVar2.Text = preset[fm].GetName(Filter.VAR2);
+            }
+        }
+
+        private void EnsureFMFilterPresets(FilterPreset[] preset)
+        {
+            // Pick the preset table that matches the current RX frequency
+            // so startup-finalisation doesn't clobber a WFM swap that
+            // already happened earlier in the init sequence. Which RX's
+            // VFO we check depends on which filter preset array we are
+            // seeding (rx1 vs rx2). Default to the HF path (NFM) if
+            // VFOAFreq/VFOBFreq haven't settled yet.
+            bool wfm = false;
+            if (preset == rx1_filters)
+                wfm = IsBroadcastFMFreq(VFOAFreq);
+            else if (preset == rx2_filters)
+                wfm = IsBroadcastFMFreq(VFOBFreq);
+
+            if (wfm)
+                SeedWFMFilterPresets(preset);
+            else
+                SeedNFMFilterPresets(preset);
+        }
+
+        // Narrow/ham FM preset table (2m NFM, 10m repeater FM). Widths
+        // step from 25 kHz down to 3 kHz — enough to cover normal
+        // hamband deviations with choice of adjacent-channel rejection.
+        private static void SeedNFMFilterPresets(FilterPreset[] preset)
+        {
+            int fm = (int)DSPMode.FM;
+            if (preset[fm] == null) return;
+
+            preset[fm].SetFilter(Filter.F1,   -12500, 12500, "25k");
+            preset[fm].SetFilter(Filter.F2,   -10000, 10000, "20k");
+            preset[fm].SetFilter(Filter.F3,    -8000,  8000, "16k");
+            preset[fm].SetFilter(Filter.F4,    -6000,  6000, "12k");
+            preset[fm].SetFilter(Filter.F5,    -5000,  5000, "10k");
+            preset[fm].SetFilter(Filter.F6,    -4000,  4000, "8k");
+            preset[fm].SetFilter(Filter.F7,    -3000,  3000, "6k");
+            preset[fm].SetFilter(Filter.F8,    -2500,  2500, "5k");
+            preset[fm].SetFilter(Filter.F9,    -2000,  2000, "4k");
+            preset[fm].SetFilter(Filter.F10,   -1500,  1500, "3k");
+            preset[fm].SetFilter(Filter.VAR1,  -7500,  7500, "Var 1");
+            preset[fm].SetFilter(Filter.VAR2,  -7500,  7500, "Var 2");
+            preset[fm].LastFilter = Filter.F3;
+        }
+
+        // Broadcast WFM preset table. Extended upward at 300/310/320k
+        // for HD Radio / IBOC reception where digital sidebands reach
+        // beyond the analog ±100 kHz envelope. EESDR's core 160/180/
+        // 200/220k widths stay in the middle; narrower end trims at
+        // 100k (below that, NFM is the better choice anyway).
+        //
+        // F7 = 160k is the default (matches EESDR's default WFM width).
+        private static void SeedWFMFilterPresets(FilterPreset[] preset)
+        {
+            int fm = (int)DSPMode.FM;
+            if (preset[fm] == null) return;
+
+            preset[fm].SetFilter(Filter.F1,   -190000, 190000, "380k");
+            preset[fm].SetFilter(Filter.F2,   -155000, 155000, "310k");
+            preset[fm].SetFilter(Filter.F3,   -150000, 150000, "300k");
+            preset[fm].SetFilter(Filter.F4,   -110000, 110000, "220k");
+            preset[fm].SetFilter(Filter.F5,   -100000, 100000, "200k");
+            preset[fm].SetFilter(Filter.F6,    -90000,  90000, "180k");
+            preset[fm].SetFilter(Filter.F7,    -80000,  80000, "160k");
+            preset[fm].SetFilter(Filter.F8,    -70000,  70000, "140k");
+            preset[fm].SetFilter(Filter.F9,    -60000,  60000, "120k");
+            preset[fm].SetFilter(Filter.F10,   -50000,  50000, "100k");
+            preset[fm].SetFilter(Filter.VAR1,  -80000,  80000, "Var 1");
+            preset[fm].SetFilter(Filter.VAR2, -100000, 100000, "Var 2");
+            preset[fm].LastFilter = Filter.F7;  // 160k default
+        }
+
+        // SunSDR2 DX RX capability ceiling on antenna A1 (per hardware
+        // spec). Anything above 61.44 MHz (ADC Nyquist for the HF direct-
+        // sample path) routes through the internal VHF/UHF down-converter.
+        private const double SUNSDR_MAX_RX_FREQ_MHZ = 419.999;
+
+        // Broadcast FM band ranges per region.
+        //   Most of world (ITU R1 & R2):   87.5 – 108.0 MHz
+        //   Japan:                          76.0 –  95.0 MHz
+        //   OIRT (legacy Eastern Europe):   65.8 –  74.0 MHz (being phased out)
+        //   Brazil:                         76.0 – 108.0 MHz (combined)
+        // Returns true if freqMHz falls inside the user's region's
+        // broadcast-FM allocation. Instance method so it reads the
+        // current CurrentRegion.
+        public bool IsBroadcastFMFreq(double freqMHz)
+        {
+            switch (CurrentRegion)
+            {
+                case FRSRegion.Japan:
+                    return freqMHz >= 76.0 && freqMHz <= 95.0;
+                case FRSRegion.Russia:
+                    // OIRT (legacy) plus the modern ITU R1 band — overlap
+                    // is fine for detection purposes.
+                    return (freqMHz >= 65.8 && freqMHz <= 74.0) ||
+                           (freqMHz >= 87.5 && freqMHz <= 108.0);
+                case FRSRegion.Extended:
+                    // Extended mode — cover every plausible broadcast FM
+                    // range so enthusiasts can DX any of them.
+                    return (freqMHz >= 65.8 && freqMHz <= 74.0) ||
+                           (freqMHz >= 76.0 && freqMHz <= 108.0);
+                default:
+                    // ITU Regions 1 & 2 (Europe, Americas, Africa, Oceania).
+                    return freqMHz >= 87.5 && freqMHz <= 108.0;
+            }
+        }
+
+        // Reconfigure WDSP's FM demod AND the FM filter preset table when
+        // the current frequency crosses the broadcast-FM band boundary.
+        // No-op when mode is not FM.
+        //   Broadcast FM: deviation 75 kHz, audio cutoff 15 kHz,
+        //                 preset grid = 220/200/180/160/140/120/100/80/60/40k
+        //   Narrow  FM  : deviation 2.5 kHz, audio up to 5 kHz,
+        //                 preset grid = 25/20/16/12/10/8/6/5/4/3k
+        // The preset table swap also refreshes the on-screen button
+        // labels so clicking them applies the right IF bandpass.
+        private bool _fm_dsp_is_wide = false;
+        private void ApplyFMDSPForCurrentBand()
+        {
+            // Called from VFOAUpdate — no parent SetRX1Mode is running,
+            // so WE own the channel-off/rate/channel-on sequence.
+            ApplyFMDSPForCurrentBand(_rx1_dsp_mode, true);
+        }
+        private void ApplyFMDSPForCurrentBand(DSPMode activeMode)
+        {
+            // Called from SetRX1Mode's FM-case. SetRX1Mode has already
+            // toggled the channel off and set the DSP rate, and will
+            // toggle it back on at the end. We must NOT toggle here or
+            // we'll turn the channel back on mid-sequence and glitch
+            // the audio pipeline.
+            ApplyFMDSPForCurrentBand(activeMode, false);
+        }
+        // Core impl. handleChannelToggle = true means this call is the
+        // sole DSP-rate-change authority and must bookend with channel
+        // off/on. false means the caller (SetRX1Mode) already does that.
+        private void ApplyFMDSPForCurrentBand(DSPMode activeMode, bool handleChannelToggle)
+        {
+            LogTool.AddLogEntry(
+                $"ApplyFMDSPForCurrentBand: activeMode={activeMode} VFOA={VFOAFreq:F3} wasWide={_fm_dsp_is_wide}",
+                "WFM");
+            if (activeMode != DSPMode.FM)
+            {
+                LogTool.AddLogEntry("  -> bail, not FM mode", "WFM");
+                return;
+            }
+
+            bool wide = IsBroadcastFMFreq(VFOAFreq);
+            LogTool.AddLogEntry($"  wide={wide}", "WFM");
+            if (wide == _fm_dsp_is_wide && rx1_filters[(int)DSPMode.FM] != null)
+            {
+                // Still on the same side of the boundary — no swap needed,
+                // but re-apply in case startup didn't settle the demod yet.
+                if (wide)
+                {
+                    LogTool.AddLogEntry("  same-side wide: re-asserting deviation=75000", "WFM");
+                    radio.GetDSPRX(0, 0).RXFMDeviation = 75000.0;
+                    radio.GetDSPRX(0, 1).RXFMDeviation = 75000.0;
+                }
+                return;
+            }
+            LogTool.AddLogEntry($"  TRANSITION narrow<->wide, swapping: deviation, presets, DSPrate", "WFM");
+
+            // DSP samplerate matters: at 192 kHz (Thetis's FM default)
+            // anything above ±96 kHz aliases, which garbles broadcast
+            // FM audio since the signal is ±100 kHz wide. Bump to
+            // 384 kHz (Nyquist 192 kHz) for WFM, drop back to 192 kHz
+            // for NFM.
+            //
+            // Only do the full off/rate/on sequence when the caller
+            // is NOT SetRX1Mode — SetRX1Mode already owns the channel
+            // toggle around the switch statement, and turning the
+            // channel on here mid-flow glitches the audio pipeline
+            // (WFM came back as noise rather than demodulated signal).
+            int new_rate = wide ? 384000 : 192000;
+            if (handleChannelToggle)
+            {
+                WDSP.SetChannelState(WDSP.id(0, 0), 0, 1);
+                WDSP.SetChannelState(WDSP.id(0, 1), 0, 0);
+                WDSP.SetDSPSamplerate(WDSP.id(0, 0), new_rate);
+                WDSP.SetDSPSamplerate(WDSP.id(0, 1), new_rate);
+                WDSP.SetChannelState(WDSP.id(0, 0), 1, 0);
+                if (radio.GetDSPRX(0, 1).Active) WDSP.SetChannelState(WDSP.id(0, 1), 1, 0);
+            }
+            // If SetRX1Mode called us, it already set the rate (see the
+            // FM block around line 34538) and will turn the channel
+            // back on at the end of SetRX1Mode. Nothing to do here for
+            // rate/toggle.
+
+            if (wide)
+            {
+                SeedWFMFilterPresets(rx1_filters);
+                SeedWFMFilterPresets(rx2_filters);
+                RefreshFMFilterButtonLabels(true);
+                RefreshFMFilterButtonLabels(false);
+
+                radio.GetDSPRX(0, 0).RXFMDeviation = 75000.0;
+                radio.GetDSPRX(0, 1).RXFMDeviation = 75000.0;
+                radio.GetDSPRX(0, 0).RXFMHighCut = 15000.0;
+                radio.GetDSPRX(0, 1).RXFMHighCut = 15000.0;
+
+                double readback_dev = radio.GetDSPRX(0, 0).RXFMDeviation;
+                double readback_hc = radio.GetDSPRX(0, 0).RXFMHighCut;
+                LogTool.AddLogEntry(
+                    $"  WFM applied: rate={new_rate} dev_readback={readback_dev} hc_readback={readback_hc}",
+                    "WFM");
+
+                // Land on the 160k preset (EESDR's default WFM width).
+                // F7 in the new ladder that extends up to 320k for HD
+                // Radio / IBOC at the top of the grid.
+                RX1Filter = Filter.F7;
+            }
+            else
+            {
+                SeedNFMFilterPresets(rx1_filters);
+                SeedNFMFilterPresets(rx2_filters);
+                RefreshFMFilterButtonLabels(true);
+                RefreshFMFilterButtonLabels(false);
+
+                radio.GetDSPRX(0, 0).RXFMDeviation = 2500.0;
+                radio.GetDSPRX(0, 1).RXFMDeviation = 2500.0;
+                // Coming back from WFM — 16 kHz (F3) is the NFM default
+                // so the user isn't stuck at a WFM-scale bandpass on a
+                // hamband FM repeater.
+                RX1Filter = Filter.F3;
+            }
+            _fm_dsp_is_wide = wide;
+        }
+
+        // WDSP only has a single DSPMode.FM, so we relabel the same button
+        // based on the active RX band / frequency to match ham+broadcast
+        // nomenclature: "FM" on HF repeaters, "NFM" on 2m, "WFM" on the
+        // 87.5-108 MHz broadcast band.
+        private void UpdateFMButtonLabels()
+        {
+            string rx1Label = "FM";
+            if (rx1_band == Band.B2M) rx1Label = "NFM";
+            else if (IsBroadcastFMFreq(VFOAFreq)) rx1Label = "WFM";
+            if (radModeFMN != null && radModeFMN.Text != rx1Label)
+                radModeFMN.Text = rx1Label;
+
+            string rx2Label = "FM";
+            if (rx2_band == Band.B2M) rx2Label = "NFM";
+            else if (IsBroadcastFMFreq(VFOBFreq)) rx2Label = "WFM";
+            if (radRX2ModeFMN != null && radRX2ModeFMN.Text != rx2Label)
+                radRX2ModeFMN.Text = rx2Label;
+
+            if (modePopupForm != null && !modePopupForm.IsDisposed)
+                modePopupForm.RepopulateForm();
+        }
+
         private void SetRX1Band(Band b)
         {
             //[2.10.3.6]MW0LGE no band change on TX fix
@@ -6613,6 +7107,7 @@ namespace Thetis
                 UpdateWaterfallLevelValues();
                 updateDisplayGridLevelValues();
                 UpdateDiversityValues();
+                UpdateFMButtonLabels();
             }
 
             if (rx1_xvtr_index >= 0)
@@ -6634,6 +7129,7 @@ namespace Thetis
                 UpdateBandButtonColors();
                 UpdateWaterfallLevelValues();
                 updateDisplayGridLevelValues();
+                UpdateFMButtonLabels();
             }
         }
 
@@ -7696,11 +8192,35 @@ namespace Thetis
                     }
                     break;
                 case DSPMode.FM:
-                    int halfBw = (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut);  //[2.10.3.4]MW0LGE
-                    int bw = ((halfBw * 2) / 1000);
-                    low = -halfBw;
-                    high = halfBw;
-                    lblFilterLabel.Text = bw.ToString() + "k";
+                    // FM has TWO filters that both matter for audible width:
+                    //  1) The IF bandpass (set below via SetRXFilter) — what
+                    //     the demod sees.
+                    //  2) The post-demod audio filter (RXFMHighCut, WDSP's
+                    //     SetRXAFMAFFilter) — clamps audible high-frequency
+                    //     content. Upstream left audio cut fixed at 3 kHz, so
+                    //     any IF wider than ~6 kHz produced identical audio.
+                    // Scale audio highcut from the preset width so every
+                    // preset makes an audible difference, floored at 1 kHz
+                    // for tight presets and capped at 5 kHz for wide ones.
+                    if (low == high)
+                    {
+                        int halfBw = (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut);
+                        low = -halfBw;
+                        high = halfBw;
+                    }
+                    else
+                    {
+                        int halfBw = Math.Max(-low, high);
+                        // Audio highcut caps: broadcast-FM-territory IF
+                        // widths (>= 50 kHz) use a 15 kHz cap to pass the
+                        // full broadcast audio spectrum; narrow/ham FM
+                        // keeps the 5 kHz voice cap.
+                        int audioCap = (halfBw >= 50000) ? 15000 : 5000;
+                        int audioHigh = Math.Max(1000, Math.Min(audioCap, halfBw / 2));
+                        radio.GetDSPRX(0, 0).RXFMHighCut = audioHigh;
+                        radio.GetDSPRX(0, 1).RXFMHighCut = audioHigh;
+                    }
+                    lblFilterLabel.Text = ((high - low) / 1000).ToString() + "k";
                     break;
             }
 
@@ -7818,9 +8338,23 @@ namespace Thetis
                     }
                     break;
                 case DSPMode.FM:
-                    int halfBw = (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut);  //[2.10.3.4]MW0LGE
-                    low = -halfBw;
-                    high = halfBw;
+                    // Same rationale as UpdateRX1Filters FM case — drive
+                    // both the IF bandpass AND the post-demod audio filter
+                    // so each preset is audibly distinct.
+                    if (low == high)
+                    {
+                        int halfBw = (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut);
+                        low = -halfBw;
+                        high = halfBw;
+                    }
+                    else
+                    {
+                        int halfBw = Math.Max(-low, high);
+                        int audioCap = (halfBw >= 50000) ? 15000 : 5000;
+                        int audioHigh = Math.Max(1000, Math.Min(audioCap, halfBw / 2));
+                        radio.GetDSPRX(1, 0).RXFMHighCut = audioHigh;
+                        radio.GetDSPRX(1, 1).RXFMHighCut = audioHigh;
+                    }
                     break;
             }
 
@@ -15093,10 +15627,36 @@ namespace Thetis
                 RX2DisplayCalOffset = rx_display_cal_offset_by_radio[HardwareSpecific.ModelInt];
             }
 
+            // SunSDR widens the legal RX ceiling far above the legacy
+            // 61.44 MHz default. When switching models, validate the VFO
+            // against the correct ceiling first; otherwise a 2m frequency
+            // gets clipped to 61.44 before the SunSDR UI override runs.
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+                ApplySunSDRSpecificUI();
+
             if (!IsSetupFormNull && HardwareSpecific.OldModel != HardwareSpecific.Model)
                 txtVFOAFreq_LostFocus(this, EventArgs.Empty);
 
+            // SUNSDR: PureSignal is not supported on this protocol. Force the
+            // PS-A UI unchecked and the internal PS state to disabled whenever
+            // the selected radio is SUNSDR2DX, so no PS-A code path can arm.
+            // 2-Tone test is part of the PS-A IMD calibration flow, so
+            // disable it too — on SunSDR it has no useful function without
+            // the matched feedback-loop sampling path.
+            // DUP button (chkRX2SR) is also inert on SunSDR — the radio's
+            // MOX path shuts down the RX LO during TX, so duplex receive
+            // cannot be supported structurally. See memory
+            // project_dup_behavior_sunsdr.md for the analysis.
+            ApplySunSDRSpecificUI();
+
             cmaster.CMSetTXOutputLevelRun();
+
+            // Re-evaluate xPA button visibility after a model change. For
+            // SUNSDR2DX, RepositionExternalPAButton unconditionally shows
+            // the button (see its implementation); for other radios it
+            // falls back to the OC-pin-configuration gate.
+            if (!IsSetupFormNull)
+                RepositionExternalPAButton(SetupForm.CheckForAnyExternalPACheckBoxes());
 
             //do always, to update everything
             CurrentModelChangedHandlers?.Invoke(HardwareSpecific.OldModel, HardwareSpecific.Model); //MW0LGE_[2.9.0.7]
@@ -15518,7 +16078,7 @@ namespace Thetis
                     chkPower.Checked)
                     chkMOX.Enabled = !_rx_only;
                 chkTUN.Enabled = !_rx_only;
-                chk2TONE.Enabled = !_rx_only; // MW0LGE_21a
+                chk2TONE.Enabled = !_rx_only && !HardwareSpecific.IsCurrentSunSDRModel; // MW0LGE_21a — 2TONE is PS-A-only, not supported on SunSDR
                 chkVOX.Enabled = !_rx_only;
                 if (_rx_only && chkMOX.Checked)
                     chkMOX.Checked = false;
@@ -15549,7 +16109,7 @@ namespace Thetis
                     chkMOX.Enabled = !_tx_inhibit;
 
                 chkTUN.Enabled = !_tx_inhibit;
-                chk2TONE.Enabled = !_tx_inhibit; //MW0LGE_21a
+                chk2TONE.Enabled = !_tx_inhibit && !HardwareSpecific.IsCurrentSunSDRModel; //MW0LGE_21a — 2TONE is PS-A-only, not supported on SunSDR
                 chkVOX.Enabled = !_tx_inhibit;
 
                 if ((_rx1_dsp_mode == DSPMode.CWL ||
@@ -17508,6 +18068,11 @@ namespace Thetis
                 }
                 DisplayAriesRXAntenna();
 
+                // Per-band visibility for the SunSDR2 DX status-bar antenna
+                // dropdowns — show only the physically valid antennas for
+                // the new band (A2/A3 on HF/6m, A1 on 2m).
+                UpdateSunSdrStatusBarAntennaMenuVisibility();
+
                 //MW0LGE_21b
                 if (old_band != rx1_band)
                 {
@@ -18525,12 +19090,27 @@ namespace Thetis
             m_dVFOAFreq = Math.Round(freq, 6); // MW0LGE_21d rounded to 6
             txtVFOAFreq.Text = freq.ToString("f6");
             txtVFOAFreq_LostFocus(this, EventArgs.Empty);
+            // FM button label is frequency-sensitive: "WFM" inside the
+            // broadcast band, "NFM" on 2m, "FM" elsewhere. Refresh on
+            // every VFO change so the label flips when the user tunes
+            // into or out of the broadcast FM range without triggering
+            // a hard band change.
+            UpdateFMButtonLabels();
+            // Same trigger also flips WDSP's FM demod between narrow and
+            // wide config when crossing the broadcast-band boundary.
+            ApplyFMDSPForCurrentBand();
+            // Reverse memory lookup: if the new VFO freq matches one of the
+            // imported memories, auto-select it in the FM memory combo so
+            // the user sees the repeater name/callsign for whatever they're
+            // tuned to. No side-effects — the memory is shown, not recalled.
+            UpdateMemoryComboFromVFO(m_dVFOAFreq);
         }
         private void VFOBUpdate(double freq)
         {
             m_dVFOBFreq = Math.Round(freq, 6); // MW0LGE_21d rounded to 6
             txtVFOBFreq.Text = freq.ToString("f6");
             txtVFOBFreq_LostFocus(this, EventArgs.Empty);
+            UpdateFMButtonLabels();
         }
         private void VFOASubUpdate(double freq)
         {
@@ -18834,6 +19414,7 @@ namespace Thetis
             get { return chkMON.Checked; }
             set 
             {
+                if (value && !chkMON.Checked) Audio.MonitorPre = false;
                 chkMON.Checked = value; 
             }
         }
@@ -19249,6 +19830,33 @@ namespace Thetis
             get { return m_bATTonTX; }
             set
             {
+                // SunSDR2 DX hard-override. The "ATT on TX" feature uses the
+                // Anan/HPSDR Alex-board 0-31 dB step attenuator, which the
+                // SunSDR2 DX does not have (its only attenuator is the
+                // +10/0/-10/-20 cycle button). Leaving this enabled on
+                // SunSDR makes the main-UI ATT label flip to "[S-ATT]"
+                // with the value forced to 31 and rendered in red — a
+                // permanent false alarm that confuses operators (the
+                // 31 never reaches the radio in any meaningful way; the
+                // SunSDR has no such register). Always force OFF on
+                // SunSDR regardless of caller intent or auto-att config.
+                // Bypasses the auto-att guard below because the hardware
+                // constraint takes precedence over operator config.
+                if (HardwareSpecific.IsCurrentSunSDRModel)
+                {
+                    if (m_bATTonTX)
+                    {
+                        m_bATTonTX = false;
+                        updateAttNudsCombos();
+                        if (PowerOn)
+                        {
+                            NetworkIO.SetTxAttenData(0);
+                            Display.TXAttenuatorOffset = 0;
+                        }
+                    }
+                    return;
+                }
+
                 if (!value && _auto_attTX_when_not_in_ps) return; // ignore in this case
                 m_bATTonTX = value;
                 updateAttNudsCombos();
@@ -19516,47 +20124,57 @@ namespace Thetis
 
                 rx1_preamp_by_band[(int)rx1_band] = rx1_preamp_mode;
 
-                _from_preampmode[0] = true;
-                switch (rx1_preamp_mode)
+                // SunSDR2 DX owns its combo state via comboPreamp_SelectedIndexChanged
+                // which early-returns after pushing opcode 0x05 and never updates
+                // rx1_preamp_mode. Letting the generic switch below run would set
+                // comboPreamp.Text from a stale enum value, wiping the user's
+                // selection every time this setter fires (MOX exit, band change,
+                // model change). Gate it for SunSDR. User-confirmed working
+                // 2026-04-24: "-20dB" selection survives TX/TUNE cycles.
+                if (!HardwareSpecific.IsCurrentSunSDRModel)
                 {
-                    case PreampMode.HPSDR_ON:
-                        comboPreamp.Text = "0dB";
-                        break;
+                    _from_preampmode[0] = true;
+                    switch (rx1_preamp_mode)
+                    {
+                        case PreampMode.HPSDR_ON:
+                            comboPreamp.Text = "0dB";
+                            break;
 
-                    case PreampMode.HPSDR_OFF:
-                        comboPreamp.Text = "-20dB";
-                        break;
+                        case PreampMode.HPSDR_OFF:
+                            comboPreamp.Text = "-20dB";
+                            break;
 
-                    case PreampMode.HPSDR_MINUS10:
-                        comboPreamp.Text = "-10db";
-                        break;
+                        case PreampMode.HPSDR_MINUS10:
+                            comboPreamp.Text = "-10db";
+                            break;
 
-                    case PreampMode.HPSDR_MINUS20:
-                        comboPreamp.Text = "-20db";
-                        break;
+                        case PreampMode.HPSDR_MINUS20:
+                            comboPreamp.Text = "-20db";
+                            break;
 
-                    case PreampMode.HPSDR_MINUS30:
-                        comboPreamp.Text = "-30db";
-                        break;
+                        case PreampMode.HPSDR_MINUS30:
+                            comboPreamp.Text = "-30db";
+                            break;
 
-                    case PreampMode.HPSDR_MINUS40:
-                        comboPreamp.Text = "-40db"; //MW0LGE_22b lower
-                        break;
+                        case PreampMode.HPSDR_MINUS40:
+                            comboPreamp.Text = "-40db"; //MW0LGE_22b lower
+                            break;
 
-                    case PreampMode.HPSDR_MINUS50:
-                        comboPreamp.Text = "-50db"; //MW0LGE_22b lower
-                        break;
-                    case PreampMode.SA_MINUS10:
-                        comboPreamp.Text = "-10dB";
-                        break;
-                    case PreampMode.SA_MINUS20:
-                        comboPreamp.Text = "-20dB";
-                        break;
-                    case PreampMode.SA_MINUS30:
-                        comboPreamp.Text = "-30dB";
-                        break;
+                        case PreampMode.HPSDR_MINUS50:
+                            comboPreamp.Text = "-50db"; //MW0LGE_22b lower
+                            break;
+                        case PreampMode.SA_MINUS10:
+                            comboPreamp.Text = "-10dB";
+                            break;
+                        case PreampMode.SA_MINUS20:
+                            comboPreamp.Text = "-20dB";
+                            break;
+                        case PreampMode.SA_MINUS30:
+                            comboPreamp.Text = "-30dB";
+                            break;
+                    }
+                    _from_preampmode[0] = false;
                 }
-                _from_preampmode[0] = false;
 
                 if (!_mox && !_setFromOtherAttenuator)
                 {
@@ -20994,10 +21612,13 @@ namespace Thetis
             set
             {
                 xvtr_present = value;
-                radBand2.Enabled = value;
+                bool sunsdr = HardwareSpecific.IsCurrentSunSDRModel;
+                radBand2.Enabled = value || sunsdr;
                 //   Hdw.XVTRPresent = value;
-                if (value)
-                    MaxFreq = 146.0;
+                if (sunsdr)
+                    MaxFreq = SUNSDR_MAX_RX_FREQ_MHZ;
+                else if (value)
+                    MaxFreq = 146.0;      // legacy XVTR path, unchanged
                 else
                     MaxFreq = 65.0;
 
@@ -21230,6 +21851,107 @@ namespace Thetis
             set { enable_vu_power_curve = value; }
         }
 
+        // SunSDR2 DX front-panel mic source. Opcode 0x21 enum decoded
+        // from EESDR3 captures (2026-04-20): 0=Mic1, 1=Mic2.
+        // Default 1 (Mic2) matches the legacy hardcoded init-macro value;
+        // existing users see no change until they explicitly pick a
+        // different source.
+        private int _sunsdr_mic_source = 1;
+        public int SunSDRMicSource
+        {
+            get { return _sunsdr_mic_source; }
+            set
+            {
+                if (value < 0 || value > 3) return;
+                _sunsdr_mic_source = value;
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                    NetworkIO.nativeSunSDRSetMicSource(value);
+            }
+        }
+
+        /* SunSDR hardware PTT driver.
+         *
+         * The radio emits a 0x1F/01 telemetry status word every second
+         * or so. Bit 7 is the physical PTT state (jack / footswitch /
+         * mic PTT button — all wired to the same input). sunsdr.c
+         * mirrors that bit into sdr.hwPttState and we poll it here at
+         * ~10 Hz, driving chkMOX when it changes.
+         *
+         * Gate: only fires when radio is powered AND the user has
+         * enabled mic PTT (UI: Setup -> H/W Select -> PTT = On, which
+         * maps to MicPTTDisabled = false).
+         *
+         * Edge-trigger guarantees software-initiated MOX (via the UI
+         * button) is idempotent — telemetry always mirrors the set
+         * state, so polling sees no edge for our own changes.
+         *
+         * Hold-on-startup safety: _hwPttLastState is initialised from
+         * the current native state on first tick so we don't auto-key
+         * if the user happened to be pressing PTT at app launch. */
+        private System.Windows.Forms.Timer _hwPttPollTimer;
+        private int _hwPttLastState = -1;   // -1 = uninitialised
+
+        private void EnsureHwPttTimerStarted()
+        {
+            if (_hwPttPollTimer != null) return;
+            _hwPttPollTimer = new System.Windows.Forms.Timer();
+            _hwPttPollTimer.Interval = 100;  // 10 Hz poll — ample for human PTT
+            _hwPttPollTimer.Tick += hwPttPollTimer_Tick;
+            _hwPttPollTimer.Start();
+        }
+
+        private void hwPttPollTimer_Tick(object sender, EventArgs e)
+        {
+            // SunSDR-only timer. Two responsibilities sharing a single 10 Hz tick:
+            //   (1) ADC overload indicator — always polled (independent of hw PTT)
+            //   (2) Hardware PTT edge detection — gated on mic_ptt_disabled
+            if (NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR) return;
+
+            // (1) ADC overload — poll regardless of chkPower so the lamp clears
+            // promptly on power-off.
+            pollAdcOverload();
+
+            if (!chkPower.Checked) return;
+            if (mic_ptt_disabled) return;
+
+            int cur;
+            try { cur = NetworkIO.nativeSunSDRGetHwPttState(); }
+            catch { return; }
+
+            if (_hwPttLastState < 0)
+            {
+                _hwPttLastState = cur;  // prime; don't react to initial state
+                return;
+            }
+
+            if (cur == _hwPttLastState) return;  // no edge
+            _hwPttLastState = cur;
+
+            // Edge fired. 0->1 = press (MOX on), 1->0 = release (MOX off).
+            // chkMOX.Checked = already-same value is a no-op, so software
+            // MOX users see no double-trigger.
+            bool wantMox = (cur == 1);
+            if (chkMOX.Checked != wantMox)
+                chkMOX.Checked = wantMox;
+        }
+
+        // ADC-overload poll. Reads the native flag set by the sunsdr.c read
+        // thread (ceiling-clustering signature in the wire IQ histogram).
+        // Drives the OVL lamp on the InfoBar (lblPS, repurposed in
+        // EnterSunSDROvlMode). The lamp clears automatically when chkPower is
+        // off because the native read returns 0 with no live samples.
+        private void pollAdcOverload()
+        {
+            bool active = false;
+            if (chkPower.Checked)
+            {
+                try { active = NetworkIO.nativeSunSDRGetAdcOverload() != 0; }
+                catch { active = false; }
+            }
+            if (infoBar != null)
+                infoBar.Overload = active;
+        }
+
         private string current_skin = "Default";
         public string CurrentSkin
         {
@@ -21261,6 +21983,21 @@ namespace Thetis
                 fm_tx_offset_mhz = value;
                 if (udFMOffset.Value != (decimal)fm_tx_offset_mhz)
                     udFMOffset.Value = (decimal)fm_tx_offset_mhz;
+
+                // Persist the live value into the per-band array on every
+                // user-driven change. The band-change handler also writes
+                // here, but only at the moment of band switch — so if the
+                // user set an offset (e.g. 0.600 on 2m) and closed the app
+                // without changing bands, the DB would save the stale
+                // default (0.100) and the user would see it "reset" on
+                // relaunch. Guarding with !initializing keeps the startup
+                // load path clean.
+                if (!initializing && fm_tx_offset_by_band_mhz != null)
+                {
+                    int bandIdx = (int)rx1_band;
+                    if (bandIdx >= 0 && bandIdx < fm_tx_offset_by_band_mhz.Length)
+                        fm_tx_offset_by_band_mhz[bandIdx] = fm_tx_offset_mhz;
+                }
             }
         }
 
@@ -25424,6 +26161,82 @@ namespace Thetis
             return watts;
         }
 
+        // Per-band SunSDR2 forward-power calibration (K, C) for
+        // watts = K * (adc - C)^2. See computeAlexFwdPower for the
+        // procedure to measure and add a new band. Bands without an
+        // entry fall back to 20m's coefficients (default).
+        //
+        // The PRO and DX share the same model shape but use very
+        // different K coefficients — the directional coupler in the PRO
+        // has roughly 25-50× weaker coupling than the DX, so the same
+        // raw ADC value corresponds to ~25-50× less actual RF.
+        private static (double K, double C) GetSunsdrPwrCal(Band b)
+        {
+            if (HardwareSpecific.Model == HPSDRModel.SUNSDR2PRO)
+            {
+                // PRO cal — refined 2026-05-08 from Bernie F6Bernie's
+                // two-point measurements (real 5 W and 15 W via Daiwa
+                // wattmeter into dummy load) on every HF band, plus
+                // 6 m. Issue #39.
+                //
+                // Method: with two (real, Artemis_displayed_under_v2.1.4_cal)
+                // pairs per band, back-derive the raw ADC values from the
+                // previous cal, then solve watts = K * (adc - C)^2 for the
+                // K and C that pass through both real-watts points exactly.
+                // Both K and C are now band-specific (the previous v2.1.4
+                // single-point fit kept C borrowed from the DX entry,
+                // which was approximate — the new fit shows C is closer to
+                // 130-175 on PRO, not 33).
+                //
+                // Result: cal lands within ~0.5 W of Bernie's measurements
+                // at 5 W and 15 W on every HF band, and 6 m (which had been
+                // falling through to 20 m and over-reading by ~2× — 23 W
+                // displayed at 11 W actual) now has its own entry.
+                //
+                // Caveat: still a two-point fit. Outside the 5-15 W range,
+                // and especially at 50 W+ where most HF QRO operation
+                // happens, the curve may deviate. PRO testers: please
+                // report back at 25 / 50 / 75 / 100 W per band on issue
+                // #39 so we can tighten the high-power region.
+                switch (b)
+                {
+                    // Comments show the v2.1.4/v2.1.5 readings Bernie measured at
+                    // (real_5W → Artemis_displayed, real_15W → Artemis_displayed).
+                    case Band.B160M: return (0.0001746, 130.9);  // (5→7, 15→15)
+                    case Band.B80M:  return (0.0003228, 159.6);  // (5→7, 15→13)
+                    case Band.B60M:  return (0.0002784, 135.8);  // (5→7, 15→14)
+                    case Band.B40M:  return (0.0003366, 157.6);  // (5→8, 15→15)
+                    case Band.B30M:  return (0.0003330, 157.8);  // (5→7, 15→13)
+                    case Band.B20M:  return (0.0002189, 149.0);  // (5→7, 15→14)
+                    case Band.B17M:  return (0.0003083, 162.4);  // (5→7, 15→13)
+                    case Band.B15M:  return (0.0002402, 174.3);  // (5→7, 13→12)
+                    case Band.B12M:  return (0.0001832, 159.8);  // (5→7, 15→14)
+                    case Band.B10M:  return (0.0001721, 127.0);  // (5→6, 15→13)
+                    case Band.B6M:   return (0.0000645, 104.4);  // (5→12, 11→23)
+                    default:         return (0.0002189, 149.0);  // fallback to 20m
+                }
+            }
+
+            // SunSDR2 DX (and any other future SunSDR family member that
+            // happens to share the DX coupler response).
+            switch (b)
+            {
+                case Band.B40M:
+                    // Measured 2026-05-01 with LP-500 against 10-point drive
+                    // sweep on 7.225 LSB. Was understating by up to 28 W;
+                    // refit reduces displayed value. Predicted vs measured
+                    // tracks within ~1-3 W across drive 5-97 W.
+                    return (0.00343, 38.0);
+
+                case Band.B20M:
+                default:
+                    // Confirmed 2026-05-01 with LP-500: meter matches actual
+                    // within ~0.5 W across drive 5-95 on 14.074. Used as
+                    // fallback for bands without their own measurement.
+                    return (0.00412, 33.0);
+            }
+        }
+
         public float computeAlexFwdPower()
         {
             float adc = 0;
@@ -25431,6 +26244,50 @@ namespace Thetis
             float bridge_volt = 0;
             float refvoltage = 0;
             int adc_cal_offset = 0;
+
+            // SunSDR family forward-power calibration.
+            //
+            // Telemetry u16 at packet bytes 14-15 is a directional-coupler
+            // voltage reading. Power is approximately V^2, so we fit a
+            // quadratic per band: watts = K * (adc - C)^2.
+            //
+            // The coupler's coupling factor and detector diode response are
+            // FREQUENCY DEPENDENT — flat across one band but drifts across
+            // 160m..6m. So each band gets its own (K, C) pair, measured
+            // against an external wattmeter (LP-500). Bands without a
+            // measurement fall back to 20m's coefficients (mid-HF, confirmed
+            // accurate, best single-band default).
+            //
+            // PRO and DX have separate cal tables in GetSunsdrPwrCal.
+            // PRO is on a single-point-per-band cal (Bernie F6Bernie's
+            // 10 W measurements, issue #39, 2026-05-08); DX is on
+            // multi-point LP-500 sweeps for 40m + 20m, default-fallback
+            // for the rest.
+            //
+            // To add a new band's calibration (DX path):
+            //   1. TUNE on the new band, sweep drive 5-95 W in ~10 steps.
+            //   2. Record (Artemis_displayed, LP-500_actual) pairs.
+            //   3. For each pair: adc = sqrt(displayed/0.00412) + 33  (back-derive
+            //      the raw adc using the 20m formula).
+            //   4. Least-squares fit watts_LP500 = K*(adc - C)^2 over all pairs.
+            //   5. Add a case to GetSunsdrPwrCal below.
+            //
+            // PRO single-point cal refinement:
+            //   1. Measure (Artemis_displayed, actual_W) at one drive level per band.
+            //   2. K_pro = actual_W * K_dx / Artemis_displayed_under_DX_cal.
+            //   3. Update PRO branch in GetSunsdrPwrCal.
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                adc = NetworkIO.getFwdPower();
+                (double K, double C) cal = GetSunsdrPwrCal(_tx_band);
+                double v = Math.Max(0.0, adc - cal.C);
+                float sunWatts = (float)(cal.K * v * v);
+                if (PAValues)
+                {
+                    average_fwdadc = alpha * average_fwdadc + (1.0f - alpha) * adc;
+                }
+                return sunWatts;
+            }
 
             switch (HardwareSpecific.Model)
             {
@@ -27613,10 +28470,68 @@ namespace Thetis
 
             if (chkPower.Checked)
             {
+                // SunSDR pre-flight reachability check — MUST run before any
+                // Power-On state changes. The rate cascade below triggers
+                // specRX.initAnalyzer which starts drawing empty FFT pixels
+                // (visible as a noise-floor "green band" in the panadapter)
+                // if we end up failing the radio probe later. Catching the
+                // unreachable-radio case here means no UI / analyzer state
+                // gets touched if the radio isn't there.
+                //
+                // Note: NetworkIO.InitRadio also runs its own pre-flight as
+                // a safety net for callers that bypass this handler. The
+                // duplication is intentional belt-and-suspenders.
+                if (HardwareSpecific.IsCurrentSunSDRModel)
+                {
+                    if (!NetworkIO.TrySunSDRPreflightFromSetup())
+                    {
+                        MessageBox.Show(
+                            "No radio detected.\n\nCheck that the radio is powered on and reachable.",
+                            "SDR-VST3",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning,
+                            MessageBoxDefaultButton.Button1,
+                            Common.MB_TOPMOST);
+                        chkPower.Checked = false;
+                        return;
+                    }
+                }
+
                 chkPower.BackColor = button_selected_color;
                 txtVFOAFreq.ForeColor = vfo_text_light_color;
                 txtVFOAMSD.ForeColor = vfo_text_light_color;
                 txtVFOALSD.ForeColor = small_vfo_color;
+
+                powerOnLog("=== Power-On START ===");
+                powerOnLog($"Model={HardwareSpecific.Model} Protocol={NetworkIO.CurrentRadioProtocol} VAC1={vac_enabled} VAC2={vac2_enabled}");
+                powerOnLog($"BEFORE rate cascade: SampleRateRX1={sample_rate_rx1} BlockSize1={block_size1} Audio.SampleRate1={Audio.SampleRate1} Audio.BlockSize={Audio.BlockSize}");
+
+                // SunSDR rate cascade — MUST run before Audio.Start because
+                // setup.cs comboAudioSampleRate1_SelectedIndexChanged has no
+                // RadioProtocol.SUNSDR case, so the C# pipeline view of the
+                // rate (Audio.SampleRate1 → cmaster.SetXcmInrate, BlockSize1,
+                // specRX, RadioDSP) never updates from the 192000 default to
+                // the radio's actual 312500. Without this cascade the rmatch
+                // resampler computes a 48000/192000 ratio while samples
+                // actually arrive at 312500 → pitch-shifted/"robotic" audio.
+                if (HardwareSpecific.IsCurrentSunSDRModel)
+                {
+                    int sunsdr_rate = 312500;
+                    int sunsdr_bs   = cmaster.GetBuffSize(sunsdr_rate);
+                    powerOnLog($"Rate cascade for SUNSDR: rate={sunsdr_rate} bs={sunsdr_bs}");
+                    SampleRateRX1   = sunsdr_rate;
+                    BlockSize1      = sunsdr_bs;
+                    SampleRateRX2   = sunsdr_rate;
+                    BlockSizeRX2    = sunsdr_bs;
+                    if (specRX != null)
+                    {
+                        specRX.GetSpecRX(0).SampleRate = sunsdr_rate;
+                        specRX.GetSpecRX(0).BlockSize  = sunsdr_bs;
+                        specRX.GetSpecRX(1).SampleRate = sunsdr_rate;
+                        specRX.GetSpecRX(1).BlockSize  = sunsdr_bs;
+                    }
+                    powerOnLog($"AFTER rate cascade: SampleRateRX1={sample_rate_rx1} BlockSize1={block_size1} Audio.SampleRate1={Audio.SampleRate1} Audio.BlockSize={Audio.BlockSize} GetChannelOutputSize(0,0)={cmaster.GetChannelOutputSize(0,0)} GetInputRate(0,0)={cmaster.GetInputRate(0,0)}");
+                }
 
                 UpdateDDCs(rx2_enabled);
                 UpdateVFOASub();
@@ -27640,10 +28555,29 @@ namespace Thetis
 
                 Audio.CurrentAudioState1 = Audio.AudioState.DTTSP;
 
-                if (vac_enabled) VACEnabled = true;  //Don't trigger StopAudioIVAC if the VACs aren't needed now
-                if (vac2_enabled) VAC2Enabled = true;
+                // VAC enable is normally done here so the VAC MME/WASAPI
+                // callbacks are running by the time Audio.Start primes the
+                // pipeline. For SUNSDR we DEFER this to after the IQ gate
+                // opens — otherwise VAC's output ring sits empty for ~150-
+                // 300 ms while the pipeline comes up, producing the
+                // underflow burst the user sees in VAC1 Monitor on Power-On.
+                bool deferVacForSunsdr = HardwareSpecific.IsCurrentSunSDRModel;
+                if (!deferVacForSunsdr)
+                {
+                    if (vac_enabled) VACEnabled = true;  //Don't trigger StopAudioIVAC if the VACs aren't needed now
+                    if (vac2_enabled) VAC2Enabled = true;
+                }
 
-                Thread.Sleep(100); // wait for hardware to settle before starting audio (possible sample rate change)
+                // The 100ms hardware-settle sleep below was added for
+                // ETH/USB rate-change races. For SUNSDR the rate cascade
+                // ran at the top of this method (already settled), and
+                // we don't need to wait here — every ms of dead time on
+                // the wire is another packet the radio queues into our
+                // recv buffer that has to drain before the gate opens.
+                if (!deferVacForSunsdr)
+                {
+                    Thread.Sleep(100); // wait for hardware to settle before starting audio (possible sample rate change)
+                }
                 psform.ForcePS();
 
                 if (m_bATTonTX)
@@ -27661,6 +28595,7 @@ namespace Thetis
                 enableAudioAmplfier(); // MW0LGE_22b
 
                 if (!IsSetupFormNull) SetupForm.BoardWarning = ""; // no board warning
+                powerOnLog("Calling Audio.Start() ...");
                 if (!Audio.Start())   // starts JanusAudio running
                 {
                     chkPower.Checked = false;
@@ -27823,7 +28758,7 @@ namespace Thetis
                 {
                     chkMOX.Enabled = true;
                     chkTUN.Enabled = true;
-                    chk2TONE.Enabled = true; //MW0LGE_21a
+                    chk2TONE.Enabled = !HardwareSpecific.IsCurrentSunSDRModel; //MW0LGE_21a — 2TONE is PS-A-only, not supported on SunSDR
                 }
                 chkVFOLock.Enabled = true;
                 chkVFOBLock.Enabled = true;
@@ -27832,11 +28767,262 @@ namespace Thetis
                 UpdateDDCs(rx2_enabled);
                 UpdateAAudioMixerStates();
 
+                // SUNSDR-only: BEFORE arming the WDSP RX channel, force
+                // every active noise reducer (NR1/2/3/4) OFF and remember
+                // the user's intended run-state so we can restore it after
+                // the audio pipeline has stabilised. Why: EMNR / RNNoise
+                // build their noise models from the FIRST samples they
+                // process. WDSP.SetChannelState below arms the channel
+                // and within ~10-50 ms the first sample arrives. Those
+                // first samples are filter-ringing / DC-settling /
+                // resampler ramp-up — feeding them into EMNR latches a
+                // poisoned noise floor that over-suppresses real signal
+                // for the rest of the session ("robotic" audio on
+                // Power-On with NR2 enabled). Toggling NR_run off/on
+                // afterwards does NOT reset the noise model
+                // (SetRXAEMNRRun only flips a flag; flush_emnr only
+                // clears the FFT pipeline buffers, not the NPE state).
+                // The only reliable trick is to keep run=0 during the
+                // unstable startup window so xemnr() never even sees
+                // those first samples — its NPE state stays at
+                // calc_emnr's malloc0 zeroes — then turn run=1 once
+                // samples are clean.
+                int[,] savedNR = new int[2, 2]; // [rx,sub] x 4 NR types packed: bit 0=NR1, 1=NR2, 2=NR3, 3=NR4
+                bool nrDeferActive = HardwareSpecific.IsCurrentSunSDRModel;
+                if (nrDeferActive)
+                {
+                    for (int rxIdx = 0; rxIdx < 2; rxIdx++)
+                    {
+                        for (int sub = 0; sub < 2; sub++)
+                        {
+                            var dsp = radio.GetDSPRX(rxIdx, sub);
+                            if (dsp == null) continue;
+                            int packed = 0;
+                            // Read pre-defer state (cache, set Force=true so the
+                            // setter ALWAYS re-pushes to WDSP regardless of cache
+                            // vs. dsp-cache state — defends against the silent
+                            // no-op path in the property setter).
+                            int nr1 = dsp.RXANR1Run;
+                            int nr2 = dsp.RXANR2Run;
+                            int nr3 = dsp.RXANR3Run;
+                            int nr4 = dsp.RXANR4Run;
+                            if (nr1 == 1) packed |= 1;
+                            if (nr2 == 1) packed |= 2;
+                            if (nr3 == 1) packed |= 4;
+                            if (nr4 == 1) packed |= 8;
+
+                            dsp.Force = true;
+                            dsp.RXANR1Run = 0;
+                            dsp.RXANR2Run = 0;
+                            dsp.RXANR3Run = 0;
+                            dsp.RXANR4Run = 0;
+                            dsp.Force = false;
+
+                            savedNR[rxIdx, sub] = packed;
+                            powerOnLog($"NR-DEFER: rx={rxIdx} sub={sub} captured=0x{packed:X} forced all NR off");
+                        }
+                    }
+                }
+
+                powerOnLog("Audio.Start() returned, all setup threads spawned, about to arm WDSP RX channel(s)");
                 WDSP.SetChannelState(WDSP.id(0, 0), 1, 1);
                 if (radio.GetDSPRX(0, 1).Active) WDSP.SetChannelState(WDSP.id(0, 1), 1, 1);
                 if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 1, 1);
+                powerOnLog("WDSP.SetChannelState ON for active RX channels");
+
+                // WDSP RX channel is now armed — open the SunSDR read
+                // thread's xrouter-dispatch gate so buffered radio IQ
+                // flows through to the configured DSP. Before this
+                // call, the native read thread drops all IQ packets
+                // to prevent WDSP from latching a default bad state
+                // (cold-start race that was previously masked by log
+                // overhead; see sunsdr.c SunSDRSetRxWdspReady).
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    // Settle barrier: SetChannelState above kicks off
+                    // FIRcore FFT-plan creation, AGC slew tables, EMNR
+                    // window calc, etc. Some of those finish their
+                    // first-time init asynchronously inside WDSP. If
+                    // we open the gate immediately, the very first
+                    // sample can land mid-init and lock the rmatch /
+                    // bp filter rings into a partially-initialized
+                    // state for the lifetime of the session
+                    // (intermittent "robotic" audio on Power-On).
+                    // Bumped 50 → 300 ms after observing the race
+                    // still hits with NR fully disabled — wider
+                    // margin against slow-init runs.
+                    Thread.Sleep(300);
+                    // Force-flush every active RX channel right before
+                    // we open the gate. WDSP.FlushChannelNow zeroes the
+                    // io ring buffers, sets exec_bypass briefly, runs
+                    // flush_main (which clears filter state, slews,
+                    // overlap-save buffers throughout the chain) and
+                    // returns. Without this, residual junk from create_*
+                    // (e.g. one-shot impulse responses, stale pixel
+                    // accumulators) can be the FIRST samples that flow
+                    // into the rmatch resampler ring on cold-start —
+                    // and rmatch latches on those for the lifetime of
+                    // the session, producing the intermittent
+                    // robotic-without-NR audio reported across runs.
+                    powerOnLog("FlushChannelNow on active RX channels prior to gate open");
+                    WDSP.FlushChannelNow(WDSP.id(0, 0));
+                    if (radio.GetDSPRX(0, 1).Active) WDSP.FlushChannelNow(WDSP.id(0, 1));
+                    if (radio.GetDSPRX(1, 0).Active) WDSP.FlushChannelNow(WDSP.id(2, 0));
+                    powerOnLog("FlushChannelNow done; opening IQ gate (SetRxWdspReady=1)");
+                    NetworkIO.nativeSunSDRSetRxWdspReady(1);
+                    powerOnLog("IQ gate OPEN — first xrouter dispatch should follow within ~5 ms");
+
+                    // Deferred VAC enable (see "deferVacForSunsdr" earlier
+                    // in this method). Wait one more window so the first
+                    // samples have flowed through xrouter -> WDSP RX ->
+                    // AAMix and are sitting in AAMix's output ring before
+                    // VAC starts pulling. 200 ms = ~40 IQ packets at the
+                    // 5 ms wire cadence, plenty for the first WDSP block to
+                    // accumulate, traverse the filter chain, and land at
+                    // AAMix output. Without this delay VAC sees an empty
+                    // ring on its very first MME callback => underflow.
+                    Thread.Sleep(200);
+                    powerOnLog("200ms VAC-settle elapsed, enabling VAC if user has it on");
+                    if (vac_enabled) VACEnabled = true;
+                    if (vac2_enabled) VAC2Enabled = true;
+                    powerOnLog($"VAC state: VACEnabled={vac_enabled} VAC2Enabled={vac2_enabled}");
+
+                    // Deferred noise-reducer RESTORE. We forced NR1/2/3/4
+                    // off above (before SetChannelState) so their noise
+                    // models would not be poisoned by the filter-ringing /
+                    // DC-settling samples in the first 50-100 ms after the
+                    // channel arms. Now wait until the pipeline has been
+                    // delivering clean steady-state samples for a moment,
+                    // then re-enable each NR exactly to the user's saved
+                    // state. EMNR will start fresh from clean samples.
+                    int[,] savedNRCapture = savedNR;
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(700);
+                        BeginInvoke(new MethodInvoker(() =>
+                        {
+                            if (!chkPower.Checked) return; // user already powered off
+                            for (int rxIdx = 0; rxIdx < 2; rxIdx++)
+                            {
+                                for (int sub = 0; sub < 2; sub++)
+                                {
+                                    var dsp = radio.GetDSPRX(rxIdx, sub);
+                                    if (dsp == null) continue;
+                                    int packed = savedNRCapture[rxIdx, sub];
+                                    dsp.Force = true; // ensure DSP-side push regardless of cache state
+                                    if ((packed & 1) != 0) dsp.RXANR1Run = 1;
+                                    if ((packed & 2) != 0) dsp.RXANR2Run = 1;
+                                    if ((packed & 4) != 0) dsp.RXANR3Run = 1;
+                                    if ((packed & 8) != 0) dsp.RXANR4Run = 1;
+                                    dsp.Force = false;
+                                    powerOnLog($"NR-RESTORE: rx={rxIdx} sub={sub} restored=0x{packed:X}");
+                                }
+                            }
+                        }));
+                    });
+
+                    // Re-assert xPA state now that the radio is powered.
+                    // On app restart, chkExternalPA.Checked gets restored
+                    // from DB but any SetPA command fired before power-on
+                    // was dropped (radio not connected yet). Without this
+                    // the UI shows xPA enabled while the hardware PA is
+                    // still disabled until user toggles the button twice.
+                    if (chkExternalPA.Checked)
+                        NetworkIO.nativeSunSDRSetPA(1);
+
+                    // Re-assert RX/TX antennas now that the radio is powered.
+                    // SunSDRInit (called during NetworkIO setup as part of
+                    // power-on) memsets the entire `sdr` struct and resets
+                    // sdr.currentRxAntenna/currentTxAntenna to 1 (= wire byte
+                    // 0x01 = physical A2 on HF). SunSDRPowerOn then applies
+                    // those defaults to the wire, leaving the radio on A2
+                    // for both directions even though the UI shows the user's
+                    // saved selection from the database.
+                    //
+                    // Push the saved per-band antennas now (radio is up,
+                    // sdr.powered=1, wire commands actually go through), using
+                    // the same direct nativeSunSDRSet{Rx,Tx}Antenna pattern
+                    // the band-switch handler at console.cs:46921 uses.
+                    // Push TX first (cached for next MOX), RX last so the live
+                    // wire selection lands on the RX antenna.
+                    if (!IsSetupFormNull)
+                    {
+                        SunSdrAntenna txAnt = (SunSdrAntenna)SetupForm.GetTXAntenna(_tx_band);
+                        int txWire = SunSdrAntennaSpec.WireValueFor(txAnt, _tx_band, true);
+                        if (txWire > 0)
+                        {
+                            powerOnLog($"Re-assert TX antenna: band={_tx_band} ant={txAnt} wire={txWire}");
+                            NetworkIO.nativeSunSDRSetTxAntenna(txWire);
+                        }
+
+                        SunSdrAntenna rxAnt = (SunSdrAntenna)SetupForm.GetRXAntenna(RX1Band);
+                        int rxWire = SunSdrAntennaSpec.WireValueFor(rxAnt, RX1Band, false);
+                        if (rxWire > 0)
+                        {
+                            powerOnLog($"Re-assert RX antenna: band={RX1Band} ant={rxAnt} wire={rxWire}");
+                            NetworkIO.nativeSunSDRSetAntenna(rxWire);
+                        }
+                    }
+
+                    // Re-assert other state that SunSDRInit/SunSDRPowerOn
+                    // resets to non-trivial defaults (sentinels or 0). Same
+                    // bug class as antenna/PA/preamp/mic-source above —
+                    // SunSDRInit's `memset(&sdr, 0, ...)` clobbers any value
+                    // C# cached pre-Power-On, and SunSDRPowerOn re-resets a
+                    // few fields. Push them now while the radio is up so the
+                    // wire state actually reflects the user's saved settings.
+
+                    // Mode: SunSDRPowerOn resets sdr.currentMode to -1
+                    // ("needs to be set" sentinel). Push the current RX1
+                    // demod mode so the radio's bandpass / mode-specific
+                    // tuning matches what the UI shows.
+                    NetworkIO.nativeSunSDRSetMode((int)RX1DSPMode);
+                    powerOnLog($"Re-assert mode: RX1DSPMode={RX1DSPMode}");
+
+                    // RX2 enable: SunSDRPowerOn captures desired_rx2 from
+                    // sdr.currentRX2Enabled BEFORE resetting it to 0, then
+                    // calls SunSDRSetRX2 if non-zero. That works only if C#
+                    // pushed RX2 state between SunSDRInit and SunSDRPowerOn.
+                    // Re-assert defensively in case the timing slips.
+                    NetworkIO.nativeSunSDRSetRX2(rx2_enabled ? 1 : 0);
+                    powerOnLog($"Re-assert RX2: enabled={rx2_enabled}");
+
+                    // VFO frequencies: SunSDRPowerOn resets currentRx1FreqHz
+                    // / currentRx2FreqHz / currentTxFreqHz to 0. Push current
+                    // VFO values so the radio is definitely on the saved
+                    // frequencies. Same VFOfreq wrapper the band-switch
+                    // handler uses (console.cs:46950).
+                    NetworkIO.VFOfreq(0, RX1DDSFreq, 0);
+                    if (rx2_enabled)
+                        NetworkIO.VFOfreq(3, RX2DDSFreq, 0);
+                    powerOnLog($"Re-assert VFO: RX1={RX1DDSFreq} MHz, RX2={(rx2_enabled ? RX2DDSFreq.ToString() : "off")} MHz");
+
+                    // Re-assert the preamp/ATT state to whatever the combo
+                    // shows. The startup macro always sends 0x05=0x83 (+10 dB
+                    // preamp); without this re-assert, the radio sticks at
+                    // +10 dB regardless of the user's saved combo value.
+                    // Calling the SelectedIndexChanged handler directly
+                    // reads comboPreamp.Text and pushes the matching wire
+                    // byte via nativeSunSDRSetPreampAtt().
+                    powerOnLog($"Re-assert preamp/ATT: comboPreamp.Text='{comboPreamp.Text}'");
+                    comboPreamp_SelectedIndexChanged(this, EventArgs.Empty);
+
+                    // Re-assert mic source. The init macro already fires
+                    // OP 0x21 with sdr.currentMicSource baked in, so this
+                    // is redundant on the first power-on — but it's cheap
+                    // and guards against any session where currentMicSource
+                    // was changed at runtime and the radio missed it.
+                    NetworkIO.nativeSunSDRSetMicSource(_sunsdr_mic_source);
+
+                    // Start the hardware PTT poll timer. It gates internally
+                    // on power + mic_ptt_disabled, so it's safe to leave
+                    // running for the rest of the session.
+                    _hwPttLastState = -1;   // re-prime from current state
+                    EnsureHwPttTimerStarted();
+                }
 
                 DataFlowing = true;
+                powerOnLog("=== Power-On COMPLETE === DataFlowing=true; NR-restore Task in flight at T+700ms");
                 SetupForm.UpdateGeneraHardware();
                 SetMicGain();
                 chkQSK_CheckStateChanged(this, EventArgs.Empty);
@@ -27849,66 +29035,46 @@ namespace Thetis
             }
             else
             {
+                // ============================================================
+                // Power-OFF teardown — REORDERED 2026-04-26 (k0koz).
+                //
+                // Old order (consumer-LAST) caused two visible problems:
+                //   (1) Underflow spike on every Power-Off because VAC was
+                //       still running while WDSP+Audio.Stop tore down for
+                //       up to ~500ms with nothing to feed it.
+                //   (2) Suspected contributor to nvwgf2umx D3D11 heap-
+                //       corruption on app exit — UI poller threads were
+                //       reading from WDSP/specRX buffers that the audio
+                //       teardown had already started invalidating.
+                //
+                // New order (consumer-FIRST):
+                //   STAGE 1 — Stop VAC consumers (no more sample demand)
+                //   STAGE 2 — Join UI / poller threads (no more buffer reads)
+                //   STAGE 3 — Other UI / form cleanup (CWX, button states, colors)
+                //   STAGE 4 — Stop processors (WDSP RX channels, mixer, DDCs)
+                //   STAGE 5 — Stop source (Audio.Stop -> 0x02 + join IQ thread + ASIO)
+                //
+                // Net: by the time Audio.Stop's blocking thread-joins run,
+                // nothing downstream is reading or writing audio buffers,
+                // so no underflows accumulate and no race is possible
+                // between teardown and a still-active poller.
+                // ============================================================
                 DataFlowing = false;
                 SetupForm.TestIMD = false;
 
-                if (HaveSync) //fix
-                {
-                    WDSP.SetChannelState(WDSP.id(0, 0), 0, 1);
-                    if (radio.GetDSPRX(0, 1).Active) WDSP.SetChannelState(WDSP.id(0, 1), 0, 1);
-                    if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 0, 1);
-                }
-
-                UpdateAAudioMixerStates();
-                UpdateDDCs(rx2_enabled);
-
-                if (m_frmCWXForm != null && !m_frmCWXForm.IsDisposed)
-                    m_frmCWXForm.StopEverything(chkPower.Checked); //[2.10.3]MW0LGE
-
-                chkMOX.Checked = false;
-                chkMOX.Enabled = false;
-                chkTUN.Checked = false;
-                chkTUN.Enabled = false;
-                chk2TONE.Checked = false;  // MW0LGE_21a
-                chk2TONE.Enabled = false;
-
-                if (serialPTT != null)  // let go of serial port
-                {
-                    serialPTT.Destroy();
-                    serialPTT = null;
-                }
-
-                chkVFOLock.Enabled = false;
-                chkVFOBLock.Enabled = false; //[2.10.3.7]MW0LGE
-
-                chkPower.BackColor = SystemColors.Control;
-                txtVFOAFreq.ForeColor = vfo_text_dark_color;
-                txtVFOAMSD.ForeColor = vfo_text_dark_color;
-                txtVFOALSD.ForeColor = vfo_text_dark_color;
-                UpdateVFOASub();
-
-                txtVFOBFreq.ForeColor = vfo_text_dark_color;
-                txtVFOBMSD.ForeColor = vfo_text_dark_color;
-                txtVFOBLSD.ForeColor = vfo_text_dark_color;
-                txtVFOBBand.ForeColor = band_text_dark_color;
-
-                timer_peak_text.Enabled = false;
-
-                //NetworkIO.StopAudio();
-                Audio.Stop();
-
+                // -------- STAGE 1: stop CONSUMERS first --------
                 if (vac_enabled)
                 {
                     ivac.SetIVACrun(0, 0);
                     ivac.StopAudioIVAC(0);
                 }
-
                 if (vac2_enabled)
                 {
                     ivac.SetIVACrun(1, 0);
                     ivac.StopAudioIVAC(1);
                 }
 
+                // -------- STAGE 2: stop UI / poller THREADS --------
                 if (multimeter_thread != null)
                 {
                     multimeter_thread.Join(Math.Max(meter_delay, meter_dig_delay) + 50);
@@ -27977,6 +29143,53 @@ namespace Thetis
                     ATUTunetokenSource.Cancel();
                 }
 
+                // -------- STAGE 3: other UI / form cleanup --------
+                if (m_frmCWXForm != null && !m_frmCWXForm.IsDisposed)
+                    m_frmCWXForm.StopEverything(chkPower.Checked); //[2.10.3]MW0LGE
+
+                chkMOX.Checked = false;
+                chkMOX.Enabled = false;
+                chkTUN.Checked = false;
+                chkTUN.Enabled = false;
+                chk2TONE.Checked = false;  // MW0LGE_21a
+                chk2TONE.Enabled = false;
+
+                if (serialPTT != null)  // let go of serial port
+                {
+                    serialPTT.Destroy();
+                    serialPTT = null;
+                }
+
+                chkVFOLock.Enabled = false;
+                chkVFOBLock.Enabled = false; //[2.10.3.7]MW0LGE
+
+                chkPower.BackColor = SystemColors.Control;
+                txtVFOAFreq.ForeColor = vfo_text_dark_color;
+                txtVFOAMSD.ForeColor = vfo_text_dark_color;
+                txtVFOALSD.ForeColor = vfo_text_dark_color;
+                UpdateVFOASub();
+
+                txtVFOBFreq.ForeColor = vfo_text_dark_color;
+                txtVFOBMSD.ForeColor = vfo_text_dark_color;
+                txtVFOBLSD.ForeColor = vfo_text_dark_color;
+                txtVFOBBand.ForeColor = band_text_dark_color;
+
+                timer_peak_text.Enabled = false;
+
+                // -------- STAGE 4: stop PROCESSORS (WDSP, mixer, DDCs) --------
+                if (HaveSync) //fix
+                {
+                    WDSP.SetChannelState(WDSP.id(0, 0), 0, 1);
+                    if (radio.GetDSPRX(0, 1).Active) WDSP.SetChannelState(WDSP.id(0, 1), 0, 1);
+                    if (radio.GetDSPRX(1, 0).Active) WDSP.SetChannelState(WDSP.id(2, 0), 0, 1);
+                }
+
+                UpdateAAudioMixerStates();
+                UpdateDDCs(rx2_enabled);
+
+                // -------- STAGE 5: stop SOURCE (radio + read thread + ASIO) --------
+                //NetworkIO.StopAudio();
+                Audio.Stop();
             }
 
             panelVFOAHover.Invalidate();
@@ -28140,6 +29353,26 @@ namespace Thetis
                         default:
 
                             break;
+                    }
+                    break;
+                case RadioProtocol.SUNSDR:
+                    if (chkPower.Checked)
+                    {
+                        /*
+                         * SunSDR currently exposes RX1, optional RX2, and a single TX
+                         * monitor stream to the Thetis mixer. Treat it like the always-
+                         * active Ethernet monitor path so MON/DUP/VAC monitor routing
+                         * stays alive during MOX.
+                         */
+                        cmaster.MONMixState = true;
+                        cmaster.SetAAudioMixStates((void*)0, 0, RX1 + RX1S + RX2 + MON, RX1 + RX1S + RX2EN + MON);
+                        cmaster.SetAntiVOXSourceStates(0, RX1 + RX1S + RX2, RX1 + RX1S + RX2EN);
+                    }
+                    else
+                    {
+                        cmaster.MONMixState = false;
+                        cmaster.SetAAudioMixStates((void*)0, 0, RX1 + RX1S + RX2 + MON, 0);
+                        cmaster.SetAntiVOXSourceStates(0, RX1 + RX1S + RX2, 0);
                     }
                     break;
             }
@@ -28690,7 +29923,21 @@ namespace Thetis
                 {
                     //[2.10.3.12]MW0LGE added incase anything needs to close down instantly irrespective of console closing
                     //PSform is an example of this, as the timer1/2 threads get blocked on UI calls as the main UI thread is busy closing down
-                    await run_console_closing_handlers_async();
+                    //
+                    // Bound the wait with a 3s timeout so a hung subscriber
+                    // (seen 2026-04-24: close stuck on "Please wait" dialog
+                    // forever because the await here never returned). The
+                    // only subscriber is PSForm's onConsoleClosingAsync which
+                    // does await Task.Delay(100), so 3s is enormous headroom.
+                    // If it times out we log and call Close() anyway — better
+                    // a slightly messy close than a stuck app.
+                    var handlersTask = run_console_closing_handlers_async();
+                    var timeoutTask = Task.Delay(3000);
+                    var winner = await Task.WhenAny(handlersTask, timeoutTask);
+                    if (winner == timeoutTask)
+                    {
+                        shutdownLogStringToPath("Console_Closing: handlers TIMED OUT after 3s — continuing close anyway");
+                    }
 
                     //then try again to close the console
                     Close();
@@ -28754,10 +30001,37 @@ namespace Thetis
             GanymedeCATEnabled = false;
 
             shutdownLogStringToPath("Before power off");
-            if (chkPower.Checked == true)  // If we're quitting without first clicking off the "Power" button            
+            if (chkPower.Checked == true)  // If we're quitting without first clicking off the "Power" button
                 chkPower.Checked = false;
 
             Thread.Sleep(100); //[2.10.3.12]MW0LGE give some time for power down
+
+            // SUNSDR-only: SunSDRPowerOff (called above via
+            // chkPower.Checked=false) only stops the audio-path
+            // threads (read thread, keepalive, ASIO). The TX pacing
+            // thread, the async-log writer thread, the native UDP
+            // ctrl/stream sockets, the 1 ms timer-resolution boost
+            // and the PowerRequest handle are STILL ALIVE and will
+            // not be cleaned up unless we explicitly call
+            // SunSDRDestroy here. Without this call, the OS forcibly
+            // tears them down at process termination — async-logger
+            // mid-write into a closed file handle, sockets being
+            // ripped while a recv() is pending, etc. Strong candidate
+            // for the 0xc0000374 heap corruption seen during
+            // nvwgf2umx (NVIDIA D3D11) teardown later in this same
+            // close path. Doing it here, BEFORE Display.ShutdownDX2D
+            // below, ensures no SunSDR native thread is still touching
+            // memory while D3D11 is releasing its surfaces.
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                shutdownLogStringToPath("Before nativeSunSDRDestroy");
+                try { NetworkIO.nativeSunSDRDestroy(); }
+                catch (Exception ex)
+                {
+                    shutdownLogStringToPath("nativeSunSDRDestroy threw: " + ex.Message);
+                }
+                shutdownLogStringToPath("After nativeSunSDRDestroy");
+            }
 
             if (psform != null)
             {
@@ -28930,6 +30204,26 @@ namespace Thetis
                 System.Diagnostics.Debug.WriteLine($"Shutdown log write failed: {ex.Message} path={AppDataPath}");
             }
         }
+
+        // Power-On flow tracer — gated on the same -logshutdown CLI arg
+        // as shutdownLogStringToPath so release builds don't drop a
+        // poweron_log.txt in %AppData%. Output is ms-precision, written
+        // to %AppData%\poweron_log.txt only when the user
+        // explicitly opts in to diagnostic logging.
+        private void powerOnLog(string entry)
+        {
+            if (!m_bLogShutdown || string.IsNullOrEmpty(entry)) return;
+            try
+            {
+                long ms = System.Diagnostics.Stopwatch.GetTimestamp() * 1000L
+                          / System.Diagnostics.Stopwatch.Frequency;
+                using (StreamWriter w = File.AppendText(AppDataPath + "\\poweron_log.txt"))
+                {
+                    w.WriteLine("{0:O} qpc_ms={1} | {2}", DateTime.UtcNow, ms, entry);
+                }
+            }
+            catch { }
+        }
         private void removeShutdownLog()
         {
             try
@@ -28941,6 +30235,28 @@ namespace Thetis
         }
         private void comboPreamp_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            // SunSDR2 DX has its own 4-state front-end (cycle button in
+            // EESDR3). Short-circuit the HPSDR step-atten / Alex preamp
+            // paths and just push the state to the radio via OP 0x05.
+            // state index maps to wire byte: 0 -> 0x80 (-20 dB atten),
+            // 1 -> 0x81 (-10 dB), 2 -> 0x82 (bypass), 3 -> 0x83 (+10 dB preamp).
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                int sunsdrState = -1;
+                switch (comboPreamp.Text)
+                {
+                    case "+10dB": sunsdrState = 3; break;
+                    case "0dB":   sunsdrState = 2; break;
+                    case "-10dB": sunsdrState = 1; break;
+                    case "-20dB": sunsdrState = 0; break;
+                }
+                if (sunsdrState >= 0)
+                    NetworkIO.nativeSunSDRSetPreampAtt(sunsdrState);
+                if (comboPreamp.Focused)
+                    btnHidden.Focus();
+                return;
+            }
+
             PreampMode mode = PreampMode.FIRST;
             bool exit = false;
 
@@ -29257,6 +30573,7 @@ namespace Thetis
                 m_fDrivePower = new_pwr;
                 DrivePowerChangedHandlers?.Invoke(1, new_pwr, TUN || chk2TONE.Checked); // only rx1
             }
+
         }
 
         private void ptbAF_Scroll(object sender, System.EventArgs e)
@@ -29659,11 +30976,36 @@ namespace Thetis
                 ChangeTuneStepUp();
         }
 
+        private void UpdateMONButton()
+        {
+            bool cw = Audio.TXDSPMode == DSPMode.CWL || Audio.TXDSPMode == DSPMode.CWU;
+            chkMON.Text = !chkMON.Checked || cw ? "MON" : (Audio.MonitorPre ? "PRE" : "POST");
+            chkMON.AccessibleName = "Transmit monitor " + (!chkMON.Checked ? "off" : (cw ? "CW sidetone" : (Audio.MonitorPre ? "pre processing" : "post processing")));
+            toolTip1.SetToolTip(chkMON, "Transmit monitor: Off -> PRE -> POST -> Off.\nPRE: selected input before MIC gain, VOX/DEXP, EQ and compression.\nPOST: after TX processing and ALC, before modulation.\nCW: toggle sidetone. Use TX AF to set monitor volume.");
+        }
+
+        private void chkMON_Click(object sender, EventArgs e)
+        {
+            if (Audio.TXDSPMode == DSPMode.CWL || Audio.TXDSPMode == DSPMode.CWU)
+                chkMON.Checked = !chkMON.Checked;
+            else if (!chkMON.Checked)
+            {
+                Audio.MonitorPre = true;
+                chkMON.Checked = true;
+            }
+            else if (Audio.MonitorPre)
+                Audio.MonitorPre = false;
+            else
+                chkMON.Checked = false;
+            UpdateMONButton();
+        }
+
         private void chkMON_CheckedChanged(object sender, System.EventArgs e)
         {
             bool oldMON = Audio.MON;
 
             Audio.MON = chkMON.Checked;
+            UpdateMONButton();
 
             if (chkMON.Checked)
                 chkMON.BackColor = button_selected_color;
@@ -29705,6 +31047,20 @@ namespace Thetis
 
         private void HdwMOXChanged(bool tx, double freq)
         {
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+            {
+                // SunSDR native TX scaling reads prn->tx[0].drive_level. That state is
+                // initialized to 0 on startup, so refresh the current Thetis-selected
+                // power source before the native TX/TUNE transition.
+                if (tx)
+                {
+                    if (chkTUN.Checked)
+                        ptbTune_Scroll(this, EventArgs.Empty);
+                    else
+                        ptbPWR_Scroll(this, EventArgs.Empty);
+                }
+            }
+
             if (tx)
             {
                 if (m_bQSOResetTimerOnMox) QSOTimerReset();
@@ -29718,6 +31074,15 @@ namespace Thetis
 
                 UpdateRX1DDSFreq();
                 UpdateRX2DDSFreq();
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR && freq > 0.0)
+                {
+                    // Thetis can leave tx_dds_freq_mhz stale after an RX band change.
+                    // Use the MOX transition's validated TX frequency so the radio does
+                    // not key on the previous band. Do not apply the SSB tune-tone
+                    // pitch offset here; the SunSDR primary frequency command is the
+                    // actual RF frequency the radio should transmit on.
+                    tx_dds_freq_mhz = freq;
+                }
                 UpdateTXDDSFreq();
 
                 Band lo_band = BandByFreq(XVTRForm.TranslateFreq(VFOAFreq), rx1_xvtr_index, current_region);
@@ -29740,6 +31105,48 @@ namespace Thetis
                 }
                 UpdateTRXAnt(); //[2.3.10.6]MW0LGE added
 
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    // Key SunSDR only after Thetis has pushed the band-dependent
+                    // TX frequency and antenna state. Keying first caused a
+                    // post-PTT frequency/antenna burst, heard as an extra relay
+                    // click on bands where TX/RX cached state differed.
+                    NetworkIO.nativeSunSDRSetMode((int)Audio.TXDSPMode);
+                    if (!_tuning || !chkTUN.Checked)
+                        NetworkIO.nativeSunSDRSetTune(0);
+
+                    // Tell NetworkIO the current SunSDR TUNE-in-SSB offset so
+                    // EVERY TX freq push (this one, Thetis's own refresh
+                    // ~230 ms later, VFO change during TX, etc.) is shifted
+                    // consistently. The actual shift is applied inside
+                    // NetworkIO.VFOfreq for all tx=1 writes.
+                    int sunsdr_tune_offset_hz = 0;
+                    if (chkTUN.Checked)
+                    {
+                        switch (Audio.TXDSPMode)
+                        {
+                            case DSPMode.LSB:
+                            case DSPMode.DIGL:
+                                sunsdr_tune_offset_hz = +cw_pitch;
+                                break;
+                            case DSPMode.USB:
+                            case DSPMode.DIGU:
+                                sunsdr_tune_offset_hz = -cw_pitch;
+                                break;
+                            // CW/AM/FM TUNE already lands at dial — no shift.
+                        }
+                    }
+                    NetworkIO.SunSDRTuneFreqOffsetHz = sunsdr_tune_offset_hz;
+
+                    // Force a fresh TX freq push so the shift takes effect
+                    // immediately at PTT-on (otherwise the radio would key
+                    // on the pre-offset freq from the most recent VFOfreq).
+                    double sunsdr_tx_dial_mhz = freq > 0.0 ? freq : TXFreq;
+                    NetworkIO.VFOfreq(0, sunsdr_tx_dial_mhz, 1);
+
+                    NetworkIO.nativeSunSDRSetPTT(1);
+                }
+
                 NetworkIO.SetTRXrelay(1);
                 if (cw_fw_keyer &&
                     (RX1DSPMode == DSPMode.CWL || RX1DSPMode == DSPMode.CWU) &&
@@ -29753,6 +31160,18 @@ namespace Thetis
             }
             else // rx
             {
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    // Drop RF before restoring RX-side VFO/antenna state.
+                    if (!_tuning)
+                        NetworkIO.nativeSunSDRSetTune(chkTUN.Checked ? 1 : 0);
+                    NetworkIO.nativeSunSDRSetPTT(0);
+                    // Clear TUNE freq offset so the next voice TX starts
+                    // at the unshifted dial. (Re-applied at the next PTT-on
+                    // if TUNE is still engaged.)
+                    NetworkIO.SunSDRTuneFreqOffsetHz = 0;
+                }
+
                 if (m_bQSOTimerDuringMoxOnly && m_bQSOTimerRunning) QSOTimerRunning = false;
 
                 NetworkIO.SetPttOut(0);
@@ -30223,7 +31642,15 @@ namespace Thetis
                 //
                 if (!chkTUN.Checked && !chk2TONE.Checked) ptbPWR_Scroll(this, EventArgs.Empty); //MW0LGE_22b need this here as we may have adjusted power via tune slider when not in mox
                 //
-                if (!full_duplex)       // shutdown RX1 and RX2 as appropriate
+                // SunSDR: skip the RX1/RX2 WDSP channel shutdown during MOX.
+                // The SunSDR IQ stream is bidirectional and continues feeding RX
+                // during TX. If we shut down the WDSP RX channel, fexchange0 stops
+                // producing audio output, which starves the VAC mixer Input 0.
+                // The VAC mixer thread blocks on WaitForMultipleObjects waiting for
+                // Input 0 data, xvac_out never fires, rmatchOUT drains, and the
+                // PortAudio output callback gets ~1562 underflows/sec during TX.
+                // The actual RX audio is muted at the mixer level by SetIVACmox.
+                if (!full_duplex && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
                 {
                     bool RX1_shutdown = chkVFOATX.Checked || (chkVFOBTX.Checked && !RX2Enabled) || mute_rx1_on_vfob_tx || (chkVFOBTX.Checked && HardwareSpecific.Model == HPSDRModel.ANAN10E && psform.PSEnabled);
                     bool RX2_shutdown = (chkVFOBTX.Checked && RX2Enabled) || mute_rx2_on_vfoa_tx || (chkVFOATX.Checked && RX2Enabled && HardwareSpecific.Model == HPSDRModel.ANAN10E && psform.PSEnabled);
@@ -30723,9 +32150,48 @@ namespace Thetis
             get { return _tune_pulse_enabled; }
             set { _tune_pulse_enabled = value; }
         }
+
+        private void LogSunSDRTuneAudioState(string label, int newPwr)
+        {
+            if (NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                return;
+
+            var tx = radio.GetDSPTX(0);
+            NetworkIO.nativeSunSDRLogTuneState(
+                label,
+                chkTUN.Checked ? 1 : 0,
+                chkMOX.Checked ? 1 : 0,
+                _tuning ? 1 : 0,
+                _mox ? 1 : 0,
+                (int)Audio.TXDSPMode,
+                (int)tx.CurrentDSPMode,
+                tx.TXPostGenRun,
+                tx.TXPostGenMode,
+                tx.TXPostGenToneFreq,
+                tx.TXPostGenToneMag,
+                _tune_pulse_enabled ? 1 : 0,
+                _tune_pulse_on ? 1 : 0,
+                (int)_tuneDrivePowerSource,
+                ptbPWR.Value,
+                newPwr);
+        }
+
         private async void chkTUN_CheckedChanged(object sender, System.EventArgs e)
         {
             bool oldTune = _tuning; //MW0LGE_21k9d
+
+            // SUNSDR: trace each handler entry so we can tell how many user
+            // TUNE clicks happened vs whether any came from a non-click source
+            // (programmatic, auto-recovery, stuck UI). User noted 12 recorded
+            // attempts when only 10 were consciously initiated; this line
+            // answers the provenance question.
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+            {
+                string senderName = (sender == null) ? "null" :
+                    (sender is System.Windows.Forms.Control c ? c.Name : sender.GetType().Name);
+                NetworkIO.nativeSunSDRLogTrace(
+                    $"chkTUN_CheckedChanged sender={senderName} chkTUN.Checked={chkTUN.Checked} oldTune={oldTune} powerOn={PowerOn} chkMOX.Checked={chkMOX.Checked}");
+            }
 
             if (chkTUN.Checked)
             {
@@ -30785,8 +32251,23 @@ namespace Thetis
 
                     radio.GetDSPTX(0).TXPostGenMode = 0;
                     radio.GetDSPTX(0).TXPostGenToneMag = MAX_TONE_MAG;
-                    radio.GetDSPTX(0).TXPostGenRun = 1;
+                    // SunSDR + AM/FM: suppress the PostGen modulation tone
+                    // during TUNE so the AM modulator emits a pure carrier
+                    // at dial (classic AM-radio TUNE). With a tone, the AM
+                    // modulator produces carrier + sidebands at ±cw_pitch,
+                    // which a narrow-mode receiver sees as a spike offset
+                    // from the dial. Pure-carrier TUNE lands exactly on
+                    // dial with no sidebands. For FM, the equivalent clean
+                    // TUNE is unmodulated carrier at dial (no deviation).
+                    bool sunsdr_am_fm_tune =
+                        NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR &&
+                        (Audio.TXDSPMode == DSPMode.AM ||
+                         Audio.TXDSPMode == DSPMode.SAM ||
+                         Audio.TXDSPMode == DSPMode.DSB ||
+                         Audio.TXDSPMode == DSPMode.FM);
+                    radio.GetDSPTX(0).TXPostGenRun = sunsdr_am_fm_tune ? 0 : 1;
                 }
+                LogSunSDRTuneAudioState("TUNE_ON_POSTGEN_SET", -1);
 
                 // remember old power //MW0LGE_22b
                 if (_tuneDrivePowerSource == DrivePowerSource.FIXED)
@@ -30799,7 +32280,8 @@ namespace Thetis
                     PWRSliderLimitEnabled = false;
                     PWR = new_pwr;
                 }
-                //          
+                LogSunSDRTuneAudioState("TUNE_ON_POST_POWER", new_pwr);
+                //
 
                 old_dsp_mode = radio.GetDSPTX(0).CurrentDSPMode;                // save current mode
                 switch (old_dsp_mode)
@@ -30826,7 +32308,16 @@ namespace Thetis
                     await Task.Run(() => ATUTune(ATUTunetoken), ATUTunetoken);
                 }
 
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    LogSunSDRTuneAudioState("TUNE_ON_PRE_NATIVE_TUNE", new_pwr);
+                    NetworkIO.nativeSunSDRSetMode((int)Audio.TXDSPMode);
+                    NetworkIO.nativeSunSDRSetTune(1);
+                    LogSunSDRTuneAudioState("TUNE_ON_POST_NATIVE_TUNE_PRE_MOX", new_pwr);
+                }
+
                 chkMOX.Checked = true;
+                LogSunSDRTuneAudioState("TUNE_ON_AFTER_CHKMOX", new_pwr);
 
                 await Task.Delay(100); // MW0LGE_21k8
                 // go for it
@@ -30851,10 +32342,19 @@ namespace Thetis
             {
                 _tune_pulse_on = false;
 
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    LogSunSDRTuneAudioState("TUNE_OFF_PRE_NATIVE_TUNE", -1);
+                    NetworkIO.nativeSunSDRSetTune(0);
+                    LogSunSDRTuneAudioState("TUNE_OFF_POST_NATIVE_TUNE", -1);
+                }
+
                 chkMOX.Checked = false;                                         // we're done
+                LogSunSDRTuneAudioState("TUNE_OFF_AFTER_CHKMOX", -1);
                 await Task.Delay(100);
 
                 radio.GetDSPTX(0).TXPostGenRun = 0;
+                LogSunSDRTuneAudioState("TUNE_OFF_POSTGEN_STOP", -1);
 
                 chkTUN.BackColor = SystemColors.Control;
 
@@ -32539,12 +34039,13 @@ namespace Thetis
                 case DSPMode.AM:
                 case DSPMode.SAM:
                 case DSPMode.FM:
-                    if (chkTUN.Checked) tx_freq -= cw_pitch * 1e-6;
+                    if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                        tx_freq -= cw_pitch * 1e-6;
                     break;
                 case DSPMode.USB:
                 case DSPMode.DIGU:
                 case DSPMode.DSB:
-                    if (chkTUN.Checked)
+                    if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
                     {
                         if (RX1IsOn60mChannel() && current_region == FRSRegion.US)
                             tx_freq -= (ModeFreqOffset(_rx1_dsp_mode) + cw_pitch * 1e-6);
@@ -32554,7 +34055,8 @@ namespace Thetis
                     break;
                 case DSPMode.LSB:
                 case DSPMode.DIGL:
-                    if (chkTUN.Checked) tx_freq += cw_pitch * 1e-6;
+                    if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                        tx_freq += cw_pitch * 1e-6;
                     break;
             }
 
@@ -32953,11 +34455,13 @@ namespace Thetis
                     case DSPMode.FM:
                     case DSPMode.USB:
                     case DSPMode.DIGU:
-                        if (chkTUN.Checked) freq -= (double)cw_pitch * 1e-6;
+                        if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                            freq -= (double)cw_pitch * 1e-6;
                         break;
                     case DSPMode.LSB:
                     case DSPMode.DIGL:
-                        if (chkTUN.Checked) freq += (double)cw_pitch * 1e-6;
+                        if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                            freq += (double)cw_pitch * 1e-6;
                         break;
                     case DSPMode.CWL:
                         freq += (double)cw_pitch * 0.0000010;
@@ -33504,11 +35008,13 @@ namespace Thetis
                 case DSPMode.USB:
                 case DSPMode.DIGU:
                 case DSPMode.DSB:
-                    if (chkTUN.Checked) tx_freq -= (double)cw_pitch * 1e-6;
+                    if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                        tx_freq -= (double)cw_pitch * 1e-6;
                     break;
                 case DSPMode.LSB:
                 case DSPMode.DIGL:
-                    if (chkTUN.Checked) tx_freq += (double)cw_pitch * 1e-6;
+                    if (chkTUN.Checked && NetworkIO.CurrentRadioProtocol != RadioProtocol.SUNSDR)
+                        tx_freq += (double)cw_pitch * 1e-6;
                     break;
                 case DSPMode.CWL:
                     if (!cw_fw_keyer || (cw_fw_keyer && chkTUN.Checked))
@@ -34775,6 +36281,9 @@ namespace Thetis
         {
             if (new_mode == DSPMode.FIRST || new_mode == DSPMode.LAST) return;
 
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                NetworkIO.nativeSunSDRSetMode((int)new_mode);
+
             //MW0LGE_21d
             Band oldBand = RX1Band;
             //            
@@ -34790,8 +36299,14 @@ namespace Thetis
 
             if (new_mode == DSPMode.FM)                             // set DSP samplerate
             {
-                WDSP.SetDSPSamplerate(WDSP.id(0, 0), 192000);
-                WDSP.SetDSPSamplerate(WDSP.id(0, 1), 192000);
+                // Broadcast FM is 200 kHz wide — 192 kHz DSP rate has
+                // Nyquist at 96 kHz so the upper sidebands alias and
+                // the audio sounds like garbled noise with intermittent
+                // breakthroughs. Bump to 384 kHz (Nyquist 192 kHz) when
+                // on a broadcast-FM frequency; keep 192 kHz for NFM.
+                int fm_rate = IsBroadcastFMFreq(VFOAFreq) ? 384000 : 192000;
+                WDSP.SetDSPSamplerate(WDSP.id(0, 0), fm_rate);
+                WDSP.SetDSPSamplerate(WDSP.id(0, 1), fm_rate);
             }
             else
             {
@@ -35170,7 +36685,12 @@ namespace Thetis
                     break;
                 case DSPMode.FM:
                     radModeFMN.BackColor = button_selected_color;
-                    DisableAllFilters();
+                    // Upstream Thetis disabled all filter presets on FM
+                    // because the preset table had no FM entries — the
+                    // buttons would be blank and do nothing. With real
+                    // FM presets now populated (see InitFilterPresets),
+                    // keep them active so users can pick width.
+                    EnableAllFilters();
 
                     if (_nr_selected[0] > 0)
                     {
@@ -35183,14 +36703,23 @@ namespace Thetis
                     {
                         if (!_rx_only && chkPower.Checked)
                             chkMOX.Enabled = true;
-                        chkMON.Checked = false;
-                        chkMON.Enabled = false;
+                        if (!HardwareSpecific.IsCurrentSunSDRModel)
+                        {
+                            chkMON.Checked = false;
+                            chkMON.Enabled = false;
+                        }
                         chkBIN.Checked = false;
                         chkBIN.Enabled = false;
                         SetTXFilters(new_mode, tx_filter_low, tx_filter_high);
 
                         ptbFMMic_Scroll(this, EventArgs.Empty);
                     }
+
+                    // Pass FM explicitly — _rx1_dsp_mode isn't assigned
+                    // to `new_mode` until later in SetRX1Mode, so calling
+                    // without the argument would see the OLD mode and
+                    // the guard would bail.
+                    ApplyFMDSPForCurrentBand(DSPMode.FM);
 
                     break;
                 case DSPMode.AM:
@@ -35323,22 +36852,22 @@ namespace Thetis
             radFilterVar2.Text = rx1_filters[(int)new_mode].GetName(Filter.VAR2);
 
             _rx1_dsp_mode = new_mode;
+            UpdateMONButton();
 
             SelectModeDependentPanel(); //MW0LGE_21k9d
 
-            if (_rx1_dsp_mode != DSPMode.SPEC && _rx1_dsp_mode != DSPMode.FM && _rx1_dsp_mode != DSPMode.DRM)
+            // FM was grouped with SPEC/DRM here to force Filter.NONE
+            // because the FM preset table was blank. With real FM presets
+            // populated, use the preset's LastFilter like every other
+            // voice/CW mode so switching to FM auto-selects a sensible
+            // filter width (F3 = 15k by default).
+            if (_rx1_dsp_mode != DSPMode.SPEC && _rx1_dsp_mode != DSPMode.DRM)
             {
                 RX1Filter = rx1_filters[(int)new_mode].LastFilter;
             }
             else
             {
                 RX1Filter = Filter.NONE;
-
-                if (_rx1_dsp_mode == DSPMode.FM)
-                {
-                    int halfBw = (int)(radio.GetDSPRX(0, 0).RXFMDeviation + radio.GetDSPRX(0, 0).RXFMHighCut); //[2.10.3.4]MW0LGE
-                    UpdateRX1Filters(-halfBw, halfBw);
-                }
             }
             BINToolStripMenuItem.Enabled = chkBIN.Enabled;
 
@@ -35458,6 +36987,8 @@ namespace Thetis
                     mode = DSPMode.CWU;
                     break;
                 case "FM":
+                case "NFM":
+                case "WFM":
                     mode = DSPMode.FM;
                     break;
                 case "AM":
@@ -35954,7 +37485,12 @@ namespace Thetis
         private int _oldFilterShiftCentre = -1;
         private void ptbFilterShift_Scroll(object sender, System.EventArgs e)
         {
-            if (_rx1_dsp_mode == DSPMode.DRM || _rx1_dsp_mode == DSPMode.SPEC || _rx1_dsp_mode == DSPMode.FM) return; // unable to shift in these modes
+            // Upstream blocked shift for FM because there was no user-facing
+            // filter on FM (no presets, width locked to FMDeviation). With
+            // real FM presets populated the shift is meaningful again — it
+            // offsets the IF bandpass which helps when an adjacent signal
+            // leaks into the passband. Only SPEC and DRM remain locked.
+            if (_rx1_dsp_mode == DSPMode.DRM || _rx1_dsp_mode == DSPMode.SPEC) return;
 
             _ignore_filter_shift_update = true;
             SelectRX1VarFilter();
@@ -36147,7 +37683,9 @@ namespace Thetis
 
         private void ptbFilterWidth_Scroll(object sender, System.EventArgs e)
         {
-            if (_rx1_dsp_mode == DSPMode.DRM || _rx1_dsp_mode == DSPMode.SPEC || _rx1_dsp_mode == DSPMode.FM) return; // unable to shift in these modes
+            // Same reasoning as ptbFilterShift_Scroll — FM now has user-
+            // selectable filter widths so unlock the width slider for it.
+            if (_rx1_dsp_mode == DSPMode.DRM || _rx1_dsp_mode == DSPMode.SPEC) return;
 
             MouseEventArgs mouseEvent = e as MouseEventArgs;
             bool bScrollUp = mouseEvent != null ? mouseEvent.Delta >= 0 : false;
@@ -37822,6 +39360,7 @@ namespace Thetis
                 bool ok = ARP.PlayFileViaWDSP("quick", file, 0, out string error);
                 if (!ok)
                 {
+                    MessageBox.Show("Quick Play failed: " + (string.IsNullOrEmpty(error) ? "unknown" : error), "Quick Play", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     ckQuickPlay.CheckedChanged -= ckQuickPlay_CheckedChanged;
                     ckQuickPlay.Checked = false;
                     ckQuickPlay.CheckedChanged += ckQuickPlay_CheckedChanged;
@@ -37875,6 +39414,7 @@ namespace Thetis
                 string filename = ARP.RecordToFileFromWDSP("quick", file, 0, out string error, true, details);
                 if(string.IsNullOrEmpty(filename))
                 {
+                    MessageBox.Show("Quick Record failed: " + (string.IsNullOrEmpty(error) ? "unknown" : error), "Quick Record", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     ckQuickRec.CheckedChanged -= ckQuickRec_CheckedChanged;
                     ckQuickRec.Checked = false;
                     ckQuickRec.CheckedChanged += ckQuickRec_CheckedChanged;
@@ -38270,8 +39810,29 @@ namespace Thetis
                 //wave cmaster.CMSetSRXWaveRecordRun(1);
                 chkRX2.Checked = value;
 
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                    NetworkIO.nativeSunSDRSetRX2(value ? 1 : 0);
+
                 if (rx2_enabled)
                 {
+                    if (vfob_dsp_mode != DSPMode.FIRST && vfob_dsp_mode != DSPMode.LAST)
+                        RX2DSPMode = vfob_dsp_mode;
+
+                    switch (vfob_filter)
+                    {
+                        case Filter.F1:
+                        case Filter.F2:
+                        case Filter.F3:
+                        case Filter.F4:
+                        case Filter.F5:
+                        case Filter.F6:
+                        case Filter.F7:
+                        case Filter.VAR1:
+                        case Filter.VAR2:
+                            RX2Filter = vfob_filter;
+                            break;
+                    }
+
                     old_rx1_display_mode = comboDisplayMode.Text;
 
                     UpdateDDCs(rx2_enabled);
@@ -38634,13 +40195,19 @@ namespace Thetis
         {
             if (new_mode == DSPMode.FIRST || new_mode == DSPMode.LAST) return;
 
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                NetworkIO.nativeSunSDRSetMode((int)new_mode);
+
             Band oldBand = RX2Band; //MW0LGE_21d
             DSPMode old_mode = _rx2_dsp_mode;
 
             WDSP.SetChannelState(WDSP.id(2, 0), 0, 1);              // turn OFF the DSP channel
 
             if (new_mode == DSPMode.FM)                             // set DSP samplerate
-                WDSP.SetDSPSamplerate(WDSP.id(2, 0), 192000);
+            {
+                int fm_rate = IsBroadcastFMFreq(VFOBFreq) ? 384000 : 192000;
+                WDSP.SetDSPSamplerate(WDSP.id(2, 0), fm_rate);
+            }
             else
                 WDSP.SetDSPSamplerate(WDSP.id(2, 0), 48000);
 
@@ -38944,8 +40511,11 @@ namespace Thetis
                             if (!_rx_only && chkPower.Checked)
                                 chkMOX.Enabled = true;
 
-                            chkMON.Checked = false;
-                            chkMON.Enabled = false;
+                            if (!HardwareSpecific.IsCurrentSunSDRModel)
+                            {
+                                chkMON.Checked = false;
+                                chkMON.Enabled = false;
+                            }
 
                             SetTXFilters(new_mode, tx_filter_low, tx_filter_high);
 
@@ -38964,8 +40534,11 @@ namespace Thetis
                         if (!_rx_only && chkPower.Checked)
                             chkMOX.Enabled = true;
 
-                        chkMON.Checked = false;
-                        chkMON.Enabled = false;
+                        if (!HardwareSpecific.IsCurrentSunSDRModel)
+                        {
+                            chkMON.Checked = false;
+                            chkMON.Enabled = false;
+                        }
 
                         SetTXFilters(new_mode, tx_filter_low, tx_filter_high);
 
@@ -38983,8 +40556,11 @@ namespace Thetis
                         if (!_rx_only && chkPower.Checked)
                             chkMOX.Enabled = true;
 
-                        chkMON.Checked = false;
-                        chkMON.Enabled = false;
+                        if (!HardwareSpecific.IsCurrentSunSDRModel)
+                        {
+                            chkMON.Checked = false;
+                            chkMON.Enabled = false;
+                        }
 
                         SetTXFilters(new_mode, tx_filter_low, tx_filter_high);
 
@@ -39068,23 +40644,13 @@ namespace Thetis
             radRX2FilterVar2.Text = rx2_filters[(int)new_mode].GetName(Filter.VAR2);
 
             _rx2_dsp_mode = new_mode;
+            UpdateMONButton();
+            vfob_dsp_mode = new_mode;
 
-            if (_rx2_dsp_mode != DSPMode.FM && _rx2_dsp_mode != DSPMode.DRM)
-            {
-                RX2Filter = rx2_filters[(int)new_mode].LastFilter;
-            }
-            else
-            {
-                RX2Filter = Filter.NONE;
-
-                if (_rx2_dsp_mode == DSPMode.FM)
-                {
-                    int halfBw = (int)(radio.GetDSPRX(1, 0).RXFMDeviation + radio.GetDSPRX(1, 0).RXFMHighCut); //[2.10.3.4]MW0LGE
-                    UpdateRX2Filters(-halfBw, halfBw);
-                }
-            }
-
-            if (_rx2_dsp_mode != DSPMode.FM && _rx2_dsp_mode != DSPMode.DRM)
+            // With FM filter presets now populated (see InitFilterPresets),
+            // FM takes the preset LastFilter path like every other voice
+            // mode — only SPEC/DRM still need Filter.NONE.
+            if (_rx2_dsp_mode != DSPMode.DRM)
             {
                 RX2Filter = rx2_filters[(int)new_mode].LastFilter;
             }
@@ -39143,6 +40709,8 @@ namespace Thetis
                     SetRX2Mode(DSPMode.CWU);
                     break;
                 case "FM":
+                case "NFM":
+                case "WFM":
                     SetRX2Mode(DSPMode.FM);
                     break;
                 case "AM":
@@ -39310,6 +40878,7 @@ namespace Thetis
             }
 
             rx2_filter = new_filter;
+            vfob_filter = new_filter;
 
             low = rx2_filters[(int)_rx2_dsp_mode].GetLow(new_filter);
             high = rx2_filters[(int)_rx2_dsp_mode].GetHigh(new_filter);
@@ -41396,11 +42965,99 @@ namespace Thetis
                 comboFMCTCSS.Items.Add(d.ToString("f1"));
         }
 
+        // Front-panel FM memory dropdown is bound to a view of the memory
+        // list sorted by frequency ascending, and shows "<freq>  <name>" so
+        // users can identify a repeater without memorising call-signs.
+        // The view is kept in sync with the underlying list via ListChanged.
+        private System.ComponentModel.BindingList<MemoryRecord> _fmMemoryView;
+        private bool _fmMemoryViewHooked;
+        // Reverse lookup flag: when true, programmatic changes to
+        // comboFMMemory.SelectedIndex do NOT fire RecallMemory (we're just
+        // showing which memory matches the currently-tuned VFO freq, not
+        // overwriting the user's current mode/CTCSS/drive state).
+        private bool _suppressMemoryRecall;
+
         private void InitMemoryFrontPanel()
         {
-            comboFMMemory.DataSource = MemoryList.List;
-            comboFMMemory.DisplayMember = "Name";
+            if (!_fmMemoryViewHooked)
+            {
+                MemoryList.List.ListChanged += (sndr, ev) => RebuildFmMemoryView();
+                _fmMemoryViewHooked = true;
+            }
+            RebuildFmMemoryView();
+            comboFMMemory.DisplayMember = "DisplayFreqName";
             comboFMMemory.ValueMember = "Name";
+        }
+
+        private void RebuildFmMemoryView()
+        {
+            if (_fmMemoryView == null)
+                _fmMemoryView = new System.ComponentModel.BindingList<MemoryRecord>();
+
+            // Preserve the user's current selection across the rebuild so the
+            // combo doesn't jump to item 0 every time a memory is added/removed.
+            MemoryRecord keep = comboFMMemory.SelectedItem as MemoryRecord;
+
+            _fmMemoryView.RaiseListChangedEvents = false;
+            _fmMemoryView.Clear();
+            foreach (var m in MemoryList.List.OrderBy(m => m.RXFreq).ThenBy(m => m.Name ?? ""))
+                _fmMemoryView.Add(m);
+            _fmMemoryView.RaiseListChangedEvents = true;
+            _fmMemoryView.ResetBindings();
+
+            if (comboFMMemory.DataSource != _fmMemoryView)
+                comboFMMemory.DataSource = _fmMemoryView;
+
+            if (keep != null)
+            {
+                int idx = _fmMemoryView.IndexOf(keep);
+                if (idx >= 0) comboFMMemory.SelectedIndex = idx;
+            }
+        }
+
+        // Reverse memory lookup: when VFO A lands on a frequency that matches
+        // an imported memory, auto-select that memory in the front-panel
+        // combo so the user sees "K3FBI — Quantico" without having to pick
+        // from the dropdown. Does NOT call RecallMemory — mode / CTCSS / drive
+        // are left untouched; this is a display-only hint.
+        // Matching tolerance is 100 Hz, which covers RepeaterBook's 4-decimal
+        // precision vs the 6-decimal VFO display.
+        private void UpdateMemoryComboFromVFO(double vfoFreqMHz)
+        {
+            if (comboFMMemory == null) return;
+            if (_fmMemoryView == null || _fmMemoryView.Count == 0) return;
+
+            // If the currently-selected memory already matches the VFO
+            // frequency (within tolerance), leave it alone. This matters
+            // when multiple memories share the same RXFreq (e.g. several
+            // repeaters on 147.375): the user may have deliberately
+            // cycled to a specific one via the Up/Down memory buttons
+            // or the combo itself, and blindly snapping back to the
+            // first-by-index match would undo that selection.
+            MemoryRecord current = comboFMMemory.SelectedItem as MemoryRecord;
+            if (current != null && Math.Abs(current.RXFreq - vfoFreqMHz) < 0.0001) return;
+
+            MemoryRecord match = null;
+            foreach (var m in _fmMemoryView)
+            {
+                if (Math.Abs(m.RXFreq - vfoFreqMHz) < 0.0001)
+                {
+                    match = m;
+                    break;
+                }
+            }
+
+            int target;
+            if (match != null)
+                target = _fmMemoryView.IndexOf(match);
+            else
+                target = -1;
+
+            if (comboFMMemory.SelectedIndex == target) return;  // already there
+
+            _suppressMemoryRecall = true;
+            try { comboFMMemory.SelectedIndex = target; }
+            finally { _suppressMemoryRecall = false; }
         }
 
         private void radFMDeviation2kHz_CheckedChanged(object sender, EventArgs e)
@@ -41617,7 +43274,13 @@ namespace Thetis
             VFOAFreq = record.RXFreq;
             RX1DSPMode = record.DSPMode;
 
-            TuneStepIndex = TuneStepLookup(record.TuneStep);
+            // Intentionally NOT restoring TuneStepIndex from the memory
+            // record. Tune step is a workflow preference (e.g. 10 Hz for
+            // HF tuning, 500 Hz or 1 kHz for band-hopping), not a
+            // per-repeater attribute — forcing it on every memory recall
+            // kept resetting the user's live choice to whatever was
+            // baked into the imported record ("10Hz" by default).
+            // TuneStepIndex = TuneStepLookup(record.TuneStep);
 
             if (record.DSPMode == DSPMode.FM)
             {
@@ -41677,7 +43340,7 @@ namespace Thetis
         {
             if (comboFMMemory.Items.Count == 0 || comboFMMemory.SelectedItem == null) return;
             MemoryRecord recordToRestore = new MemoryRecord((MemoryRecord)comboFMMemory.SelectedItem);
-            if (!initializing)
+            if (!initializing && !_suppressMemoryRecall)
                 RecallMemory(recordToRestore);
         }
 
@@ -41894,6 +43557,13 @@ namespace Thetis
         private String[] on_off_preamp_settings = { "0dB", "-20dB" };
         private String[] anan100d_preamp_settings = { "0dB", "-10dB", "-20dB", "-30dB" };
         private String[] alex_preamp_settings = { "-10db", "-20db", "-30db", "-40db", "-50db" };
+        // SunSDR2 DX exposes 4 front-end states through a single cycle
+        // button in EESDR3: +10 dB preamp / 0 dB bypass / -10 dB atten /
+        // -20 dB atten. Listed high→low so a linear dropdown pick also
+        // tracks descending gain. Wire protocol: OP 0x05 with payload
+        // 0x83 / 0x82 / 0x81 / 0x80 respectively (confirmed by capture
+        // session 20260418_2041xx, see att-wfm-findings.md).
+        private String[] sunsdr_preamp_settings = { "+10dB", "0dB", "-10dB", "-20dB" };
 
         public void SetComboPreampForHPSDR()
         {
@@ -41948,6 +43618,14 @@ namespace Thetis
                 case HPSDRModel.ANVELINAPRO3:
                     // case HPSDRModel.REDPITAYA: // DH1KLM: removed for compatibility reasons
                     comboPreamp.Items.AddRange(anan100d_preamp_settings);
+                    break;
+                case HPSDRModel.SUNSDR2DX:
+                case HPSDRModel.SUNSDR2PRO:
+                    // Four-state cycle: +10 dB preamp / 0 / -10 / -20. Wire
+                    // delivery is handled in comboPreamp_SelectedIndexChanged
+                    // via nativeSunSDRSetPreampAtt (OP 0x05). See
+                    // docs/protocol/att-wfm-findings.md.
+                    comboPreamp.Items.AddRange(sunsdr_preamp_settings);
                     break;
             }
 
@@ -44037,6 +45715,8 @@ namespace Thetis
                     radModeCWU.Checked = true;
                     break;
                 case "FM":
+                case "NFM":
+                case "WFM":
                     radModeFMN.Checked = true;
                     break;
                 case "AM":
@@ -44084,6 +45764,8 @@ namespace Thetis
                     radRX2ModeCWU.Checked = true;
                     break;
                 case "FM":
+                case "NFM":
+                case "WFM":
                     radRX2ModeFMN.Checked = true;
                     break;
                 case "AM":
@@ -45147,9 +46829,25 @@ namespace Thetis
         }
 
         private bool _puresignal_auto_old_state = false;
+        private bool _ps_sunsdr_checkbox_forced_off_logged = false;
         private void chkFWCATUBypass_CheckedChanged(object sender, EventArgs e)
         {
             //PS-A button
+
+            // SUNSDR: PureSignal is hard-disabled. If the user managed to tick
+            // this while SUNSDR is active, force it back off (will re-enter this
+            // handler once from the programmatic uncheck). Never allow PS-A
+            // AutoCal or feedback state to arm for SUNSDR.
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR && chkFWCATUBypass.Checked)
+            {
+                if (!_ps_sunsdr_checkbox_forced_off_logged)
+                {
+                    _ps_sunsdr_checkbox_forced_off_logged = true;
+                    System.Diagnostics.Debug.Print("PS_GATE_CHECKBOX_SUNSDR_FORCE_OFF: forcing chkFWCATUBypass unchecked for SUNSDR protocol");
+                }
+                chkFWCATUBypass.Checked = false;
+                return;
+            }
 
             bool oldState = psform.AutoCalEnabled;
             psform.AutoCalEnabled = chkFWCATUBypass.Checked;
@@ -46214,6 +47912,57 @@ namespace Thetis
             SetNewRXAntenna(1);
         }
 
+        // Relabel + filter the status-bar antenna dropdowns for SunSDR2 DX
+        // using the physical-ant convention:
+        //
+        //   menu item 20 / 16  -> slot 1 -> A1  (valid on 2m only)
+        //   menu item 19 / 15  -> slot 2 -> A2  (valid on HF/6m only)
+        //   menu item 18 / 17  -> slot 3 -> A3  (valid on HF/6m only)
+        //
+        // Drop is called on model init (once) to set the text, and on
+        // band change to toggle visibility. Non-SunSDR protocols keep
+        // whatever labels the designer gave them.
+        public void ConfigureSunSdrStatusBarAntennaMenu()
+        {
+            if (!HardwareSpecific.IsCurrentSunSDRModel) return;
+
+            // RX dropdown: item20 / item19 / item18 -> slots 1 / 2 / 3
+            toolStripMenuItem20.Text = SunSdrAntennaSpec.DisplayName(SunSdrAntenna.A1);
+            toolStripMenuItem19.Text = SunSdrAntennaSpec.DisplayName(SunSdrAntenna.A2);
+            toolStripMenuItem18.Text = SunSdrAntennaSpec.DisplayName(SunSdrAntenna.A3);
+            // TX dropdown: item16 / item15 / item17 -> slots 1 / 2 / 3
+            toolStripMenuItem16.Text = SunSdrAntennaSpec.DisplayName(SunSdrAntenna.A1);
+            toolStripMenuItem15.Text = SunSdrAntennaSpec.DisplayName(SunSdrAntenna.A2);
+            toolStripMenuItem17.Text = SunSdrAntennaSpec.DisplayName(SunSdrAntenna.A3);
+
+            UpdateSunSdrStatusBarAntennaMenuVisibility();
+        }
+
+        public void UpdateSunSdrStatusBarAntennaMenuVisibility()
+        {
+            if (!HardwareSpecific.IsCurrentSunSDRModel) return;
+
+            Band rxBand = RX1Band;
+            Band txBand = TXBand;
+
+            bool rxA1 = SunSdrAntennaSpec.IsValidForBand(SunSdrAntenna.A1, rxBand);
+            bool rxA2 = SunSdrAntennaSpec.IsValidForBand(SunSdrAntenna.A2, rxBand);
+            bool rxA3 = SunSdrAntennaSpec.IsValidForBand(SunSdrAntenna.A3, rxBand);
+            bool txA1 = SunSdrAntennaSpec.IsValidForBand(SunSdrAntenna.A1, txBand);
+            bool txA2 = SunSdrAntennaSpec.IsValidForBand(SunSdrAntenna.A2, txBand);
+            bool txA3 = SunSdrAntennaSpec.IsValidForBand(SunSdrAntenna.A3, txBand);
+
+            // RX: item20=A1 item19=A2 item18=A3
+            toolStripMenuItem20.Visible = rxA1;
+            toolStripMenuItem19.Visible = rxA2;
+            toolStripMenuItem18.Visible = rxA3;
+
+            // TX: item16=A1 item15=A2 item17=A3
+            toolStripMenuItem16.Visible = txA1;
+            toolStripMenuItem15.Visible = txA2;
+            toolStripMenuItem17.Visible = txA3;
+        }
+
         private void Console_Shown(object sender, EventArgs e)
         {
             //attempt to fix ampview on top issue
@@ -46228,7 +47977,7 @@ namespace Thetis
             initGpuUsageMeter();
 
             // update check - quiet GitHub releases query, status-bar label only when a newer release exists
-            //initUpdateCheck(); // disabled on request: no red "Update available" label in the status bar
+            //initUpdateCheck(); // SunSDR build: the check compares against main SDR-VST3 releases, so it always flagged a red "Update available"
 
             // set the multifunction setting to the status bar
             DataTable multitable = AndromedaSet.Tables["Multifunction Settings"];
@@ -46245,6 +47994,11 @@ namespace Thetis
             toolStripStatusLabel_TXInhibit.Width = 18;
             toolStripStatusLabelRXAnt.Width = 90;
             toolStripStatusLabelTXAnt.Width = 90;
+
+            // SunSDR2 DX: relabel the status-bar antenna dropdowns from
+            // default "1 / 2 / 3" to "A1 / A2 / A3", and apply initial
+            // per-band visibility for the current RX / TX bands.
+            ConfigureSunSdrStatusBarAntennaMenu();
             toolStripStatusLabelAndromedaMulti.Width = 140;
 
             toolStripStatusLabel_N1MM.Width = 22;
@@ -46921,7 +48675,74 @@ namespace Thetis
         {
             if (rx != 1) return;
             handleBSFChange(oldBand, newBand, oldMode, newMode, oldFilter, newFilter, oldFreq, newFreq, oldCentreF, newCentreF, oldCTUN, newCTUN, oldZoomSlider, newZoomSlider);
+
+            if (oldBand != newBand &&
+                NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR &&
+                chkPower.Checked)
+            {
+                /*
+                 * SunSDR RX is driven from the settled DDS/centre-frequency path,
+                 * not directly from the visible VFOA number. During a live band
+                 * switch Thetis briefly emits stale old-band writes while it churns
+                 * through the band-stack update. Replay the final settled SunSDR RX
+                 * state here, after SetBand has completed, so the correct DDS state
+                 * wins.
+                 *
+                 * EESDR3-matched lightweight band switch:
+                 *   wire capture of ExpertSDR3 40m -> 20m shows exactly 3 commands
+                 *   in 1 ms total: 0x09 (primary freq), 0x18 (keepalive), 0x08 (DDC
+                 *   companion). No antenna, no PA, no session teardown, no macro
+                 *   replay. The radio handles everything else internally.
+                 *
+                 * The previous implementation here also performed a full
+                 * chkPower off/on cycle (~900 ms delay plus the entire ~500 ms
+                 * power-on macro), which was a workaround for an earlier bug
+                 * where Thetis emitted stale old-band writes mid-change. The
+                 * VFOfreq replay below already handles that case correctly,
+                 * so the power cycle is no longer needed — and was the source
+                 * of the 3-4 s band-switch delay, the extra relay clicks
+                 * from replayed 0x15/0x24 commands, and the Bug 3 17m
+                 * saturation caused by the delayed refresh burst toggling
+                 * antenna/PA during stream resumption.
+                 */
+                BeginInvoke(new MethodInvoker(() =>
+                {
+                    if (!chkPower.Checked)
+                        return;
+
+                    // Push only the direction that matches the current
+                    // MOX state. The shared 0x15 selector means pushing
+                    // the "other" direction here would stomp the live
+                    // antenna. The non-pushed direction takes effect on
+                    // the next MOX transition via UpdateAlexAntSelection.
+                    if (SetupForm != null)
+                    {
+                        if (!_mox)
+                        {
+                            SunSdrAntenna ant = (SunSdrAntenna)SetupForm.GetRXAntenna(newBand);
+                            int rxWire = SunSdrAntennaSpec.WireValueFor(ant, newBand, false);
+                            if (rxWire > 0)
+                                NetworkIO.nativeSunSDRSetAntenna(rxWire);
+                        }
+                        else
+                        {
+                            SunSdrAntenna ant = (SunSdrAntenna)SetupForm.GetTXAntenna(newBand);
+                            int txWire = SunSdrAntennaSpec.WireValueFor(ant, newBand, true);
+                            if (txWire > 0)
+                                NetworkIO.nativeSunSDRSetTxAntenna(txWire);
+                        }
+                    }
+
+                    NetworkIO.nativeSunSDRSetMode((int)RX1DSPMode);
+                    NetworkIO.VFOfreq(0, RX1DDSFreq, 0);
+
+                    if (RX2Enabled)
+                        NetworkIO.VFOfreq(3, RX2DDSFreq, 0);
+                }));
+            }
         }
+
+        private bool _sunSDRBandPowerRecyclePending = false;
         private void OnEntryAdd(BandStackFilter bsf)
         {
             if (!BandStackManager.Ready) return;
@@ -47234,6 +49055,16 @@ namespace Thetis
             {
                 // set the panel rx1 only
                 BandType bt = BandStackManager.GetBandTypeForFrequency(VFOAFreq);
+
+                // On SunSDR2 DX the 2m button lives on the HF band panel
+                // (enabled for this model only — see ApplySunSDRSpecificUI).
+                // B2M is globally classified as BandType.VHF which would
+                // swap the panel to the legacy XVTR VHF slots and hide
+                // our 2 button. Keep the HF panel visible instead.
+                if (HardwareSpecific.IsCurrentSunSDRModel &&
+                    newBand == Band.B2M)
+                    bt = BandType.HF;
+
                 switch (bt)
                 {
                     case BandType.GEN:
@@ -47395,6 +49226,15 @@ namespace Thetis
         {
             bool old_in_use = _xpa_in_use;
 
+            // SunSDR2 DX: show the xPA button unconditionally so users
+            // don't have to first enable an OC Control pin before the
+            // button appears on the main window. They can then click the
+            // button to engage external PA control whenever they want.
+            // (The HPSDR path still gates visibility on OC Control pin
+            //  configuration as before.)
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+                bShow = true;
+
             if (bShow)
             {
                 // move the quick play/rec buttons down
@@ -47433,6 +49273,11 @@ namespace Thetis
             {
                 int bits = Penny.getPenny().UpdateExtCtrl(lo_band, lo_bandb, _mox, _tuning, SetupForm.TestIMD, chkExternalPA.Checked);
                 if (!IsSetupFormNull) SetupForm.UpdateOCLedStrip(_mox, bits);
+            }
+
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+            {
+                NetworkIO.nativeSunSDRSetPA(chkExternalPA.Checked ? 1 : 0);
             }
 
             _xpa_enabled = chkExternalPA.Checked;
@@ -48144,6 +49989,7 @@ namespace Thetis
                 m_fTuneDrivePower = new_pwr;
                 DrivePowerChangedHandlers?.Invoke(1, new_pwr, true); // only rx1, and always tune
             }
+
         }
         private DrivePowerSource _tuneDrivePowerSource = DrivePowerSource.DRIVE_SLIDER;
         private DrivePowerSource _2ToneDrivePowerSource = DrivePowerSource.DRIVE_SLIDER;
@@ -48352,7 +50198,18 @@ namespace Thetis
             else
             {
                 if (chkTUN.Checked)
-                    radio.GetDSPTX(0).TXPostGenRun = 1;
+                {
+                    // Keep PostGen off for SunSDR AM/FM TUNE — pure carrier
+                    // at dial, no sidebands. (Same reasoning as chkTUN
+                    // engagement handler above.)
+                    bool sunsdr_am_fm_tune =
+                        NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR &&
+                        (Audio.TXDSPMode == DSPMode.AM ||
+                         Audio.TXDSPMode == DSPMode.SAM ||
+                         Audio.TXDSPMode == DSPMode.DSB ||
+                         Audio.TXDSPMode == DSPMode.FM);
+                    radio.GetDSPTX(0).TXPostGenRun = sunsdr_am_fm_tune ? 0 : 1;
+                }
                 Audio.RadioVolume = (double)Math.Min((target_volts / 0.8), 1.0);
             }
 
@@ -50176,6 +52033,12 @@ namespace Thetis
                     }                    
                     sProto = "2";
                     sSupportedProtocol = NetworkIO.Protocol2VersionSupported.ToString("0\\.0");
+                }
+                else if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    sFW = NetworkIO.GetSunSDRVersionText();
+                    sProto = NetworkIO.GetSunSDRProtocolText();
+                    sSupportedProtocol = "";
                 }
                 else
                 {
@@ -52928,7 +54791,7 @@ namespace Thetis
             {
                 case OtherButtonId.POWER: PowerOn = !PowerOn; break;
                 case OtherButtonId.RX_2: RX2Enabled = !RX2Enabled; break;
-                case OtherButtonId.MON: MON = !MON; break;
+                case OtherButtonId.MON: chkMON_Click(this, EventArgs.Empty); break;
                 case OtherButtonId.TUN: TUN = !TUN; break;
                 case OtherButtonId.MOX: MOX = !MOX; break;
                 case OtherButtonId.TWOTON: TwoTone = !TwoTone; break;
@@ -53091,6 +54954,7 @@ namespace Thetis
                 case OtherButtonId.SR_48000: DoGeneralSettingAction(rx, OtherButtonId.SR_48000, true); break;
                 case OtherButtonId.SR_96000: DoGeneralSettingAction(rx, OtherButtonId.SR_96000, true); break;
                 case OtherButtonId.SR_192000: DoGeneralSettingAction(rx, OtherButtonId.SR_192000, true); break;
+                case OtherButtonId.SR_312500: DoGeneralSettingAction(rx, OtherButtonId.SR_312500, true); break;
                 case OtherButtonId.SR_384000: DoGeneralSettingAction(rx, OtherButtonId.SR_384000, true); break;
                 case OtherButtonId.SR_768000: DoGeneralSettingAction(rx, OtherButtonId.SR_768000, true); break;
                 case OtherButtonId.SR_1536000: DoGeneralSettingAction(rx, OtherButtonId.SR_1536000, true); break;
@@ -53319,6 +55183,7 @@ namespace Thetis
                 case OtherButtonId.SR_48000:
                 case OtherButtonId.SR_96000:
                 case OtherButtonId.SR_192000:
+                case OtherButtonId.SR_312500:
                 case OtherButtonId.SR_384000:
                 case OtherButtonId.SR_768000:
                 case OtherButtonId.SR_1536000:
@@ -53668,6 +55533,7 @@ namespace Thetis
                 case OtherButtonId.SR_48000: return GetGeneralSetting(rx, OtherButtonId.SR_48000);
                 case OtherButtonId.SR_96000: return GetGeneralSetting(rx, OtherButtonId.SR_96000);
                 case OtherButtonId.SR_192000: return GetGeneralSetting(rx, OtherButtonId.SR_192000);
+                case OtherButtonId.SR_312500: return GetGeneralSetting(rx, OtherButtonId.SR_312500);
                 case OtherButtonId.SR_384000: return GetGeneralSetting(rx, OtherButtonId.SR_384000);
                 case OtherButtonId.SR_768000: return GetGeneralSetting(rx, OtherButtonId.SR_768000);
                 case OtherButtonId.SR_1536000: return GetGeneralSetting(rx, OtherButtonId.SR_1536000);
@@ -54303,6 +56169,7 @@ namespace Thetis
                 case OtherButtonId.SR_48000: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 48000; break;
                 case OtherButtonId.SR_96000: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 96000; break;
                 case OtherButtonId.SR_192000: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 192000; break;
+                case OtherButtonId.SR_312500: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 312500; break;
                 case OtherButtonId.SR_384000: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 384000; break;
                 case OtherButtonId.SR_768000: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 768000; break;
                 case OtherButtonId.SR_1536000: if (!IsSetupFormNull) return SetupForm.GetHWSampleRate(rx) == 1536000; break;
@@ -54377,8 +56244,9 @@ namespace Thetis
                 SetGeneralSetting(n, OtherButtonId.SR_48000, GetGeneralSetting(n, OtherButtonId.SR_48000));
                 SetGeneralSetting(n, OtherButtonId.SR_96000, GetGeneralSetting(n, OtherButtonId.SR_96000));
                 SetGeneralSetting(n, OtherButtonId.SR_192000, GetGeneralSetting(n, OtherButtonId.SR_192000));
+                SetGeneralSetting(n, OtherButtonId.SR_312500, GetGeneralSetting(n, OtherButtonId.SR_312500));
                 SetGeneralSetting(n, OtherButtonId.SR_384000, GetGeneralSetting(n, OtherButtonId.SR_384000));
-                SetGeneralSetting(n, OtherButtonId.SR_768000, GetGeneralSetting(n, OtherButtonId.SR_768000));                
+                SetGeneralSetting(n, OtherButtonId.SR_768000, GetGeneralSetting(n, OtherButtonId.SR_768000));
                 SetGeneralSetting(n, OtherButtonId.SR_1536000, GetGeneralSetting(n, OtherButtonId.SR_1536000));
 
                 setATTGeneralSetting(n);
@@ -54493,6 +56361,8 @@ namespace Thetis
                     if (!IsSetupFormNull) SetupForm.SetHWSampleRate(rx, 96000); return true;
                 case OtherButtonId.SR_192000:
                     if (!IsSetupFormNull) SetupForm.SetHWSampleRate(rx, 192000); return true;
+                case OtherButtonId.SR_312500:
+                    if (!IsSetupFormNull) SetupForm.SetHWSampleRate(rx, 312500); return true;
                 case OtherButtonId.SR_384000:
                     if (!IsSetupFormNull) SetupForm.SetHWSampleRate(rx, 384000); return true;
                 case OtherButtonId.SR_768000:
@@ -54506,12 +56376,13 @@ namespace Thetis
         public void SetHWSampleRateSetting(int rx, int rate)
         {
             if (rx < 1 || rx > 2) return;
-            if (!(rate == 48000 || rate == 96000 || rate == 192000 || rate == 384000 || rate == 768000 || rate == 1536000)) return;
+            if (!(rate == 48000 || rate == 96000 || rate == 192000 || rate == 312500 || rate == 384000 || rate == 768000 || rate == 1536000)) return;
 
             //set all off
             SetGeneralSetting(rx, OtherButtonId.SR_48000, false);
             SetGeneralSetting(rx, OtherButtonId.SR_96000, false);
             SetGeneralSetting(rx, OtherButtonId.SR_192000, false);
+            SetGeneralSetting(rx, OtherButtonId.SR_312500, false);
             SetGeneralSetting(rx, OtherButtonId.SR_384000, false);
             SetGeneralSetting(rx, OtherButtonId.SR_768000, false);
             SetGeneralSetting(rx, OtherButtonId.SR_1536000, false);
@@ -54526,6 +56397,9 @@ namespace Thetis
                     break;
                 case 192000:
                     SetGeneralSetting(rx, OtherButtonId.SR_192000, true);
+                    break;
+                case 312500:
+                    SetGeneralSetting(rx, OtherButtonId.SR_312500, true);
                     break;
                 case 384000:
                     SetGeneralSetting(rx, OtherButtonId.SR_384000, true);

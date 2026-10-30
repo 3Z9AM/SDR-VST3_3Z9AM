@@ -19,6 +19,8 @@
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <NoWarn>WFO1000;SYSLIB0011;NU1510</NoWarn>
+    <!-- crash reports show Console\setup.cs instead of the build machine path -->
+    <PathMap>$(MSBuildProjectDirectory)\=Console\</PathMap>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
@@ -146,7 +148,6 @@
     <Compile Include="Setup.AGCAttack.cs" />
     <Compile Include="Console.DiversityMini.cs" />
     <Compile Include="DiversityCross.cs" />
-    <Compile Include="DiversityDecimator.cs" />
     <Compile Include="DiversityForm.Phase.cs" />
     <Compile Include="Display.Pan3DPhase.cs" />
     <Compile Include="DiversityPhaseWaterfall.cs">
@@ -239,6 +240,8 @@
       <DependentUpon>frmVariablePicker.cs</DependentUpon>
     </Compile>
     <Compile Include="HPSDR\clsRadioDiscovery.cs" />
+    <Compile Include="HPSDR\clsSunSDRDiscovery.cs" />
+    <Compile Include="HPSDR\SunSdrAntenna.cs" />
     <Compile Include="TimeOutTimerManager.cs" />
     <Compile Include="Firewall.cs" />
     <Compile Include="cmaster.cs" />

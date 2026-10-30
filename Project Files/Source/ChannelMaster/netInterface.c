@@ -24,6 +24,14 @@
 #include "network.h"
 #include "obbuffs.h"
 
+static void sunsdr_trace(const char* msg) {
+	/* Disabled. Was an early-bring-up trace writer to a hard-coded
+	 * absolute path outside the Thetis binary folder. Calibration is
+	 * locked; production builds should not write logs unless the
+	 * primary sdr_logf path in sunsdr.c is enabled. */
+	(void)msg;
+}
+
 #define MDECAY 0.99f;
 const int numInputBuffs = 12;
 
@@ -75,9 +83,14 @@ int StartAudioNative()
 
 		} while (0);
 	}
+	else if (RadioProtocol == SUNSDR)
+	{
+		/* SunSDR: StartReadThread launches its own IQ + keepalive threads */
+		StartReadThread();
+	}
 	else
 	{
-		do { 		
+		do {
 				StartReadThread();
 				prn->hReadThreadInitSem = CreateSemaphore(NULL, 0, 1, NULL);
 				prn->hReadThreadMain = (HANDLE)_beginthreadex(NULL, 0, ReadThreadMain, 0, 0, NULL);
@@ -96,10 +109,11 @@ int StartAudioNative()
 }
 
 PORT
-void StopAudio() 
+void StopAudio()
 {
 	int rc;
-	if (!audio_running) return;
+	sunsdr_trace("StopAudio() called");
+	if (!audio_running) { sunsdr_trace("StopAudio: not running, returning"); return; }
 	audio_running = 0;
 	printf("stop audio called\n");  fflush(stdout);
 	rc = IOThreadStop();

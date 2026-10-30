@@ -28,6 +28,7 @@ warren@wpratt.com
 #include "fldigi_mod.h"
 #include "wsjtx_mod.h"
 
+
 pipe pip  = {0};
 PIPE ppip = &pip;
 
@@ -277,14 +278,18 @@ void xpipe (int stream, int pos, double** buffs)
 			xrecordwave(1, 1, 0, buff);															// wav recorder 1
 			break;
 		case 1: // IQ data
-			xscope(0, 1, buffs[2]);																// scope
-			xvacOUT(0, 2, buffs[2]);															// data to VAC 0
-			xvacOUT(1, 2, buffs[2]);															// data to VAC 1
+		{
+			// Selected PRE/POST audio, or CW sidetone including local RX keying.
+			double* tx_monitor = buffs[2];
+			xscope(0, 1, tx_monitor);															// scope
+			xvacOUT(0, 2, tx_monitor);															// data to VAC 0
+			xvacOUT(1, 2, tx_monitor);															// data to VAC 1
 			for (i = 0; i < pcm->cmRCVR; i++)
-				xtciOUT(i, 2, buffs[2]);														// tx monitor into each TCI rx audio stream
-			xrecordwave(0, 1, 1, buffs[2]);														// wav recorder 0
-			xrecordwave(1, 1, 1, buffs[2]);														// wav recorder 1
+				xtciOUT(i, 2, tx_monitor);														// tx monitor into each TCI rx audio stream
+			xrecordwave(0, 1, 1, tx_monitor);													// wav recorder 0
+			xrecordwave(1, 1, 1, tx_monitor);													// wav recorder 1
 			break;
+		}
 		}
 	}
 	else if (stream == inid(2, 0))	// PowerSDR Stitched Rcvrs, Left side

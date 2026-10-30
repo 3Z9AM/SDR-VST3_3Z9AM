@@ -96,6 +96,8 @@ typedef struct _cmaster
 		int ch_outrate;												// xmtr output rate = tx channel output rate
 		int ch_outsize;												// xmtr output size = tx channel output size
 		double* out[3];												// output buff, per transmitter
+		double* mon_input;
+		double* mon_output;
 		VOX pvox;													// vox, per transmitter
 		void (__stdcall *pushvox)(int channel, int active);			// vox, per transmitter
 		TXGAIN pgain;												// gain block, for Penelope power control & amp protect
@@ -130,6 +132,15 @@ extern __declspec (dllexport) void SendpVstCreateRxChain (void (*Create)(int sam
 extern __declspec (dllexport) void SendpVstCreateTxChain (void (*Create)(int sample_rate, int block_size));
 extern __declspec (dllexport) void SendpVstDestroyRxChain (void (*Destroy)(void));
 extern __declspec (dllexport) void SendpVstDestroyTxChain (void (*Destroy)(void));
+
+// SunSDR2 RX-AF refactor (issue #40): user's RX AF / volume slider sets the
+// per-input gain on the speaker mixer here, instead of being baked into
+// WDSP's RXA panel gain. That keeps VAC RX, TCI RX and the WAV recorder at
+// fixed DSP-output level so digital decoders (Decodium, JTDX, FLDIGI...)
+// don't need the AF slider at ~50% to receive usable audio.
+//   channel : WDSP / aamix input id (== chid(stream, subrx))
+//   gain    : 0.0..1.0 (linear; matches the old SetRXAPanelGain1 contract)
+extern __declspec (dllexport) void SetRXOutputGain (int channel, double gain);
 
 enum AudioCODEC
 {

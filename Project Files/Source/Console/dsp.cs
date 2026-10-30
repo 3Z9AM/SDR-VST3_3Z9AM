@@ -3,7 +3,6 @@
 This file is part of a program that implements a Software-Defined Radio.
 
 Copyright (C) 2013-2017 Warren Pratt, NR0V
-Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -75,6 +74,9 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetChannelState", CallingConvention = CallingConvention.Cdecl)]
         public static extern int SetChannelState(int channel, int state, int dmode);
 
+        [DllImport("wdsp.dll", EntryPoint = "FlushChannelNow", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void FlushChannelNow(int channel);
+
         [DllImport("wdsp.dll", EntryPoint = "SetChannelTDelayUp", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetChannelTDelayUp(int channel, double time);
 
@@ -95,6 +97,9 @@ namespace Thetis
 
         [DllImport("wdsp.dll", EntryPoint = "SetTXAMode", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetTXAMode(int channel, DSPMode mode);
+
+        [DllImport("wdsp.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetTXAMonitorPre(int channel, int pre);
 
         [DllImport("wdsp.dll", EntryPoint = "fexchange0", CallingConvention = CallingConvention.Cdecl)]
         public static extern void fexchange0 (int channel, double* Cin, double* Cout, int* error);
@@ -657,24 +662,6 @@ namespace Thetis
         // diversity per frequency section (wdsp/secdiv.c): mode 0 off, 1 MRC, 2 co-phase
         [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSections", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetEXTDIVSections(int mode, int sections, double tau, int rate, int lo, int hi);
-
-        [DllImport("wdsp.dll", EntryPoint = "GetEXTDIVSectionsWeights", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int GetEXTDIVSectionsWeights(double[] output, int max);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsFine", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsFine(int fine);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsPass2", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsPass2(int on);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsClean", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsClean(int pct);
-
-        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsCleanSens", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetEXTDIVSectionsCleanSens(int s);
-
-        [DllImport("wdsp.dll", EntryPoint = "GetEXTDIVSectionsCleanShare", CallingConvention = CallingConvention.Cdecl)]
-        public static extern double GetEXTDIVSectionsCleanShare();
 
         [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsFreeze", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetEXTDIVSectionsFreeze(int freeze);

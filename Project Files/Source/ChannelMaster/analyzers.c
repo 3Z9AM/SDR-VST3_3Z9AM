@@ -65,6 +65,27 @@ void* create_analyzer_alloc (int m_analyzers, int base_disp)
 // destroy the analyzer allocator; called from cmaster.c
 int destroy_analyzer_alloc ()
 {
+	/* FIRST: stop every analyzer's dispatcher thread that we allocated
+	 * out of this pool. Without this, any analyzer still in 'disp[] != -1'
+	 * state has its sendbuf() thread (analyzer.c) still running and
+	 * iterating over IQ/buffer state — and the rest of destroy_cmaster
+	 * proceeds to destroy_router/destroy_aamix below us, freeing the
+	 * very memory those dispatcher threads are reading from. Result:
+	 * 0xc0000374 heap corruption on app exit, faulting in
+	 * wdsp!sendbuf+0x262 (crash dumps 8988 and 18712, 2026-04-26..27).
+	 *
+	 * DestroyAnalyzer raises end_dispatcher and waits for the dispatcher
+	 * loop to exit cleanly via the existing while-Sleep-1 spin in
+	 * analyzer.c:1454. */
+	for (int i = 0; i < a->m_analyzers; i++)
+	{
+		if (a->disp[i] >= a->base_disp)
+		{
+			DestroyAnalyzer (a->disp[i]);
+			a->disp[i] = -1;
+		}
+	}
+
 	DeleteCriticalSection(&a->cs_update);
 	for (int i = 0; i < 16; i++)
 	{

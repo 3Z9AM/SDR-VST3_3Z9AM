@@ -27,7 +27,6 @@
 //
 //=================================================================
 // Continual modifications Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //=================================================================
 //
 //============================================================================================//
@@ -62,7 +61,7 @@ namespace Thetis
 
             string sBits = Common.Is64Bit ? " x64" : " x86";
 
-            s += " v" + version + "-faza" + sBits;   // diversity phase build (branch faza)
+            s += " v" + version + "-sunsdr" + sBits;   // SunSDR2 build (branch sunsdr)
             s += " (" + VersionInfo.BuildDate + ")<FW>";  //[2.10.2.2]MW0LGE use the auto generated class from pre build event for the BuildDate
 
             // program name is BUILD_NAME itself, not appended again

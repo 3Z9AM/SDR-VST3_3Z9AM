@@ -28,7 +28,6 @@
 //
 //=================================================================
 // Continual modifications Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 //=================================================================
 //
 //============================================================================================//
@@ -353,6 +352,8 @@ namespace Thetis
             btnResetP1ADC_Click(this, EventArgs.Empty);
             //
 
+            //
+
             ThetisSkinService.Version = console.ProductVersion;
 
             updateDiscordState();
@@ -385,7 +386,9 @@ namespace Thetis
             // MW0LGE note: this will allways cause the change event to fire, as the combobox does not contain any default value
             // it is bypassed in the event by use of the initializing flag, and is then
             // forced through in ForceAllEvents. This is the default radio with a blank database.
-            if (comboRadioModel.Text == "") comboRadioModel.Text = "HERMES";
+            // Artemis: SunSDR2 DX is the only supported radio — default to it so
+            // fresh installs skip the model-selection step.
+            if (comboRadioModel.Text == "") comboRadioModel.Text = "SUNSDR2-DX";
             //
 
             labelSavingLoading.Visible = false;// MW0LGE gets shown/hidden by save/cancel/apply
@@ -830,6 +833,17 @@ namespace Thetis
             LogTool.AddLogEntry("        Setup applying settings...", "FORCEALL");
             ForceAllEvents();
 
+            // SunSDR2 DX antenna-tab layout + one-shot legacy→SunSdrAntenna
+            // migration. MUST run AFTER ForceAllEvents() — that call fires
+            // comboRadioModel_SelectedIndexChanged → initHPSDR(), which sets
+            // panelAlexRXXVRTControl.Visible = true. If we ran before that,
+            // initHPSDR() would re-show the middle RX-only XVTR checkbox
+            // grid we just hid.
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                ConfigureSunSDRAntennaButtons();
+            }
+
             //model known, update anything that might have been initialsed without this being known
             if (console.psform != null) console.psform.UpdateWarningSetPk();
 
@@ -1058,7 +1072,7 @@ namespace Thetis
         public void SetHWSampleRate(int rx, int rate)
         {
             if (rx < 1 || rx > 2) return;
-            if (!(rate == 48000 || rate == 96000 || rate == 192000 || rate == 384000 || rate == 768000 || rate == 1536000)) return;
+            if (!(rate == 48000 || rate == 96000 || rate == 192000 || rate == 312500 || rate == 384000 || rate == 768000 || rate == 1536000)) return;
             if (comboAudioSampleRate1 == null || comboAudioSampleRateRX2 == null) return;
 
             string sRate = rate.ToString();
@@ -1100,8 +1114,12 @@ namespace Thetis
 
             int[] p1_rates = include_extra_p1_rate ? new int[] { 48000, 96000, 192000, 384000 } : new int[] { 48000, 96000, 192000 };
             int[] p2_rates = { 48000, 96000, 192000, 384000, 768000, 1536000 };
+            int[] sunsdr_dx_rates = { 312500 }; // DX: native 312.5 kHz router path
+            int[] sunsdr_pro_rates = { 312500 }; // PRO: native 312.5 kHz like DX (sunsdr.c profile since Artemis v2.1.9); 384000 here left WDSP expecting 384 kHz -> VAC underflows
 
-            int[] rates = NetworkIO.CurrentRadioProtocol == RadioProtocol.ETH ? p2_rates : p1_rates;
+            int[] rates = HardwareSpecific.Model == HPSDRModel.SUNSDR2DX ? sunsdr_dx_rates :
+                          HardwareSpecific.Model == HPSDRModel.SUNSDR2PRO ? sunsdr_pro_rates :
+                          NetworkIO.CurrentRadioProtocol == RadioProtocol.ETH ? p2_rates : p1_rates;
 
             foreach (int rate in rates)
             {
@@ -1116,6 +1134,7 @@ namespace Thetis
                 rx1_index = selected_rate1_index;
             else
                 rx1_index = Array.IndexOf(rates, 192000);
+            if (rx1_index < 0) rx1_index = 0; // fallback to first available rate
 
             comboAudioSampleRate1.SelectedIndex = rx1_index; // this will always cause a changed event because we removed everything
 
@@ -1124,6 +1143,7 @@ namespace Thetis
                 rx2_index = selected_rate2_index;
             else
                 rx2_index = Array.IndexOf(rates, 192000);
+            if (rx2_index < 0) rx2_index = 0;
 
             comboAudioSampleRateRX2.SelectedIndex = rx2_index; // this will always cause a changed event because we removed everything
         }
@@ -1991,7 +2011,10 @@ namespace Thetis
                 return HardwareSpecific.StringModelToEnum(a["comboRadioModel"]);
             }
             else
-                return HPSDRModel.FIRST;
+                // Artemis ships pre-configured for SunSDR2 DX — no other radios
+                // are supported. Skip the "select radio model" step on fresh
+                // installs by defaulting to SUNSDR2DX instead of HPSDRModel.FIRST.
+                return HPSDRModel.SUNSDR2DX;
         }
         private bool _gettingOptions = false;
 
@@ -5972,7 +5995,7 @@ namespace Thetis
                 {
                     if (value > (float)udDisplayGridMin.Maximum) value = (float)udDisplayGridMin.Maximum;
                     if (value < (float)udDisplayGridMin.Minimum) value = (float)udDisplayGridMin.Minimum;
-                    udDisplayGridMin.Value = Math.Round((decimal)value, udDisplayGridMin.DecimalPlaces); // float->decimal keeps 7 digits: fractional Max - Step never matched after a round trip, Min clamp recursed until stack overflow
+                    udDisplayGridMin.Value = (decimal)value;
                 }
             }
         }
@@ -5986,7 +6009,7 @@ namespace Thetis
                 {
                     if (value > (float)udDisplayGridMax.Maximum) value = (float)udDisplayGridMax.Maximum;
                     if (value < (float)udDisplayGridMax.Minimum) value = (float)udDisplayGridMax.Minimum;
-                    udDisplayGridMax.Value = Math.Round((decimal)value, udDisplayGridMax.DecimalPlaces);
+                    udDisplayGridMax.Value = (decimal)value;
                 }
             }
         }
@@ -6000,7 +6023,7 @@ namespace Thetis
                 {
                     if (value > (float)udRX2DisplayGridMin.Maximum) value = (float)udRX2DisplayGridMin.Maximum;
                     if (value < (float)udRX2DisplayGridMin.Minimum) value = (float)udRX2DisplayGridMin.Minimum;
-                    udRX2DisplayGridMin.Value = Math.Round((decimal)value, udRX2DisplayGridMin.DecimalPlaces);
+                    udRX2DisplayGridMin.Value = (decimal)value;
                 }
             }
         }
@@ -6014,7 +6037,7 @@ namespace Thetis
                 {
                     if (value > (float)udRX2DisplayGridMax.Maximum) value = (float)udRX2DisplayGridMax.Maximum;
                     if (value < (float)udRX2DisplayGridMax.Minimum) value = (float)udRX2DisplayGridMax.Minimum;
-                    udRX2DisplayGridMax.Value = Math.Round((decimal)value, udRX2DisplayGridMax.DecimalPlaces);
+                    udRX2DisplayGridMax.Value = (decimal)value;
                 }
             }
         }
@@ -10756,165 +10779,195 @@ namespace Thetis
 
         #region Keyboard Tab Event Handlers
 
+        // SelectedIndex is -1 when the key stored in the DB is not in KeyList (e.g. DB from another build) - indexing KeyList then crashed Setup creation
+
         private void comboKBTuneUp1_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneUp1.SelectedIndex < 0) return;
             console.KeyTuneUp1 = (Keys)KeyList[comboKBTuneUp1.SelectedIndex];
         }
 
         private void comboKBTuneDown1_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneDown1.SelectedIndex < 0) return;
             console.KeyTuneDown1 = (Keys)KeyList[comboKBTuneDown1.SelectedIndex];
         }
 
         private void comboKBTuneUp2_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneUp2.SelectedIndex < 0) return;
             console.KeyTuneUp2 = (Keys)KeyList[comboKBTuneUp2.SelectedIndex];
         }
 
         private void comboKBTuneDown2_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneDown2.SelectedIndex < 0) return;
             console.KeyTuneDown2 = (Keys)KeyList[comboKBTuneDown2.SelectedIndex];
         }
 
         private void comboKBTuneUp3_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneUp3.SelectedIndex < 0) return;
             console.KeyTuneUp3 = (Keys)KeyList[comboKBTuneUp3.SelectedIndex];
         }
 
         private void comboKBTuneDown3_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneDown3.SelectedIndex < 0) return;
             console.KeyTuneDown3 = (Keys)KeyList[comboKBTuneDown3.SelectedIndex];
         }
 
         private void comboKBTuneUp4_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneUp4.SelectedIndex < 0) return;
             console.KeyTuneUp4 = (Keys)KeyList[comboKBTuneUp4.SelectedIndex];
         }
 
         private void comboKBTuneDown4_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneDown4.SelectedIndex < 0) return;
             console.KeyTuneDown4 = (Keys)KeyList[comboKBTuneDown4.SelectedIndex];
         }
 
         private void comboKBTuneUp5_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneUp5.SelectedIndex < 0) return;
             console.KeyTuneUp5 = (Keys)KeyList[comboKBTuneUp5.SelectedIndex];
         }
 
         private void comboKBTuneDown5_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneDown5.SelectedIndex < 0) return;
             console.KeyTuneDown5 = (Keys)KeyList[comboKBTuneDown5.SelectedIndex];
         }
 
         private void comboKBTuneUp6_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneUp6.SelectedIndex < 0) return;
             console.KeyTuneUp6 = (Keys)KeyList[comboKBTuneUp6.SelectedIndex];
         }
 
         private void comboKBTuneDown6_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBTuneDown6.SelectedIndex < 0) return;
             console.KeyTuneDown6 = (Keys)KeyList[comboKBTuneDown6.SelectedIndex];
         }
 
         private void comboKBTuneUp7_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            if (comboKBTuneUp7.SelectedIndex < 0) return;
             console.KeyTuneUp7 = (Keys)KeyList[comboKBTuneUp7.SelectedIndex];
         }
 
         private void comboKBTuneDown7_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            if (comboKBTuneDown7.SelectedIndex < 0) return;
             console.KeyTuneDown7 = (Keys)KeyList[comboKBTuneDown7.SelectedIndex];
         }
 
         private void comboKBBandUp_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBBandUp.SelectedIndex < 0) return;
             console.KeyBandUp = (Keys)KeyList[comboKBBandUp.SelectedIndex];
         }
 
         private void comboKBBandDown_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBBandDown.SelectedIndex < 0) return;
             console.KeyBandDown = (Keys)KeyList[comboKBBandDown.SelectedIndex];
         }
 
         private void comboKBFilterUp_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBFilterUp.SelectedIndex < 0) return;
             console.KeyFilterUp = (Keys)KeyList[comboKBFilterUp.SelectedIndex];
         }
 
         private void comboKBFilterDown_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBFilterDown.SelectedIndex < 0) return;
             console.KeyFilterDown = (Keys)KeyList[comboKBFilterDown.SelectedIndex];
         }
 
         private void comboKBModeUp_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBModeUp.SelectedIndex < 0) return;
             console.KeyModeUp = (Keys)KeyList[comboKBModeUp.SelectedIndex];
         }
 
         private void comboKBModeDown_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBModeDown.SelectedIndex < 0) return;
             console.KeyModeDown = (Keys)KeyList[comboKBModeDown.SelectedIndex];
         }
 
         private void comboKBCWDot_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBCWDot.SelectedIndex < 0) return;
             console.KeyCWDot = (Keys)KeyList[comboKBCWDot.SelectedIndex];
         }
 
         private void comboKBCWDash_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBCWDash.SelectedIndex < 0) return;
             console.KeyCWDash = (Keys)KeyList[comboKBCWDash.SelectedIndex];
         }
 
         private void comboKBRITUp_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            if (comboKBRITUp.SelectedIndex < 0) return;
             console.KeyRITUp = (Keys)KeyList[comboKBRITUp.SelectedIndex];
         }
 
         private void comboKBRITDown_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            if (comboKBRITDown.SelectedIndex < 0) return;
             console.KeyRITDown = (Keys)KeyList[comboKBRITDown.SelectedIndex];
         }
 
         private void comboKBXITUp_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            if (comboKBXITUp.SelectedIndex < 0) return;
             console.KeyXITUp = (Keys)KeyList[comboKBXITUp.SelectedIndex];
         }
 
         private void comboKBXITDown_SelectedIndexChanged(object sender, System.EventArgs e)
         {
+            if (comboKBXITDown.SelectedIndex < 0) return;
             console.KeyXITDown = (Keys)KeyList[comboKBXITDown.SelectedIndex];
         }
 
         private void comboKBPTTTx_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBPTTTx.SelectedIndex < 0) return;
             console.KeyPTTTx = (Keys)KeyList[comboKBPTTTx.SelectedIndex];
         }
 
         private void comboKBPTTRx_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             if (initializing) return;
+            if (comboKBPTTRx.SelectedIndex < 0) return;
             console.KeyPTTRx = (Keys)KeyList[comboKBPTTRx.SelectedIndex];
         }
 
@@ -14072,7 +14125,8 @@ namespace Thetis
                                                          new[] { radAlexR1_15,  radAlexR2_15, radAlexR3_15 },
                                                          new[] { radAlexR1_12,  radAlexR2_12, radAlexR3_12 },
                                                          new[] { radAlexR1_10,  radAlexR2_10, radAlexR3_10 },
-                                                         new[] { radAlexR1_6,  radAlexR2_6, radAlexR3_6 }
+                                                         new[] { radAlexR1_6,  radAlexR2_6, radAlexR3_6 },
+                                                         new[] { radAlexR1_2,  radAlexR2_2, radAlexR3_2 }
                                                      };
 
             _AlexTxAntButtons = new[] { new RadioButtonTS[] { radAlexT1_160, radAlexT2_160, radAlexT3_160 },
@@ -14085,7 +14139,8 @@ namespace Thetis
                                                          new[] { radAlexT1_15,  radAlexT2_15, radAlexT3_15 },
                                                          new[] { radAlexT1_12,  radAlexT2_12, radAlexT3_12 },
                                                          new[] { radAlexT1_10,  radAlexT2_10, radAlexT3_10 },
-                                                         new[] { radAlexT1_6,  radAlexT2_6, radAlexT3_6 }
+                                                         new[] { radAlexT1_6,  radAlexT2_6, radAlexT3_6 },
+                                                         new[] { radAlexT1_2,  radAlexT2_2, radAlexT3_2 }
                                                      };
 
             // old state copy
@@ -14113,7 +14168,8 @@ namespace Thetis
                                                             new bool[] { false, false, false },
                                                             new bool[] { false, false, false },
                                                             new bool[] { false, false, false },
-                                                            new bool[] { false, false, false }
+                                                            new bool[] { false, false, false },
+                                                            new bool[] { false, false, false }   /* B2M */
                                                      };
 
             _AlexTxAntButtons_old = new[] { new bool[]  { false, false, false },
@@ -14126,7 +14182,8 @@ namespace Thetis
                                                             new bool[] { false, false, false },
                                                             new bool[] { false, false, false },
                                                             new bool[] { false, false, false },
-                                                            new bool[] { false, false, false }
+                                                            new bool[] { false, false, false },
+                                                            new bool[] { false, false, false }   /* B2M */
                                                      };
         }
 
@@ -14135,6 +14192,234 @@ namespace Thetis
             bool orig_state = grpAlexAntCtrl.Enabled;
             grpAlexAntCtrl.Enabled = state;
             return orig_state;
+        }
+
+        // While this is true, CheckedChanged side effects from bulk
+        // radio-button state mutation (during migration + row layout)
+        // are suppressed in ProcessAlexAntRadioButton. Prevents a cascade
+        // of wire writes / console-side work during form construction,
+        // which hits paths that assume the radio is up and the console
+        // is fully initialised — both untrue during AfterConstructor.
+        private bool _suppressSunSdrAntCascades = false;
+
+        public bool SuppressSunSdrAntCascades
+        {
+            get { return _suppressSunSdrAntCascades; }
+        }
+
+        // SunSDR2 DX antenna layout — single source of truth for per-band
+        // validity, UI column assignment, and physical-name labels lives in
+        // SunSdrAntennaSpec. Every antenna-touching code path goes through
+        // it (setup form, bottom-left meter, wire writes).
+        //
+        // Physical column assignment:
+        //   button[0] = column 1 = A1 (2m only)
+        //   button[1] = column 2 = A2 (HF / 6m only)
+        //   button[2] = column 3 = A3 (HF / 6m only)
+        //
+        // Alex.RxAnt[idx] / TxAnt[idx] now store SunSdrAntenna enum values
+        // (A1=1, A2=2, A3=3) directly. A one-shot DB-flagged migration
+        // translates legacy "slot-index-1-based" storage into the new
+        // convention on first run.
+        //
+        // Also hides the legacy RX-only / XVTR checkbox grid and the
+        // "Do Not TX" row — neither is meaningful on this radio.
+        public void ConfigureSunSDRAntennaButtons()
+        {
+            // All radio-button state mutation below fires CheckedChanged,
+            // which would cascade through ProcessAlexAntRadioButton into
+            // Alex / console / native wire writes. At this point in the
+            // startup sequence the console is still being constructed and
+            // the radio is not connected — those side effects crash or
+            // leave half-initialised state. Suppress for the duration.
+            _suppressSunSdrAntCascades = true;
+            try
+            {
+                // One-shot legacy → SunSdrAntenna migration, flagged in DB
+                // so it runs exactly once per installation.
+                MigrateAntennaSelectionsIfNeeded();
+
+                for (int idx = 0; idx < _AlexRxAntButtons.Length; idx++)
+                {
+                    Band band = (Band)((int)Band.B160M + idx);
+                    ApplySunSdrAntennaRowLayout(_AlexRxAntButtons[idx], band);
+                    ApplySunSdrAntennaRowLayout(_AlexTxAntButtons[idx], band);
+                }
+            }
+            finally
+            {
+                _suppressSunSdrAntCascades = false;
+            }
+
+            // Column headers — logical A1 / A2 / A3 left-to-right.
+            // Note: label8/9/10 are in panelAlexTXAntControl (TX side) and
+            // label2/3/4 are in panelAlexRXAntControl (RX side); both get
+            // the same labels since button[n] means the same physical ant
+            // on both sides. Also bump their width so "A1"/"A2"/"A3"
+            // doesn't clip at the default 16px designer size.
+            SetAntColumnLabel(label8,  "A1");
+            SetAntColumnLabel(label9,  "A2");
+            SetAntColumnLabel(label10, "A3");
+            SetAntColumnLabel(label2,  "A1");
+            SetAntColumnLabel(label3,  "A2");
+            SetAntColumnLabel(label4,  "A3");
+
+            // Hide the middle RX-only / XVTR checkbox grid + its header.
+            panelAlexRXXVRTControl.Visible = false;
+
+            // Hide the "Do Not TX" row and force its flags off.
+            chkBlockTxAnt2.Visible = false;
+            chkBlockTxAnt3.Visible = false;
+            labelTS257.Visible = false;
+            if (chkBlockTxAnt2.Checked) chkBlockTxAnt2.Checked = false;
+            if (chkBlockTxAnt3.Checked) chkBlockTxAnt3.Checked = false;
+
+            // MeterManager legacy display names (A1/A2/A3 in column order).
+            RXAntChk1Name = "A1";
+            RXAntChk2Name = "A2";
+            RXAntChk3Name = "A3";
+        }
+
+        private static void SetAntColumnLabel(LabelTS lbl, string text)
+        {
+            lbl.Text = text;
+            // Designer sets these at 16x16 which clips "A2"/"A3". Bump to 20
+            // and slide left 2px so the label stays centered over its button.
+            if (lbl.Width < 20)
+            {
+                lbl.Left -= 2;
+                lbl.Width = 20;
+            }
+        }
+
+        // Per-band visibility + default selection for one antenna row
+        // (either the RX side or the TX side — same rules on both).
+        private static void ApplySunSdrAntennaRowLayout(RadioButtonTS[] btns, Band band)
+        {
+            // Show exactly the columns that are valid for this band.
+            SunSdrAntenna[] valid = SunSdrAntennaSpec.ValidForBand(band);
+            for (int col = 0; col < 3; col++)
+            {
+                btns[col].Visible = ContainsColumn(valid, col);
+            }
+
+            // Make sure something valid is checked. If nothing is, or
+            // something invalid is, snap to DefaultForBand.
+            SunSdrAntenna checkedAnt = SunSdrAntenna.None;
+            for (int col = 0; col < 3; col++)
+            {
+                if (!btns[col].Checked) continue;
+                SunSdrAntenna a = SunSdrAntennaSpec.FromColumnIndex(col);
+                if (SunSdrAntennaSpec.IsValidForBand(a, band))
+                {
+                    checkedAnt = a;
+                }
+                else
+                {
+                    btns[col].Checked = false;
+                }
+            }
+
+            if (checkedAnt == SunSdrAntenna.None)
+            {
+                SunSdrAntenna dflt = SunSdrAntennaSpec.DefaultForBand(band);
+                int dfltCol = SunSdrAntennaSpec.ColumnIndexFor(dflt);
+                if (dfltCol >= 0 && dfltCol < 3)
+                {
+                    btns[dfltCol].Checked = true;
+                }
+            }
+        }
+
+        private static bool ContainsColumn(SunSdrAntenna[] valid, int col)
+        {
+            foreach (var a in valid)
+            {
+                if (SunSdrAntennaSpec.ColumnIndexFor(a) == col) return true;
+            }
+            return false;
+        }
+
+        private const string SUNSDR_ANT_MIGRATION_KEY = "sunsdr_ant_scheme_v2_migrated";
+
+        // One-shot migration: translate the pre-SunSdrAntenna legacy radio-
+        // button "slot-index" convention into the physical-column convention
+        // enforced by ApplySunSdrAntennaRowLayout. Runs exactly once per
+        // installation — guarded by a DB key that persists via DB.SaveVarsDictionary.
+        //
+        // Pre-migration convention (Artemis ≤ 2.0.8 development builds):
+        //   HF rows: button[0] = Thetis "Ant 1" (SunSDR A2)
+        //            button[1] = Thetis "Ant 2" (SunSDR A3)
+        //            button[2] = Thetis "XVTR" (invalid on SunSDR)
+        //   2m row:  any of the three buttons could be checked, often
+        //            button[2] (slot 3 = A1 under the very brief in-progress
+        //            scheme) — treat all as "force A1".
+        //
+        // Post-migration convention:
+        //   button[0] = A1 (valid only on 2m)
+        //   button[1] = A2 (valid only on HF/6m)
+        //   button[2] = A3 (valid only on HF/6m)
+        private void MigrateAntennaSelectionsIfNeeded()
+        {
+            var opts = DB.GetVarsDictionary("Options");
+            string flag;
+            if (opts.TryGetValue(SUNSDR_ANT_MIGRATION_KEY, out flag) && flag == "True")
+            {
+                return; // already migrated
+            }
+
+            for (int idx = 0; idx < _AlexRxAntButtons.Length; idx++)
+            {
+                Band band = (Band)((int)Band.B160M + idx);
+                MigrateLegacyAntRow(_AlexRxAntButtons[idx], band);
+                MigrateLegacyAntRow(_AlexTxAntButtons[idx], band);
+            }
+
+            opts[SUNSDR_ANT_MIGRATION_KEY] = "True";
+            DB.SaveVarsDictionary("Options", ref opts, true);
+            // Flush to disk right away so a crash before the next normal
+            // save doesn't leave the flag in-memory only and re-run
+            // migration on the already-migrated buttons next launch.
+            DB.WriteDB();
+        }
+
+        private static void MigrateLegacyAntRow(RadioButtonTS[] btns, Band band)
+        {
+            // Snapshot which button was checked under the legacy convention
+            // before we clobber the state.
+            int legacyChecked = -1;
+            for (int i = 0; i < btns.Length; i++)
+            {
+                if (btns[i].Checked) { legacyChecked = i; break; }
+            }
+
+            // Clear everything.
+            for (int i = 0; i < btns.Length; i++) btns[i].Checked = false;
+
+            if (band == Band.B2M)
+            {
+                // 2m → always A1 (button 0). Legacy 2m state is ambiguous;
+                // A1 is the only physically valid selection.
+                btns[0].Checked = true;
+                return;
+            }
+
+            // HF / 6m.
+            // Legacy button[0] = SunSDR A2 → new button[1] (A2)
+            // Legacy button[1] = SunSDR A3 → new button[2] (A3)
+            // Legacy button[2] = XVTR (invalid) → new button[1] (A2 default)
+            switch (legacyChecked)
+            {
+                case 1:
+                    btns[2].Checked = true; // A3
+                    break;
+                case 0:
+                case 2:
+                case -1:
+                default:
+                    btns[1].Checked = true; // A2 (default)
+                    break;
+            }
         }
 
         private void radAlexR_160_CheckedChanged(object sender, System.EventArgs e)
@@ -14489,6 +14774,21 @@ namespace Thetis
             ProcessAlexAntRadioButton(sender, Band.B6M, true);
         }
 
+        // VHF 2m — added GH #12. SunSDR2 DX's 2m port has two meaningful RX
+        // paths (A1 / ADC) which the native layer encodes via opcode 0x1E.
+        // We store the UI selection in the standard B2M slot of the Alex
+        // per-band antenna table and let SunSDRSetAntenna / SunSDRSetTxAntenna
+        // in sunsdr.c translate UI slot 1/2 → 0x1E=0/1 on VHF bands.
+        private void radAlexR_2_CheckedChanged(object sender, System.EventArgs e)
+        {
+            ProcessAlexAntRadioButton(sender, Band.B2M, false);
+        }
+
+        private void radAlexT_2_CheckedChanged(object sender, System.EventArgs e)
+        {
+            ProcessAlexAntRadioButton(sender, Band.B2M, true);
+        }
+
         private void chkAlex160R_CheckedChanged(object sender, System.EventArgs e)
         {
             ProcessAlexAntCheckBox(sender, Band.B160M);
@@ -14654,6 +14954,15 @@ namespace Thetis
             RadioButtonTS radBtnTS = (RadioButtonTS)sender;
             if (!radBtnTS.Checked) return;
 
+            // Bulk SunSDR antenna-button init (migration + row layout) sets
+            // button state programmatically during form construction. Those
+            // changes must not cascade into wire writes / console side
+            // effects because the radio link isn't up and the console isn't
+            // finished initialising. The flag is set only around
+            // ConfigureSunSDRAntennaButtons; normal user clicks are not
+            // affected.
+            if (_suppressSunSdrAntCascades) return;
+
             int idx = (int)band - (int)Band.B160M;
 
             RadioButtonTS[] buttons = is_xmit ? _AlexTxAntButtons[idx] : _AlexRxAntButtons[idx];
@@ -14697,7 +15006,39 @@ namespace Thetis
                 handleRXAntennaChangeForNF(band);
             }
 
-            console.AlexAntCtrlEnabled = true; // need side effect of prop set to push data down to C code 
+            console.AlexAntCtrlEnabled = true; // need side effect of prop set to push data down to C code
+
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+            {
+                // SunSDR2 DX uses a single physical antenna selector (opcode
+                // 0x15) for both RX and TX. Wire writes must match the live
+                // direction (MOX state) — otherwise editing TX ant during
+                // RX would visibly switch the antenna and vice versa.
+                //
+                // Write only when:
+                //   - the edited band is the currently-tuned band, AND
+                //   - the edit direction matches the current MOX state
+                //     (TX edits while transmitting, RX edits while
+                //     receiving).
+                // Any other edit stays purely in per-band storage and
+                // takes effect on the next matching band/MOX transition.
+                Band activeBand = is_xmit ? console.TXBand : console.RX1Band;
+                bool mox = console.MOX;
+                if (band == activeBand && is_xmit == mox)
+                {
+                    // Our `ant` here is the 1-based button-column index
+                    // (1 = column 1 = A1, 2 = A2, 3 = A3). Translate to
+                    // SunSdrAntenna, then to wire. Column-index 0-based is
+                    // `ant - 1`.
+                    SunSdrAntenna physical = SunSdrAntennaSpec.FromColumnIndex(ant - 1);
+                    int wireAnt = SunSdrAntennaSpec.WireValueFor(physical, band, is_xmit);
+                    if (wireAnt > 0)
+                    {
+                        if (is_xmit) NetworkIO.nativeSunSDRSetTxAntenna(wireAnt);
+                        else         NetworkIO.nativeSunSDRSetAntenna(wireAnt);
+                    }
+                }
+            }
 
             // changed notification
             updateChangedAntAlexButton(is_xmit, idx, band);
@@ -14735,7 +15076,7 @@ namespace Thetis
         public int GetRXAntenna(Band band)
         {
             int antInUse = 0; //0 none, 1-3 valid
-            if ((band >= Band.B160M) && (band <= Band.B6M))
+            if ((band >= Band.B160M) && (band <= Band.B2M))
             {
                 int idx = (int)band - (int)Band.B160M;
                 int Btn;
@@ -14752,7 +15093,7 @@ namespace Thetis
         public int GetTXAntenna(Band band)
         {
             int antInUse = 0; //0 none, 1-3 valid
-            if ((band >= Band.B160M) && (band <= Band.B6M))
+            if ((band >= Band.B160M) && (band <= Band.B2M))
             {
                 int idx = (int)band - (int)Band.B160M;
                 int Btn;
@@ -14781,7 +15122,7 @@ namespace Thetis
         // this must also cancel any ext input check boxes
         public void SetRXAntenna(int Antenna, Band band)
         {
-            if ((band >= Band.B160M) && (band <= Band.B6M))
+            if ((band >= Band.B160M) && (band <= Band.B2M))
             {
                 int idx = (int)band - (int)Band.B160M;
                 int Btn;
@@ -14795,10 +15136,19 @@ namespace Thetis
                         buttons[Btn].Checked = false;
                 }
 
-                CheckBoxTS[] cboxes = _AlexRxOnlyAntCheckBoxes[idx];
-                for (Btn = 0; Btn < 3; Btn++)
+                // _AlexRxOnlyAntCheckBoxes is sized for HF+6m only (11 rows,
+                // 160m..6m). The method's range was widened to include B2M
+                // so the bottom-left meter and band-change restore can call
+                // it on 2m, but the RX-only XVTR checkbox grid doesn't exist
+                // for 2m — skip the access to avoid IndexOutOfRangeException.
+                if (band >= Band.B160M && band <= Band.B6M
+                    && idx < _AlexRxOnlyAntCheckBoxes.Length)
                 {
-                    cboxes[Btn].Checked = false;
+                    CheckBoxTS[] cboxes = _AlexRxOnlyAntCheckBoxes[idx];
+                    for (Btn = 0; Btn < 3; Btn++)
+                    {
+                        cboxes[Btn].Checked = false;
+                    }
                 }
             }
         }
@@ -14823,7 +15173,7 @@ namespace Thetis
         // only select antennas 2 or 3 if not blocked by "do not TX" check boxes
         public void SetTXAntenna(int Antenna, Band band)
         {
-            if ((band >= Band.B160M) && (band <= Band.B6M))
+            if ((band >= Band.B160M) && (band <= Band.B2M))
             {
                 int idx = (int)band - (int)Band.B160M;
                 int Btn;
@@ -14843,6 +15193,10 @@ namespace Thetis
                 RadioButtonTS[] buttons = _AlexTxAntButtons[idx];
                 if (TXAllowed)
                 {
+                    Alex.getAlex().setTxAnt(band, (byte)Antenna);
+                    pi_TxAnt = Antenna;
+                    console.SetAriesTXAntenna(Antenna, band);
+
                     for (Btn = 0; Btn < 3; Btn++)
                     {
                         if (Btn == Antenna - 1)
@@ -14850,6 +15204,17 @@ namespace Thetis
                         else
                             buttons[Btn].Checked = false;
                     }
+
+                    updateChangedAntAlexButton(true, idx, band);
+
+                    // Do NOT push to the SunSDR wire here. Setting a radio
+                    // button's Checked above already triggered
+                    // radAlexT_*_CheckedChanged -> ProcessAlexAntRadioButton
+                    // which applies the correct MOX-gated wire write. Firing
+                    // nativeSunSDRSetTxAntenna again here was unconditional,
+                    // bypassed the MOX gate, and was the last remaining path
+                    // that moved the live RX antenna when the user clicked
+                    // a Tx Ant button in the bottom-left meter.
                 }
             }
         }
@@ -14902,7 +15267,11 @@ namespace Thetis
 
             if (NetworkIO.getHaveSync() == 1)
             {
-                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.ETH)
+                if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+                {
+                    sRet = NetworkIO.GetSunSDRTitleVersionString();
+                }
+                else if (NetworkIO.CurrentRadioProtocol == RadioProtocol.ETH)
                 {
                     switch (HardwareSpecific.Model)
                     {
@@ -21587,6 +21956,11 @@ namespace Thetis
                     break;
             }
 
+            if (HardwareSpecific.IsCurrentSunSDRModel)
+            {
+                ConfigureSunSDRAntennaButtons();
+            }
+
             bool user_adjusted = sender != this;
 
             setupADCRadioButtions();
@@ -22974,6 +23348,32 @@ namespace Thetis
                     console.PennyExtCtrlEnabled = chkPennyExtCtrl.Checked;  // need side effect of this to push change to native code 
                 }
             }
+        }
+
+        /// <summary>
+        /// Hide / show the Anan-only sub-controls in the "Hardware Options"
+        /// block on H/W Select. Specifically hides:
+        ///   - Mic wiring Tip/Ring (Anan mic jack polarity)
+        ///   - Bias Off/On (Anan electret mic bias)
+        ///   - Input XLR/3.5mm (Saturn mic input selector)
+        ///   - Alex + Apollo presence checkboxes
+        /// PTT Off/On STAYS VISIBLE — it is reserved for upcoming SunSDR
+        /// hardware PTT support. Called from console.cs
+        /// ApplySunSDRSpecificUI() when the selected radio model is
+        /// SUNSDR2DX.
+        /// </summary>
+        public void SetAnanHardwareOptionsVisible(bool visible)
+        {
+            if (panelOrionMic != null)       panelOrionMic.Visible = visible;
+            if (panelOrionBias != null)      panelOrionBias.Visible = visible;
+            if (panelSaturnMicInput != null) panelSaturnMicInput.Visible = visible;
+            if (pnlAlexApollo != null)       pnlAlexApollo.Visible = visible;
+            // panelOrionPTT intentionally NOT hidden — reserved for SunSDR
+            // hardware PTT support coming in a future release.
+            // "Disable BYPASS" on the Ant/Filters tab is an ANAN100/100B
+            // PA-revision flag. SunSDR has no Alex filter board and no
+            // PA-rev ambiguity, so hide it under the same switch.
+            if (chkDisableRXOut != null)     chkDisableRXOut.Visible = visible;
         }
 
         public bool CheckForAnyExternalPACheckBoxes()
@@ -24462,7 +24862,177 @@ namespace Thetis
             PAProfile p = getPAProfile(comboPAProfile.Text);
             if (p == null) return 1000;
 
-            return p.GetGainForBand(b, nDriveValue);
+            float gain = p.GetGainForBand(b, nDriveValue);
+            bool zero_adjust_curve = true;
+            for (int i = 0; i < 9; i++)
+            {
+                if (Math.Abs(p.GetAdjust(b, i)) > 0.05f)
+                {
+                    zero_adjust_curve = false;
+                    break;
+                }
+            }
+
+            float[] sunsdrCurrent = new float[(int)Band.LAST];
+            sunsdrCurrent[(int)Band.B160M] = 41.0f;
+            sunsdrCurrent[(int)Band.B80M] = 41.2f;
+            sunsdrCurrent[(int)Band.B60M] = 41.3f;
+            sunsdrCurrent[(int)Band.B40M] = 41.3f;
+            sunsdrCurrent[(int)Band.B30M] = 41.0f;
+            sunsdrCurrent[(int)Band.B20M] = 40.5f;
+            sunsdrCurrent[(int)Band.B17M] = 39.9f;
+            sunsdrCurrent[(int)Band.B15M] = 38.8f;
+            sunsdrCurrent[(int)Band.B12M] = 38.8f;
+            sunsdrCurrent[(int)Band.B10M] = 38.8f;
+            sunsdrCurrent[(int)Band.B6M] = 38.8f;
+
+            /*
+             * SunSDR2DX support was added after many existing databases already
+             * contained PA profiles with the generic fallback of 100 dB on every
+             * band. Those persisted values drive RadioVolume almost to zero.
+             * Treat that legacy all-100 state as "uninitialized" for SunSDR and
+             * fall back to the model defaults until the user recalibrates.
+             */
+            if (HardwareSpecific.IsCurrentSunSDRModel && gain >= 99.0f)
+            {
+                float[] defaults = HardwareSpecific.DefaultPAGainsForBands(HardwareSpecific.Model);
+                if ((int)b > (int)Band.FIRST && (int)b < (int)Band.LAST)
+                    gain = defaults[(int)b] - GetSunSDRDefaultAdjust(nDriveValue);
+            }
+
+            /*
+             * Early SunSDR2DX support used an ANAN100-like baseline (~50 dB HF),
+             * which drives the native SunSDR TX path far too low. Existing saved
+             * PA profiles may still carry those values, so transparently map that
+             * legacy baseline to the current SunSDR defaults until the operator
+             * recalibrates the profile.
+             */
+            if (HardwareSpecific.IsCurrentSunSDRModel &&
+                (int)b > (int)Band.FIRST && (int)b < (int)Band.LAST)
+            {
+                float[] legacy = new float[(int)Band.LAST];
+                legacy[(int)Band.B160M] = 50.0f;
+                legacy[(int)Band.B80M] = 50.5f;
+                legacy[(int)Band.B60M] = 50.5f;
+                legacy[(int)Band.B40M] = 50.0f;
+                legacy[(int)Band.B30M] = 49.5f;
+                legacy[(int)Band.B20M] = 48.5f;
+                legacy[(int)Band.B17M] = 48.0f;
+                legacy[(int)Band.B15M] = 47.5f;
+                legacy[(int)Band.B12M] = 46.5f;
+                legacy[(int)Band.B10M] = 42.0f;
+                legacy[(int)Band.B6M] = 43.0f;
+
+                if (Math.Abs(gain - legacy[(int)b]) < 0.2f)
+                {
+                    float[] defaults = HardwareSpecific.DefaultPAGainsForBands(HardwareSpecific.Model);
+                    gain = defaults[(int)b] - GetSunSDRDefaultAdjust(nDriveValue);
+                }
+            }
+
+            /*
+             * A first SunSDR2DX-specific baseline (~41 dB HF, zero offsets) also
+             * shipped during bring-up. That baseline still underdrives the native
+             * TX path and leaves the watt curve badly compressed. Treat that exact
+             * no-offset SunSDR profile shape as legacy too and map it to the
+             * current SunSDR defaults plus the built-in low-power compensation.
+             */
+            if (HardwareSpecific.IsCurrentSunSDRModel &&
+                zero_adjust_curve &&
+                (int)b > (int)Band.FIRST && (int)b < (int)Band.LAST)
+            {
+                if (Math.Abs(gain - sunsdrCurrent[(int)b]) < 0.2f)
+                {
+                    float[] defaults = HardwareSpecific.DefaultPAGainsForBands(HardwareSpecific.Model);
+                    gain = defaults[(int)b] - GetSunSDRDefaultAdjust(nDriveValue);
+                }
+            }
+
+            return gain;
+        }
+        private float GetSunSDRDefaultAdjust(int nDriveValue)
+        {
+            if (nDriveValue <= 0) return 0.0f;
+            if (nDriveValue >= 100) return 0.0f;
+
+            /*
+             * Default SunSDR2DX drive shaping for 40m (other bands fall
+             * back to this table until separately measured).
+             *
+             * 2026-04-15 calibration sweep on 40m, matched antenna SWR 1.2,
+             * after architecture reset (wire peak clipped to ~1.0 via
+             * iq_gain=1.167, raw drive byte passes straight through from
+             * Thetis's calibrated computation). Observed UI -> actual W:
+             *
+             *   UI  5 ->   4.3 W    UI  60 ->  80 W
+             *   UI 10 ->  12   W    UI  70 ->  84 W
+             *   UI 15 ->  19   W    UI  80 ->  86 W
+             *   UI 20 ->  27   W    UI  90 ->  97 W
+             *   UI 30 ->  42   W    UI 100 ->  97 W
+             *   UI 40 ->  58   W
+             *   UI 50 ->  70   W
+             *
+             * Middle range over-shoots by 30-50%. Computed the dB delta
+             * needed per anchor (10 log10(target / actual)) and applied
+             * it to the prior adjust[i] — the table below is the result.
+             * Array indices map to 10W..90W; 0W and 100W have no entry
+             * (top returns 0 anyway, consistent with the UI 100->97 W
+             * result within +/- 3%).
+             *
+             * Points are dB reduction of PA attenuation; positive =
+             * more power, negative = less power. If linearity is off
+             * on a different band the operator enters their own
+             * offsets via Setup -> PA Settings -> PA Gain -> Offsets
+             * for <band>, and sets the PA Gain value below 99 so this
+             * default table is no longer the fallback.
+             *
+             * Iter-13 (40m, final tune). Full 12-point sweep after
+             * the corrected iter-11/12 table landed:
+             *
+             *   UI  5 ->  4   W (hardware low-drive dead-zone)
+             *   UI 10 ->  9.8 W   UI  60 ->  60 W  (exact)
+             *   UI 15 -> 16.3 W   UI  70 ->  70 W  (exact)
+             *   UI 20 -> 21   W   UI  80 ->  80 W  (exact)
+             *   UI 30 -> 30   W   UI  90 -> 91 W
+             *   UI 40 -> 40   W   UI 100 -> 97 W
+             *   UI 50 -> 50   W
+             *
+             * 30-80 W range is spot on. UI 15/20 slightly hot
+             * (+0.2-0.4 dB). Nudge adjust[1] from -0.34 to -0.55 to
+             * pull UI 20 down to target; interpolation improves UI 15
+             * in the same direction. Everything else kept; UI 100
+             * residual (-0.13 dB) is within measurement noise and
+             * radio PA ceiling.
+             */
+            float[] adjust = new float[] { 0.13f, -0.55f, -0.84f, -1.05f, -1.13f, -1.35f, -1.40f, -1.41f, -1.26f };
+
+            int nLIndex = nDriveValue / 10;
+            if (nDriveValue % 10 == 0)
+            {
+                if (nLIndex == 0 || nLIndex == 10) return 0.0f;
+                return adjust[nLIndex - 1];
+            }
+
+            float low;
+            float high;
+            if (nLIndex == 0)
+            {
+                low = 0.0f;
+                high = adjust[0];
+            }
+            else if (nLIndex >= 9)
+            {
+                low = adjust[8];
+                high = 0.0f;
+            }
+            else
+            {
+                low = adjust[nLIndex - 1];
+                high = adjust[nLIndex];
+            }
+
+            float frac = (nDriveValue - (nLIndex * 10)) / 10f;
+            return low + frac * (high - low);
         }
         public bool GetPABandUsesMaxPower(Band b)
         {
@@ -24939,6 +25509,29 @@ namespace Thetis
         {
             setAdjustingBand(newBand);
             lblTXattBand.Text = newBand.ToString(); //[2.3.10.6]MW0LGE added (also in ATTOnTX)
+
+            if (NetworkIO.CurrentRadioProtocol == RadioProtocol.SUNSDR)
+            {
+                // Only push the TX ant to the wire if we are currently
+                // transmitting; otherwise the stored TX ant takes effect
+                // on the next PTT (via UpdateAlexAntSelection on MOX edge).
+                // Writing it during RX would switch the live RX antenna
+                // because the radio uses 0x15 as a shared selector.
+                if (console != null && console.MOX)
+                {
+                    SunSdrAntenna ant = (SunSdrAntenna)GetTXAntenna(newBand);
+                    int wireAnt = SunSdrAntennaSpec.WireValueFor(ant, newBand, true);
+                    if (wireAnt > 0)
+                        NetworkIO.nativeSunSDRSetTxAntenna(wireAnt);
+                }
+
+                if (console != null && console.PowerOn)
+                {
+                    DSPMode tx_mode = (console.RX2Enabled && console.VFOBTX) ? console.RX2DSPMode : console.RX1DSPMode;
+                    NetworkIO.nativeSunSDRSetMode((int)tx_mode);
+                    NetworkIO.VFOfreq(0, tx_frequency, 1);
+                }
+            }
         }
         private void setAdjustingBand(Band b)
         {
@@ -25648,7 +26241,13 @@ namespace Thetis
             btnContainer_load.Enabled = bEnableAdd;// MeterManager.TotalMeterContainers < MAX_CONTAINERS;
             btnContainer_dupe.Enabled = bEnableControls;// && comboContainerSelect.SelectedIndex > -1;
             btnRecoverContainer.Enabled = bEnableControls && !locked;
-            btnContainerDelete.Enabled = bEnableControls && !locked;
+            // btnContainerDelete stays enabled whenever a container is
+            // selected, regardless of the Lock checkbox — locking should
+            // prevent accidental edits to meters INSIDE the container, not
+            // block intentional removal of the whole container. The click
+            // handler confirms deletion when locked so the user can't
+            // wipe a locked container by accident.
+            btnContainerDelete.Enabled = bEnableControls;
             chkContainerHighlight.Enabled = bEnableControls;
             comboContainerSelect.Enabled = bEnableControls;
             clrbtnContainerBackground.Enabled = bEnableControls;
@@ -25696,6 +26295,8 @@ namespace Thetis
             for (int n = 1; n < (int)MeterType.LAST; n++)
             {
                 MeterType mt = (MeterType)n;
+
+                if (mt == MeterType.DISCORD_BUTTONS) continue;
 
                 if (m.HasMeterType(mt))
                 {
@@ -25776,7 +26377,15 @@ namespace Thetis
         }
         private void btnContainerDelete_Click(object sender, EventArgs e)
         {
-            if (chkLockContainer.Checked) return;
+            if (chkLockContainer.Checked)
+            {
+                DialogResult dr = MessageBox.Show(this,
+                    "This container is locked. Remove it anyway?",
+                    "Remove locked container",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                if (dr != DialogResult.Yes) return;
+            }
             if (preventIfContainerContainsLockedRecordings()) return;
 
             clsContainerComboboxItem cci = (clsContainerComboboxItem)comboContainerSelect.SelectedItem;
@@ -33686,7 +34295,9 @@ namespace Thetis
             {
                 MeterManager.LockContainer(cci.ID, chkLockContainer.Checked);
                 btnRecoverContainer.Enabled = !chkLockContainer.Checked;
-                btnContainerDelete.Enabled = !chkLockContainer.Checked;
+                // btnContainerDelete stays enabled regardless of Lock;
+                // its click handler confirms deletion when locked.
+                btnContainerDelete.Enabled = true;
                 btnAddMeterItem.Enabled = !chkLockContainer.Checked;
                 btnRemoveMeterItem.Enabled = !chkLockContainer.Checked;
                 btnMeterUp.Enabled = !chkLockContainer.Checked;
@@ -33709,18 +34320,21 @@ namespace Thetis
                 ignore |= tmp.Contains(call, StringComparison.OrdinalIgnoreCase);
             }
 
-            #if !DEBUG
-            if (portaudio_issue || (!cmasio_config_flag && !ignore))
+            if (portaudio_issue)
             {
                 tcAudio.TabPages.Remove(tpCMAsio);
                 return;
             }
-            #endif
 
             _ignore_cmasio_settings_change = true; // prevent any changes here from writing to registry
 
-            bool enable = cmaster.GetCMAstate() == 0; // only enable when CMA is stopped
-            comboASIODevicesAvailable.Enabled = enable;
+            // The entire cmASIO tab follows a "queue change, apply on restart"
+            // model — see the "Settings updated. Restart to take effect." label.
+            // Earlier code disabled this dropdown when cmASIO was already
+            // running (state == 1), which prevented users from queuing a
+            // different device for the next session. There's no actual harm
+            // in letting them pick — the change doesn't apply until restart.
+            comboASIODevicesAvailable.Enabled = true;
 
             comboASIODevicesAvailable.Items.Clear();
             comboCMASIO_inpair.Items.Clear();
@@ -33851,39 +34465,38 @@ namespace Thetis
         }
         private void setupInOutBaseChannels(bool select_zero = false)
         {
-            bool enable = cmaster.GetCMAstate() == 0;
-
+            // Always populate from the currently selected device. Earlier code
+            // had a `cmaster.GetCMAstate() == 0` gate here that collapsed the
+            // pair selectors to a single read-only entry whenever cmASIO was
+            // active — but, like the device dropdown above, these selectors
+            // are queue-and-restart, so blocking them while running was just
+            // preventing users from configuring the next session.
             comboCMASIO_inpair.Items.Clear();
             comboCMASIO_outpair.Items.Clear();
 
             int in_ch = CMASIOConfig.GetASIObaseinchannel();
             int out_ch = CMASIOConfig.GetASIObaseoutchannel();
-            if (enable)
+
+            AsioDeviceInfo device = comboASIODevicesAvailable.SelectedItem as AsioDeviceInfo;
+            if (device != null)
             {
-                AsioDeviceInfo device = comboASIODevicesAvailable.SelectedItem as AsioDeviceInfo;
-                if (device != null)
+                for (int i = 0; i < device.InputChannelCount - 1; i++)
                 {
-                    for (int i = 0; i < device.InputChannelCount - 1; i++)
-                    {
-                        int idx = comboCMASIO_inpair.Items.Add($"ch{(i + 1).ToString()} + {(i + 2).ToString()}");
-                        if (idx == in_ch) comboCMASIO_inpair.SelectedIndex = idx;
-                    }
-                    for (int i = 0; i < device.OutputChannelCount - 1; i++)
-                    {
-                        int idx = comboCMASIO_outpair.Items.Add($"ch{(i + 1).ToString()} + {(i + 2).ToString()}");
-                        if (idx == out_ch) comboCMASIO_outpair.SelectedIndex = idx;
-                    }
-                    comboCMASIO_inpair.Enabled = true;
-                    comboCMASIO_outpair.Enabled = true;
+                    int idx = comboCMASIO_inpair.Items.Add($"ch{(i + 1).ToString()} + {(i + 2).ToString()}");
+                    if (idx == in_ch) comboCMASIO_inpair.SelectedIndex = idx;
                 }
-                else
+                for (int i = 0; i < device.OutputChannelCount - 1; i++)
                 {
-                    comboCMASIO_inpair.Enabled = false;
-                    comboCMASIO_outpair.Enabled = false;
+                    int idx = comboCMASIO_outpair.Items.Add($"ch{(i + 1).ToString()} + {(i + 2).ToString()}");
+                    if (idx == out_ch) comboCMASIO_outpair.SelectedIndex = idx;
                 }
+                comboCMASIO_inpair.Enabled = true;
+                comboCMASIO_outpair.Enabled = true;
             }
             else
             {
+                // No usable device info — show the saved channel as a single
+                // read-only entry so the user still sees what's queued.
                 int idx;
                 idx = comboCMASIO_inpair.Items.Add($"ch{(in_ch + 1).ToString()} + {(in_ch + 2).ToString()}");
                 comboCMASIO_inpair.SelectedIndex = idx;
@@ -33916,7 +34529,19 @@ namespace Thetis
 
         private void btnCMASIODisable_Click(object sender, EventArgs e)
         {
+            // Queue cmASIO off for the next restart. The cmASIO subsystem
+            // can't be torn down hot — it has to be re-evaluated at app
+            // startup — so we just clear the registry entry and rely on
+            // the "Settings updated. Restart to take effect." label.
+            //
+            // Update the on-screen state too: clear the "Current cmASIO
+            // Device" label and disable the per-device controls so the
+            // user can see something happened. Without this the dropdown
+            // still shows the device that was current at tab-open and the
+            // button looks like a no-op.
             CMASIOConfig.SetASIOdrivername("");
+            txtCurrentAsioDevice.Text = "";
+            setCMasioControls(false);
             updateCMAsioInfo();
         }
         private void setCMasioControls(bool enabled)
@@ -38184,6 +38809,31 @@ namespace Thetis
                     discovered = new List<NicRadioScanResult>();
                     if (result != null) discovered.Add(result);
                 }
+
+                /* SunSDR native-protocol probe: the HPSDR scan above will not
+                 * see a SunSDR2 DX (different discovery packet on port 50001).
+                 * Run the SunSDR probe only when the selected Radio Model is
+                 * SunSDR, and merge replies into the per-NIC Radios list.
+                 *
+                 * Broadcast target is the SunSDR2 DX default control port
+                 * (50001). Operators who changed the radio's control port
+                 * from 50001 cannot use Discover on that setup; they can
+                 * still add the radio via the Custom dialog by typing
+                 * IP:port (e.g. 10.0.3.50:40001) — the parser honours the
+                 * port and network.c passes it through to SunSDRInit
+                 * (fix for issue #15). */
+                if (HardwareSpecific.IsCurrentSunSDRModel)
+                {
+                    SunSDRDiscoveryService sunsdrSvc = new SunSDRDiscoveryService();
+                    foreach (NicRadioScanResult nic in discovered)
+                    {
+                        if (nic == null || nic.LocalIPv4 == null) continue;
+                        List<RadioInfo> sunsdrRadios = sunsdrSvc.Probe(nic.LocalIPv4, 800);
+                        if (sunsdrRadios == null || sunsdrRadios.Count < 1) continue;
+                        if (nic.Radios == null) nic.Radios = new List<RadioInfo>();
+                        nic.Radios.AddRange(sunsdrRadios);
+                    }
+                }
             }
             finally
             {
@@ -38378,6 +39028,47 @@ namespace Thetis
                     break;
             }
 
+            // Auto-sync the Radio Model dropdown to match the selected
+            // discovered radio's family, so a user who picked the wrong
+            // model from the dropdown before running Discovery doesn't
+            // end up talking to the radio with the wrong protocol.
+            //
+            // Example of the bug this closes: pick "SUNSDR2-PRO" from the
+            // dropdown → click Discover → the multi-family probe finds a
+            // SunSDR2 DX → user selects it in the list → without this
+            // sync, Model stays on "SUNSDR2-PRO" and Artemis tries to
+            // drive a DX with the PRO wire profile, which fails.
+            //
+            // Discovery result is the source of truth when Discovery is
+            // used; the dropdown is the fallback for manual entry. We
+            // only touch the dropdown if the selected discovered radio
+            // clearly belongs to a different model than what's chosen.
+            RadioInfo details = ucRadioList_Radios.SelectedRadioDetails;
+            if (details != null && !string.IsNullOrWhiteSpace(details.DisplayName))
+            {
+                string dn = details.DisplayName;
+                string targetModel = null;
+                if (dn.IndexOf("PRO", StringComparison.OrdinalIgnoreCase) >= 0
+                    && dn.IndexOf("SunSDR", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    targetModel = "SUNSDR2-PRO";
+                }
+                else if (dn.IndexOf("DX", StringComparison.OrdinalIgnoreCase) >= 0
+                         && dn.IndexOf("SunSDR", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    targetModel = "SUNSDR2-DX";
+                }
+
+                if (targetModel != null
+                    && comboRadioModel.Items.Contains(targetModel)
+                    && !string.Equals(comboRadioModel.Text, targetModel, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Setting .Text cascades through comboRadioModel_SelectedIndexChanged
+                    // -> HardwareSpecific.Model update -> initHPSDR -> all downstream UI.
+                    comboRadioModel.Text = targetModel;
+                }
+            }
+
             UpdateDDCTab();
             InitAudioTab();
         }
@@ -38433,6 +39124,14 @@ namespace Thetis
             }
 
             f.Board = HardwareSpecific.Hardware.ToString();
+
+            /* Pre-populate the IP field with the currently selected radio's
+             * IP (if any). Port is intentionally stripped — the field
+             * accepts IP only; discovery port defaults to 1024 in
+             * tryParseIpPort's fallback path. */
+            string priorIp = ucRadioList_Radios.SelectedRadioIp;
+            if (!string.IsNullOrWhiteSpace(priorIp))
+                f.RadioIPPort = priorIp;
 
             DialogResult dr = f.ShowDialog(this);
             if (dr == DialogResult.Cancel) return;

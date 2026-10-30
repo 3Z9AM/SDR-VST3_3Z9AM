@@ -19,7 +19,6 @@
 // You may contact the author via email at: k5kdn@arrl.net
 //=================================================================
 // Continual modifications Copyright (C) 2019-2026 Richard Samphire (MW0LGE)
-// Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 /*
 Modifications to support the Behringer Midi controllers
 by Chris Codella, W2PA, April 2017.  Indicated by //-W2PA comment lines.

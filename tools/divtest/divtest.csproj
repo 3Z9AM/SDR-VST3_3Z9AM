@@ -9,6 +9,5 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="../../Project Files/Source/Console/CwSkimmer.cs" />
-    <Compile Include="../../Project Files/Source/Console/DiversityDecimator.cs" />
   </ItemGroup>
 </Project>

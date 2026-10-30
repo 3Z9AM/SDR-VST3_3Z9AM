@@ -447,5 +447,3 @@ FREEDV_HANDOFF.md
 
 # activation key (tools/unlockgen + Thetis), never commit
 Project Files/Source/Console/ActivationSecret.cs
-# private working notes, keep local
-CLAUDE.md

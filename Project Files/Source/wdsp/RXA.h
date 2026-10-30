@@ -3,7 +3,6 @@
 This file is part of a program that implements a Software-Defined Radio.
 
 Copyright (C) 2013, 2014, 2015, 2016, 2025, 2026 Warren Pratt, NR0V
-Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -79,6 +78,7 @@ struct _rxa
 	struct
 	{
 		HBResampler p;
+		RESAMPLE f;	// polyphase fallback for ratios HBResampler lacks (SunSDR 312.5 kHz)
 	} rsmpin;
 	struct
 	{

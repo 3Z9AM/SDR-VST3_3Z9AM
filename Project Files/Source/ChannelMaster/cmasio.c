@@ -40,6 +40,10 @@ bryanr@bometals.com
 #include "cmcomm.h"
 #include "obbuffs.h"
 
+/* Defined in sunsdr.c — used here for instrumenting the rate-cascade
+ * vs ASIO blocksize relationship. */
+extern void sdr_logf(const char* fmt, ...);
+
 cmasio cma = { 0 };
 CMASIO pcma = &cma;
 int cmaError = 0;
@@ -47,10 +51,32 @@ int cmaError = 0;
 void create_cmasio()
 {
 	pcma->protocol = 1; // default Protocol 2
-	pcma->blocksize = pcm->audio_outsize;
+	// ASIO drivers (e.g. Audient) reject non-power-of-2 buffers, so the driver keeps the rate's natural size and rmatchOUT absorbs SunSDR's 96-sample mixer block
+	pcma->blocksize = getbuffsize(pcm->audio_outrate);
+	pcma->out_size = pcm->audio_outsize;
+	// TX-side block size: the TX stream's xcm_insize. On integer-ratio rates
+	// this matches blocksize; on SunSDR's 312500/48000 non-integer ratio,
+	// audio_outsize=96 (RX) but xmtr_insize=64 (TX). Use the TX-stream's
+	// actual block size so rmatchIN's pull-side matches what xcmaster's TX
+	// loop consumes per iteration.
+	{
+		int tx_stream = inid(1, 0);
+		pcma->tx_size = (tx_stream >= 0 && tx_stream < cmMAXstream)
+			? pcm->xcm_insize[tx_stream]
+			: pcma->blocksize;
+		if (pcma->tx_size <= 0) pcma->tx_size = pcma->blocksize;
+	}
 	int samplerate = pcm->audio_outrate;
+	sdr_logf("[CMASIO ENTRY] create_cmasio() called: blocksize=%d tx_size=%d samplerate=%d audio_outsize=%d audio_outrate=%d\n",
+		pcma->blocksize, pcma->tx_size, samplerate, pcm->audio_outsize, pcm->audio_outrate);
 	char* asioDriverName = (char*)calloc(32, sizeof(char));
-	if (getASIODriverString(asioDriverName) != 0) { free(asioDriverName); return; }
+	int regResult = getASIODriverString(asioDriverName);
+	if (regResult != 0) {
+		sdr_logf("[CMASIO FAIL] getASIODriverString returned %d (no driver configured in registry) — cmASIO will not start\n", regResult);
+		free(asioDriverName);
+		return;
+	}
+	sdr_logf("[CMASIO REGISTRY] driver name read from registry: \"%s\" (regResult=%d)\n", asioDriverName, regResult);
 	char buf[128];
 	sprintf_s(buf, 128, "Initializing cmASIO with: \nblock size = %d\nsample rate = %d\ndriver name = \"%s\"\n\n", pcma->blocksize, samplerate, asioDriverName);
 	OutputDebugStringA(buf);
@@ -70,6 +96,11 @@ void create_cmasio()
 	int result = prepareASIO(pcma->blocksize, samplerate, asioDriverName, &CallbackASIO, input_base_channel, output_base_channel);
 	sprintf_s(buf, 128, "prepareASIO return = %d", result);
 	OutputDebugStringA(buf);
+	sdr_logf("[CMASIO PREPARE] prepareASIO(driver=\"%s\", blocksize=%d, rate=%d, in_base=%ld, out_base=%ld) returned %d  (0=success, non-zero=fail)\n",
+		asioDriverName, pcma->blocksize, samplerate, input_base_channel, output_base_channel, result);
+	if (result != 0) {
+		sdr_logf("[CMASIO FAIL] cmASIO will not start — common causes: another app holds the ASIO driver exclusively, driver name mismatch, sample rate not supported by driver, or driver init error. cmaError will be set to %d.\n", result);
+	}
 	if (result == 0)
 	{
 		sprintf_s(buf, 128, "ASIO driver \"%s\" is loaded, initialized, and prepared.", asioDriverName);
@@ -87,10 +118,20 @@ void create_cmasio()
 		sprintf_s(buf, 128, "blockNum = %d\nlockMode = %d", blockNum, pcma->lockMode);
 		OutputDebugStringA(buf);
 
-		pcma->rmatchIN = create_rmatchV(pcma->blocksize, pcma->blocksize, samplerate, samplerate, blockNum * pcma->blocksize, 1);
-		pcma->rmatchOUT = create_rmatchV(pcma->blocksize, pcma->blocksize, samplerate, samplerate, blockNum * pcma->blocksize, 1);
+		// rmatchIN: ASIO callback pushes `blocksize` (96) samples per fill;
+		// asioIN pulls `tx_size` (64 on SunSDR) samples per call. Same rate
+		// (samplerate==samplerate), just different block boundaries —
+		// rmatchV handles the buffer-size matching internally.
+		pcma->rmatchIN = create_rmatchV(pcma->blocksize, pcma->tx_size, samplerate, samplerate, blockNum * pcma->blocksize, 1);
+		// rmatchOUT: asioOUT pushes `blocksize` (96) samples; ASIO callback
+		// pulls `blocksize` (96) samples — RX side is symmetric.
+		pcma->rmatchOUT = create_rmatchV(pcma->out_size, pcma->blocksize, samplerate, samplerate, blockNum * max(pcma->blocksize, pcma->out_size), 1);
 		forceRMatchVar(pcma->rmatchIN, 1, 1);
 		forceRMatchVar(pcma->rmatchOUT, 1, 1);
+		sdr_logf("[CMASIO INIT] blocksize=%d samplerate=%d blockNum=%ld lockMode=%d  rmatch in/out_size=%d in/out_rate=%d  audio_outsize=%d ch_outsize[0]=%d\n",
+			pcma->blocksize, samplerate, blockNum, pcma->lockMode,
+			pcma->blocksize, samplerate,
+			pcm->audio_outsize, pcm->cmRCVR > 0 ? pcm->rcvr[0].ch_outsize : -1);
 
 		pcma->bufferFull = CreateSemaphore(NULL, 0, 1, NULL);
 		pcma->bufferEmpty = CreateSemaphore(NULL, 1, 1, NULL);
@@ -111,6 +152,11 @@ void destroy_cmasio()
 	_aligned_free(pcma->input);
 	_aligned_free(pcma->output);
 	unloadASIO();
+	// a failed re-create must not leave ASIO selected with freed buffers (SunSDR power-on crash)
+	pcm->audioCodecId = HERMES;
+	pcma->run = 0;
+	pcma->rmatchIN = pcma->rmatchOUT = NULL;
+	pcma->input = pcma->output = NULL;
 
 	char buf[128];
 	sprintf_s(buf, 128, "cmASIO has been destroyed");
@@ -120,14 +166,21 @@ void destroy_cmasio()
 void asioIN(double* in_tx)
 {	// used for ASIO MIC data to TX
 	if (pcm->audioCodecId != ASIO) return;
+	// TX path uses tx_size, NOT blocksize. xcmaster's TX iteration consumes
+	// xcm_insize=tx_size complex samples per call. On SunSDR's non-integer
+	// rate ratio (audio_outsize=96 vs xmtr_insize=64) using blocksize=96
+	// here pulled 96 samples per call against a 750/sec call rate — total
+	// drain 72000 samples/sec vs ASIO supply 48000 samples/sec → constant
+	// underrun → robotic TX audio. Pulling tx_size=64 matches consumption
+	// to supply.
 	if (pcma->lockMode)
 	{
 		if (WaitForSingleObject(pcma->bufferFull, 2) == WAIT_TIMEOUT) { ++pcma->underFlowsIn; return; }
-		memcpy(in_tx, pcma->input, pcma->blocksize * sizeof(complex));
+		memcpy(in_tx, pcma->input, pcma->tx_size * sizeof(complex));
 		if (pcma->input_mode == IM_BOTH)
 		{
-			combinebuff(pcma->blocksize, in_tx, in_tx);
-			scalebuff(pcma->blocksize, in_tx, 0.5, in_tx);
+			combinebuff(pcma->tx_size, in_tx, in_tx);
+			scalebuff(pcma->tx_size, in_tx, 0.5, in_tx);
 		}
 		ReleaseSemaphore(pcma->bufferEmpty, 1, NULL);
 	}
@@ -136,14 +189,28 @@ void asioIN(double* in_tx)
 		xrmatchOUT(pcma->rmatchIN, in_tx);
 		if (pcma->input_mode == IM_BOTH)
 		{
-			combinebuff(pcma->blocksize, in_tx, in_tx);
-			scalebuff(pcma->blocksize, in_tx, 0.5, in_tx);
+			combinebuff(pcma->tx_size, in_tx, in_tx);
+			scalebuff(pcma->tx_size, in_tx, 0.5, in_tx);
 		}
 	}
 }
 
 void asioOUT(int id, int nsamples, double* buff)
 {	// called by the global mixer with a buffer of output data for ASIO
+
+	/* SunSDR audio debug: one-shot logging */
+	{
+		static volatile long asio_dbg_count = 0;
+		long c = InterlockedIncrement(&asio_dbg_count);
+		if (c <= 5 || (c <= 1000 && c % 200 == 0))
+		{
+			char dbg[256];
+			sprintf(dbg, "[asioOUT] id=%d nsamples=%d run=%d protocol=%d (call #%ld)\n",
+				id, nsamples, pcma->run, pcma->protocol, c);
+			OutputDebugStringA(dbg);
+		}
+	}
+
 	if (!pcma->run) return;
 	xrmatchIN(pcma->rmatchOUT, buff);		// audio data from mixer
 	if (pcma->protocol == 0) // W4WMT cmASIO via Protocol 1
