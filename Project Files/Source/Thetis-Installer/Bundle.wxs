@@ -51,7 +51,10 @@
                   UninstallCommand="/uninstall /quiet /norestart"
                   PerMachine="yes"
                   Permanent="yes"
-                  Vital="yes" />
+                  Vital="yes">
+        <!-- 1638 = newer .NET 10 runtime already installed (older bundled runtime refuses) -->
+        <ExitCode Value="1638" Behavior="success" />
+      </ExePackage>
       <MsiPackage Id="SDRVST3Product"
                   SourceFile="$(var.MsiPath)"
                   DisplayInternalUI="yes" />
