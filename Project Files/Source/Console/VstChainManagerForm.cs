@@ -66,6 +66,9 @@ namespace Thetis
             public Control Column;
             public CheckBox ChainBypassCheckBox;
             public NumericUpDown GainUpDown;
+            public NumericUpDown LaneAUpDown;
+            public NumericUpDown LaneBUpDown;
+            public Button LaneButton;
             public NumericUpDown LatencyFloorUpDown;
             public Label LatencyLabel;
             public Label ChainStatusLabel;
@@ -73,6 +76,9 @@ namespace Thetis
             public FlowLayoutPanel ButtonPanel;
             public ListView PluginListView;
             public VstRackView RackView;
+            public VstRackView RackViewB;           // TX: rack of parallel path B, next to path A
+            public TableLayoutPanel RackColumns;    // TX: holds both racks
+            public List<int>[] LaneRows;            // TX rack: per path, rack slot -> display row
             public Button AddButton;
             public Button RemoveButton;
             public Button MoveUpButton;
@@ -478,6 +484,17 @@ namespace Thetis
             };
             headerPanel.Controls.Add(page.GainUpDown);
 
+            // TX only: two parallel paths - plugins marked B run on a copy of the input, both paths are mixed
+            if (kind == VstChainKind.Tx)
+            {
+                page.LaneAUpDown = CreateLaneGainUpDown(page, 0);
+                page.LaneBUpDown = CreateLaneGainUpDown(page, 1);
+                headerPanel.Controls.Add(CreateFieldLabel("A dB:"));
+                headerPanel.Controls.Add(page.LaneAUpDown);
+                headerPanel.Controls.Add(CreateFieldLabel("B dB:"));
+                headerPanel.Controls.Add(page.LaneBUpDown);
+            }
+
             headerPanel.Controls.Add(CreateFieldLabel("Floor:"));
 
             page.LatencyFloorUpDown = new NumericUpDown();
@@ -536,38 +553,19 @@ namespace Thetis
             };
             page.PluginListView.DoubleClick += delegate { OpenPluginEditorAt(page, GetSelectedIndex(page)); };
 
-            page.RackView = new VstRackView(kind);
-            page.RackView.Dock = DockStyle.Fill;
-            page.RackView.SelectionChanged += delegate
-            {
-                if (_updatingUi) return;
-                _activePage = page;
-                UpdateSelection(page);
-            };
-            page.RackView.AddRequested += delegate { AddPluginFromCatalog(page); };
-            page.RackView.RemoveRequested += delegate(object s, VstRackSlotEventArgs e)
-            {
-                RemovePluginAt(page, e.Index);
-            };
-            page.RackView.MoveRequested += delegate(object s, VstRackMoveEventArgs e)
-            {
-                MovePluginAt(page, e.Index, e.Delta);
-            };
-            page.RackView.EnabledToggleRequested += delegate(object s, VstRackSlotEventArgs e)
-            {
-                TogglePluginEnabledAt(page, e.Index);
-            };
-            page.RackView.BypassToggleRequested += delegate(object s, VstRackSlotEventArgs e)
-            {
-                TogglePluginBypassAt(page, e.Index);
-            };
-            page.RackView.EditorRequested += delegate(object s, VstRackSlotEventArgs e)
-            {
-                OpenPluginEditorAt(page, e.Index);
-            };
+            page.RackView = CreateRackView(page, kind == VstChainKind.Tx ? 0 : -1);
 
             page.ViewHost.Controls.Add(page.PluginListView);
-            page.ViewHost.Controls.Add(page.RackView);
+            if (kind == VstChainKind.Tx)
+            {
+                page.RackViewB = CreateRackView(page, 1);
+                page.RackColumns = CreateRackColumns(page);
+                page.ViewHost.Controls.Add(page.RackColumns);
+            }
+            else
+            {
+                page.ViewHost.Controls.Add(page.RackView);
+            }
 
             // Row 3 — compact button cluster, wraps on narrow columns
             FlowLayoutPanel buttonPanel = new FlowLayoutPanel();
@@ -605,6 +603,13 @@ namespace Thetis
             page.ToggleBypassButton.Click += delegate { TogglePluginBypassAt(page, GetSelectedIndex(page)); };
             buttonPanel.Controls.Add(page.ToggleBypassButton);
 
+            if (kind == VstChainKind.Tx)
+            {
+                page.LaneButton = CreateButton("→ B", 48);
+                page.LaneButton.Click += delegate { TogglePluginLaneAt(page, GetSelectedIndex(page)); };
+                buttonPanel.Controls.Add(page.LaneButton);
+            }
+
             page.OpenEditorButton = CreateButton("Editor", 56);
             page.OpenEditorButton.Click += delegate { OpenPluginEditorAt(page, GetSelectedIndex(page)); };
             buttonPanel.Controls.Add(page.OpenEditorButton);
@@ -635,6 +640,113 @@ namespace Thetis
             column.Controls.Add(buttonPanel, 0, 3);
 
             return page;
+        }
+
+        /// <summary>Rack of one path: lane -1 = whole chain (RX), 0/1 = TX path A/B with slots mapped to display rows.</summary>
+        private VstRackView CreateRackView(ChainPage page, int lane)
+        {
+            VstRackView rack = new VstRackView(page.Kind);
+            rack.Dock = DockStyle.Fill;
+            rack.SelectionChanged += delegate
+            {
+                if (_updatingUi) return;
+                _activePage = page;
+                VstRackView other = rack == page.RackView ? page.RackViewB : page.RackView;
+                if (other != null && rack.SelectedIndex >= 0)
+                    other.SelectedIndex = -1;   // one selection across both paths
+                UpdateSelection(page);
+            };
+            rack.AddRequested += delegate { AddPluginFromCatalog(page, lane == 1 ? 1 : 0); };
+            rack.RemoveRequested += delegate(object s, VstRackSlotEventArgs e) { RemovePluginAt(page, RackRow(page, lane, e.Index)); };
+            rack.MoveRequested += delegate(object s, VstRackMoveEventArgs e) { MovePluginAt(page, RackRow(page, lane, e.Index), e.Delta); };
+            rack.EnabledToggleRequested += delegate(object s, VstRackSlotEventArgs e) { TogglePluginEnabledAt(page, RackRow(page, lane, e.Index)); };
+            rack.BypassToggleRequested += delegate(object s, VstRackSlotEventArgs e) { TogglePluginBypassAt(page, RackRow(page, lane, e.Index)); };
+            rack.EditorRequested += delegate(object s, VstRackSlotEventArgs e) { OpenPluginEditorAt(page, RackRow(page, lane, e.Index)); };
+            return rack;
+        }
+
+        private TableLayoutPanel CreateRackColumns(ChainPage page)
+        {
+            TableLayoutPanel columns = new TableLayoutPanel();
+            columns.Dock = DockStyle.Fill;
+            columns.Margin = new Padding(0);
+            columns.BackColor = FormBack;
+            columns.ColumnCount = 2;
+            columns.RowCount = 2;
+            columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            columns.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            columns.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            columns.Controls.Add(CreateFieldLabel("Path A"), 0, 0);
+            columns.Controls.Add(CreateFieldLabel("Path B (parallel)"), 1, 0);
+            columns.Controls.Add(page.RackView, 0, 1);
+            columns.Controls.Add(page.RackViewB, 1, 1);
+            return columns;
+        }
+
+        private static int RackRow(ChainPage page, int lane, int slot)
+        {
+            if (lane < 0 || page.LaneRows == null)
+                return slot;
+            return slot >= 0 && slot < page.LaneRows[lane].Count ? page.LaneRows[lane][slot] : -1;
+        }
+
+        private static void SetRackPlugins(ChainPage page, List<VstPluginState> displayPlugins)
+        {
+            if (page.RackViewB == null)
+            {
+                page.RackView.SetPlugins(displayPlugins, MaxPluginsPerChain);
+                return;
+            }
+
+            List<VstPluginState>[] lists = { new List<VstPluginState>(), new List<VstPluginState>() };
+            page.LaneRows = new[] { new List<int>(), new List<int>() };
+            for (int i = 0; i < displayPlugins.Count; i++)
+            {
+                int lane = displayPlugins[i] != null && displayPlugins[i].Lane == 1 ? 1 : 0;
+                lists[lane].Add(displayPlugins[i]);
+                page.LaneRows[lane].Add(i);
+            }
+
+            // the chain limit is shared, so each rack offers an add bay only while the whole chain has room
+            page.RackView.SetPlugins(lists[0], MaxPluginsPerChain - lists[1].Count);
+            page.RackViewB.SetPlugins(lists[1], MaxPluginsPerChain - lists[0].Count);
+        }
+
+        private static void SelectRackRow(ChainPage page, int row)
+        {
+            if (page.RackViewB == null)
+            {
+                page.RackView.SelectedIndex = row;
+                return;
+            }
+
+            page.RackView.SelectedIndex = page.LaneRows == null ? -1 : page.LaneRows[0].IndexOf(row);
+            page.RackViewB.SelectedIndex = page.LaneRows == null ? -1 : page.LaneRows[1].IndexOf(row);
+        }
+
+        private static void InvalidateRacks(ChainPage page)
+        {
+            page.RackView.Invalidate(true);
+            if (page.RackViewB != null)
+                page.RackViewB.Invalidate(true);
+        }
+
+        /// <summary>Row a move by delta lands on; on TX it skips the other path so a plugin moves within its column.</summary>
+        private int MoveTarget(ChainPage page, int index, int delta)
+        {
+            VstPluginState plugin = GetPluginAt(page, index);
+            int step = Math.Sign(delta);
+
+            if (plugin == null || step == 0)
+                return -1;
+            for (int target = index + step; target >= 0 && target < GetDisplayCount(page); target += step)
+            {
+                VstPluginState other = GetPluginAt(page, target);
+                if (page.RackViewB == null || (other != null && other.Lane == plugin.Lane))
+                    return target;
+            }
+            return -1;
         }
 
         private static Label CreateFieldLabel(string text)
@@ -699,8 +811,8 @@ namespace Thetis
             if (!show)
                 VstPluginArt.Clear();
 
-            _rxPage.RackView.Invalidate(true);
-            _txPage.RackView.Invalidate(true);
+            InvalidateRacks(_rxPage);
+            InvalidateRacks(_txPage);
         }
 
         /// <summary>
@@ -726,8 +838,8 @@ namespace Thetis
 
             int removed = VstHost.ClearCapturedArt();
 
-            _rxPage.RackView.Invalidate(true);
-            _txPage.RackView.Invalidate(true);
+            InvalidateRacks(_rxPage);
+            InvalidateRacks(_txPage);
 
             MessageBox.Show(
                 this,
@@ -760,11 +872,13 @@ namespace Thetis
 
         private static void ApplyViewModeToPage(ChainPage page, bool rack)
         {
-            page.RackView.Visible = rack;
+            Control rackHost = page.RackColumns != null ? (Control)page.RackColumns : page.RackView;
+
+            rackHost.Visible = rack;
             page.PluginListView.Visible = !rack;
 
             if (rack)
-                page.RackView.BringToFront();
+                rackHost.BringToFront();
             else
                 page.PluginListView.BringToFront();
         }
@@ -1022,6 +1136,7 @@ namespace Thetis
 
                 if (prev.Enabled != curr.Enabled ||
                     prev.Bypass != curr.Bypass ||
+                    prev.Lane != curr.Lane ||
                     prev.LoadState != curr.LoadState)
                     return false;
             }
@@ -1072,7 +1187,14 @@ namespace Thetis
                 page.LastChainInfo = chainInfo;
                 page.ChainBypassCheckBox.Checked = chainInfo.Bypass;
                 page.RackView.ChainBypassed = chainInfo.Bypass;
+                if (page.RackViewB != null)
+                    page.RackViewB.ChainBypassed = chainInfo.Bypass;
                 page.GainUpDown.Value = ClampDecimal(chainInfo.Gain, page.GainUpDown.Minimum, page.GainUpDown.Maximum);
+                if (page.LaneAUpDown != null)
+                {
+                    page.LaneAUpDown.Value = ClampDecimal(GainToDb(chainInfo.LaneGainA), page.LaneAUpDown.Minimum, page.LaneAUpDown.Maximum);
+                    page.LaneBUpDown.Value = ClampDecimal(GainToDb(chainInfo.LaneGainB), page.LaneBUpDown.Minimum, page.LaneBUpDown.Maximum);
+                }
                 if (chainInfo.LatencyFloorBlocks >= (int)page.LatencyFloorUpDown.Minimum &&
                     chainInfo.LatencyFloorBlocks <= (int)page.LatencyFloorUpDown.Maximum)
                     page.LatencyFloorUpDown.Value = chainInfo.LatencyFloorBlocks;
@@ -1097,7 +1219,7 @@ namespace Thetis
                     VstPluginState plugin = displayPlugins[i];
                     bool isStub = IsStubRow(plugin);
                     ListViewItem item = new ListViewItem((i + 1).ToString());
-                    item.SubItems.Add(VstHost.GetPluginDisplayName(plugin));
+                    item.SubItems.Add(VstHost.GetPluginRackLabel(plugin));
                     item.SubItems.Add(VstHost.GetPluginFormatDisplayName(plugin.Format));
                     item.SubItems.Add(isStub ? "Failed" : VstHost.GetLoadStateDisplayName(plugin.LoadState));
                     item.SubItems.Add(isStub ? "No" : (plugin.Enabled ? "Yes" : "No"));
@@ -1124,17 +1246,17 @@ namespace Thetis
 
                 page.PluginListView.EndUpdate();
 
-                page.RackView.SetPlugins(displayPlugins, MaxPluginsPerChain);
+                SetRackPlugins(page, displayPlugins);
 
                 if (selectedIndex >= 0 && selectedIndex < displayPlugins.Count)
                 {
                     page.PluginListView.Items[selectedIndex].Selected = true;
                     page.PluginListView.Items[selectedIndex].Focused = true;
-                    page.RackView.SelectedIndex = selectedIndex;
+                    SelectRackRow(page, selectedIndex);
                 }
                 else
                 {
-                    page.RackView.SelectedIndex = -1;
+                    SelectRackRow(page, -1);
                 }
             }
             finally
@@ -1260,10 +1382,15 @@ namespace Thetis
 
             page.AddButton.Enabled = chainHasCapacity;
             page.RemoveButton.Enabled = hasSelection;
-            page.MoveUpButton.Enabled = hasSelection && !isStub && selectedIndex > 0;
-            page.MoveDownButton.Enabled = hasSelection && !isStub && selectedIndex >= 0 && selectedIndex < GetDisplayCount(page) - 1;
+            page.MoveUpButton.Enabled = hasSelection && !isStub && MoveTarget(page, selectedIndex, -1) >= 0;
+            page.MoveDownButton.Enabled = hasSelection && !isStub && MoveTarget(page, selectedIndex, 1) >= 0;
             page.ToggleEnabledButton.Enabled = hasSelection && !isStub;
             page.ToggleBypassButton.Enabled = hasSelection && !isStub;
+            if (page.LaneButton != null)
+            {
+                page.LaneButton.Enabled = hasSelection && !isStub;
+                page.LaneButton.Text = plugin != null && plugin.Lane == 1 ? "→ A" : "→ B";
+            }
             page.OpenEditorButton.Enabled = hasSelection && !isStub && plugin != null && plugin.LoadState == VstPluginLoadState.Active;
 
             if (!hasSelection)
@@ -1296,7 +1423,11 @@ namespace Thetis
         private int GetSelectedIndex(ChainPage page)
         {
             if (_viewMode == VstChainViewMode.Rack)
-                return page.RackView.SelectedIndex;
+            {
+                if (page.RackViewB != null && page.RackViewB.SelectedIndex >= 0)
+                    return RackRow(page, 1, page.RackViewB.SelectedIndex);
+                return RackRow(page, page.RackViewB != null ? 0 : -1, page.RackView.SelectedIndex);
+            }
 
             if (page.PluginListView.SelectedIndices.Count == 0)
                 return -1;
@@ -1337,7 +1468,7 @@ namespace Thetis
 
         #region Chain operations
 
-        private void AddPluginFromCatalog(ChainPage page)
+        private void AddPluginFromCatalog(ChainPage page, int lane = 0)
         {
             if (!CanAddPlugin(page))
                 return;
@@ -1347,13 +1478,15 @@ namespace Thetis
                 if (dialog.ShowDialog(this) != DialogResult.OK)
                     return;
 
-                AddPlugin(page, dialog.SelectedPluginPath, dialog.SelectedPluginClassId);
+                AddPlugin(page, dialog.SelectedPluginPath, dialog.SelectedPluginClassId, lane);
             }
         }
 
-        private void AddPlugin(ChainPage page, string pluginPath, string classId = null)
+        private void AddPlugin(ChainPage page, string pluginPath, string classId = null, int lane = 0)
         {
             VstOperationResult result = VstHost.AddPlugin(page.Kind, pluginPath, classId);
+            if (lane == 1 && result.Success && result.PluginIndex >= 0)
+                VstHost.SetPluginLane(page.Kind, result.PluginIndex, 1);
             _activePage = page;
             RefreshChainPageAsync(page, result.PluginIndex);
 
@@ -1414,11 +1547,9 @@ namespace Thetis
 
         private void MovePluginAt(ChainPage page, int index, int delta)
         {
-            int targetIndex = index + delta;
+            int targetIndex = MoveTarget(page, index, delta);
 
-            if (index < 0)
-                return;
-            if (targetIndex < 0 || targetIndex >= GetDisplayCount(page))
+            if (index < 0 || targetIndex < 0)
                 return;
 
             int fromNativeIndex = GetNativePluginIndex(page, index);
@@ -1471,6 +1602,53 @@ namespace Thetis
 
             _activePage = page;
             QueueChainPageRefresh(page, index);
+        }
+
+        private void TogglePluginLaneAt(ChainPage page, int index)
+        {
+            VstPluginState plugin = GetPluginAt(page, index);
+
+            if (plugin == null || IsStubRow(plugin))
+                return;
+
+            int nativeIndex = GetNativePluginIndex(page, index);
+            if (nativeIndex < 0 || !VstHost.SetPluginLane(page.Kind, nativeIndex, plugin.Lane == 1 ? 0 : 1))
+            {
+                MessageBox.Show(this, "The native host could not move the plugin to the other path.", "VST Chains", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            _activePage = page;
+            QueueChainPageRefresh(page, index);
+        }
+
+        private const double LaneGainMinDb = -60.0;    // bottom of the control = path muted
+
+        private static double GainToDb(double gain)
+        {
+            return gain > 0.0 ? Math.Max(LaneGainMinDb, 20.0 * Math.Log10(gain)) : LaneGainMinDb;
+        }
+
+        private NumericUpDown CreateLaneGainUpDown(ChainPage page, int lane)
+        {
+            NumericUpDown upDown = new NumericUpDown();
+            upDown.DecimalPlaces = 1;
+            upDown.Increment = 0.5M;
+            upDown.Maximum = 12M;
+            upDown.Minimum = (decimal)LaneGainMinDb;
+            upDown.Value = -6M;
+            upDown.Size = new Size(56, 24);
+            upDown.Margin = new Padding(0, 2, 8, 0);
+            upDown.BorderStyle = BorderStyle.FixedSingle;
+            upDown.BackColor = PanelBack;
+            upDown.ForeColor = TextPrimary;
+            upDown.ValueChanged += delegate
+            {
+                if (_updatingUi) return;
+                double db = (double)upDown.Value;
+                VstHost.SetChainLaneGain(page.Kind, lane, db <= LaneGainMinDb ? 0.0 : Math.Pow(10.0, db / 20.0));
+            };
+            return upDown;
         }
 
         private void OpenPluginEditorAt(ChainPage page, int index)
@@ -1550,7 +1728,7 @@ namespace Thetis
                     BeginInvoke((MethodInvoker)delegate
                     {
                         if (!IsDisposed && !Disposing)
-                            page.RackView.Invalidate(true);
+                            InvalidateRacks(page);
                     });
                 }
                 catch (ObjectDisposedException)

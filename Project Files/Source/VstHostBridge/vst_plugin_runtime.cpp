@@ -6,6 +6,7 @@ This code/file can be found on GitHub : https://github.com/nubbyless/Thetis-Plus
 
 Copyright (C) 2026 ChasingCoffee
 Copyright (C) 2026 nubbyless <nubbyless@yahoo.com>
+Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -145,6 +146,20 @@ int ThetisPluginRuntime_Process(ThetisPluginRuntime* runtime, double* interleave
 	{
 	case VST_PLUGIN_FORMAT_VST3:
 		return VstRuntime_Process(runtime->vst3_runtime, interleaved_buffer, frames, chain_channels);
+	default:
+		return -1;
+	}
+}
+
+int ThetisPluginRuntime_GetLatencySamples(ThetisPluginRuntime* runtime)
+{
+	if (!runtime)
+		return -1;
+
+	switch (runtime->format)
+	{
+	case VST_PLUGIN_FORMAT_VST3:
+		return VstRuntime_GetLatencySamples(runtime->vst3_runtime);
 	default:
 		return -1;
 	}

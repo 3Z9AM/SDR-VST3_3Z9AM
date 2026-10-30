@@ -519,6 +519,14 @@ namespace
 			response.result = VstChain_SetPluginEnabled(g_chains[kind], request.arg0, request.arg1);
 			bump_snapshot_generation_now = response.result == 0;
 			break;
+		case VST_HOST_IPC_SET_PLUGIN_LANE:
+			response.result = VstChain_SetPluginLane(g_chains[kind], request.arg0, request.arg1);
+			bump_snapshot_generation_now = response.result == 0;
+			break;
+		case VST_HOST_IPC_SET_CHAIN_LANE_GAIN:
+			VstChain_SetLaneGain(g_chains[kind], request.arg0, request.double_value);
+			response.result = 0;
+			break;
 		case VST_HOST_IPC_GET_PLUGIN_STATE_SIZE:
 			expected_generation = request.arg1;
 			if (expected_generation >= 0 && expected_generation != current_chain_snapshot_generation(kind))

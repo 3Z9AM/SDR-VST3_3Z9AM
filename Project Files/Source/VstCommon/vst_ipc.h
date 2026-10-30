@@ -6,6 +6,7 @@ This code/file can be found on GitHub : https://github.com/nubbyless/Thetis-Plus
 
 Copyright (C) 2026 ChasingCoffee
 Copyright (C) 2026 nubbyless <nubbyless@yahoo.com>
+Portions Copyright (C) 2026 Daniel Poznanski, 3Z9AM - changes in this fork (see its git history).
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -55,6 +56,8 @@ enum VstHostIpcMessageType
 	VST_HOST_IPC_SET_PLUGIN_STATE = 27,
 	VST_HOST_IPC_OPEN_PLUGIN_EDITOR = 28,
 	VST_HOST_IPC_GET_CHAIN_SNAPSHOT_INFO = 29,
+	VST_HOST_IPC_SET_PLUGIN_LANE = 30,
+	VST_HOST_IPC_SET_CHAIN_LANE_GAIN = 31,
 	VST_HOST_IPC_RESPONSE = 100
 };
 

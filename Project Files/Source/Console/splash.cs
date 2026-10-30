@@ -124,65 +124,20 @@ namespace Thetis
 			timer1.Start();
 			this.ClientSize = this.BackgroundImage.Size;
 			this.Scale(new SizeF(SPLASH_SCALE, SPLASH_SCALE));
-			using (Bitmap full = new Bitmap(this.BackgroundImage))
+			try
 			{
-				drawCallsign(full);
-				this.BackgroundImage = new Bitmap(full, this.ClientSize);
+				using (Bitmap full = CallsignBackground.SplashImage(CallsignBackground.SavedCallsign() ?? SPLASH_CALLSIGN, 963, 309))
+					this.BackgroundImage = new Bitmap(full, this.ClientSize);
+			}
+			catch (Exception)
+			{
+				this.BackgroundImage = new Bitmap(this.BackgroundImage, this.ClientSize);    // keep the built-in picture
 			}
 			this.ShowInTaskbar = false;
 		}
 
-		// Replaces the "SDR-VST3" title baked into the default 963x309 splash image with the
-		// station callsign: the old title is painted out by interpolating the background
-		// between the rows just above and below it, then the callsign is drawn in a similar
-		// blue-to-purple glow style.
+		// default picture: the callsign background look (CallsignBackground.SplashImage)
 		private const string SPLASH_CALLSIGN = "3Z9AM";    // until a callsign background is generated
-		private static void drawCallsign(Bitmap bmp)
-		{
-			if (bmp.Width != 963 || bmp.Height != 309) return;
-
-			const int x0 = 70, x1 = 405, y0 = 100, y1 = 167;
-			for (int x = x0; x <= x1; x++)
-			{
-				Color a = bmp.GetPixel(x, y0 - 1);
-				Color b = bmp.GetPixel(x, y1 + 1);
-				for (int y = y0; y <= y1; y++)
-				{
-					float t = (y - y0 + 1) / (float)(y1 - y0 + 2);
-					bmp.SetPixel(x, y, Color.FromArgb(
-						(int)(a.R + (b.R - a.R) * t),
-						(int)(a.G + (b.G - a.G) * t),
-						(int)(a.B + (b.B - a.B) * t)));
-				}
-			}
-
-			string call = CallsignBackground.SavedCallsign() ?? SPLASH_CALLSIGN;
-			try
-			{
-				using (Graphics g = Graphics.FromImage(bmp))
-				using (FontFamily family = new FontFamily("Bahnschrift"))
-				using (GraphicsPath path = new GraphicsPath(FillMode.Winding))
-				using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-				using (LinearGradientBrush fill = new LinearGradientBrush(new PointF(90, 0), new PointF(390, 0),
-					Color.FromArgb(40, 120, 255), Color.FromArgb(175, 85, 255)))
-				{
-					g.SmoothingMode = SmoothingMode.AntiAlias;
-					path.AddString(call, family, (int)FontStyle.Bold, Math.Min(74f, 74f * 5.5f / call.Length),
-						new RectangleF(70, 112, 336, 76), sf);
-
-					foreach (float w in new[] { 10f, 6f, 3f })
-					{
-						using (Pen glow = new Pen(Color.FromArgb(40, 90, 110, 255), w) { LineJoin = LineJoin.Round })
-							g.DrawPath(glow, path);
-					}
-					g.FillPath(fill, path);
-				}
-			}
-			catch (ArgumentException)
-			{
-				// Bahnschrift missing (pre Windows 10): leave the painted-out area plain
-			}
-		}
 
 		protected override void Dispose( bool disposing )
 		{

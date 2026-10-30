@@ -81,6 +81,8 @@ typedef enum _VstHostState
 	VST_HOST_STATE_RESTARTING = 5
 } VstHostState;
 
+#define VST_CHAIN_LANES 2 /* parallel paths of a chain: A, B */
+
 typedef struct _VstPluginInfo
 {
 	int index;
@@ -91,6 +93,7 @@ typedef struct _VstPluginInfo
 	wchar_t path[VST_MAX_PLUGIN_PATH_CHARS];
 	wchar_t name[VST_MAX_PLUGIN_NAME_CHARS];
 	wchar_t cid[VST_MAX_PLUGIN_CID_CHARS];
+	int lane; /* parallel path: 0 = A, 1 = B */
 } VstPluginInfo;
 
 typedef struct _VstPluginProbeInfo
@@ -131,6 +134,9 @@ VSTBRIDGE_API int  VST_GetPluginCount(VstChainKind kind);
 VSTBRIDGE_API int  VST_GetPluginInfo(VstChainKind kind, int index, VstPluginInfo* info);
 VSTBRIDGE_API int  VST_SetPluginBypass(VstChainKind kind, int index, int bypass);
 VSTBRIDGE_API int  VST_SetPluginEnabled(VstChainKind kind, int index, int enabled);
+VSTBRIDGE_API int  VST_SetPluginLane(VstChainKind kind, int index, int lane);
+VSTBRIDGE_API void VST_SetChainLaneGain(VstChainKind kind, int lane, double gain);
+VSTBRIDGE_API double VST_GetChainLaneGain(VstChainKind kind, int lane);
 VSTBRIDGE_API int  VST_GetPluginStateSize(VstChainKind kind, int index);
 VSTBRIDGE_API int  VST_GetPluginState(VstChainKind kind, int index, void* buffer, int buffer_size, int* bytes_written);
 VSTBRIDGE_API int  VST_SetPluginState(VstChainKind kind, int index, const void* buffer, int buffer_size);

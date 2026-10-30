@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 #include "vst_chain.h"
+#include "vst_lane_mix.h"
 
 #include "vst_plugin_runtime.h"
 
@@ -275,6 +276,7 @@ namespace
 		InterlockedExchange(&plugin.bypass, 0);
 		InterlockedExchange(&plugin.load_state, VST_PLUGIN_LOAD_NONE);
 		InterlockedExchange(&plugin.format, VST_PLUGIN_FORMAT_UNKNOWN);
+		InterlockedExchange(&plugin.lane, 0);
 		plugin.path[0] = L'\0';
 		plugin.name[0] = L'\0';
 		plugin.cid[0] = L'\0';
@@ -286,6 +288,7 @@ namespace
 		InterlockedExchange(&destination.bypass, InterlockedCompareExchange(const_cast<LONG*>(&source.bypass), 0, 0));
 		InterlockedExchange(&destination.load_state, InterlockedCompareExchange(const_cast<LONG*>(&source.load_state), 0, 0));
 		InterlockedExchange(&destination.format, InterlockedCompareExchange(const_cast<LONG*>(&source.format), 0, 0));
+		InterlockedExchange(&destination.lane, InterlockedCompareExchange(const_cast<LONG*>(&source.lane), 0, 0));
 		wcsncpy_s(destination.path, VST_MAX_PLUGIN_PATH_CHARS, source.path, _TRUNCATE);
 		wcsncpy_s(destination.name, VST_MAX_PLUGIN_NAME_CHARS, source.name, _TRUNCATE);
 		wcsncpy_s(destination.cid, VST_MAX_PLUGIN_CID_CHARS, source.cid, _TRUNCATE);
@@ -350,6 +353,35 @@ namespace
 		return GetFileAttributesW(normalized_path) != INVALID_FILE_ATTRIBUTES;
 	}
 
+	void free_lane_buffers(VstProcessingState* state)
+	{
+		int lane;
+
+		delete[] state->lane_buffer;
+		state->lane_buffer = 0;
+		for (lane = 0; lane < VST_CHAIN_LANES; ++lane)
+		{
+			delete[] state->lane_delay[lane];
+			state->lane_delay[lane] = 0;
+		}
+	}
+
+	// scratch for the parallel paths, allocated with every processing state so the audio thread never allocates
+	bool alloc_lane_buffers(VstProcessingState* state)
+	{
+		size_t channels = static_cast<size_t>(state->num_channels);
+		int lane;
+
+		state->lane_buffer = new (std::nothrow) double[static_cast<size_t>(state->max_block_size) * channels]();
+		for (lane = 0; lane < VST_CHAIN_LANES; ++lane)
+			state->lane_delay[lane] = new (std::nothrow) double[static_cast<size_t>(VST_LANE_MAX_DELAY_FRAMES) * channels]();
+		state->lane_delay_pos = 0;
+		if (state->lane_buffer && state->lane_delay[0] && state->lane_delay[1])
+			return true;
+		free_lane_buffers(state);
+		return false;
+	}
+
 	void retain_processing_state(VstProcessingState* state)
 	{
 		if (state)
@@ -394,6 +426,7 @@ namespace
 			}
 		}
 
+		free_lane_buffers(local_state);
 		delete local_state;
 	}
 
@@ -558,6 +591,8 @@ namespace
 		new_state->max_block_size = max_block_size;
 		new_state->num_channels = num_channels;
 		new_state->plugin_count = plugin_count;
+		if (!alloc_lane_buffers(new_state.get()))
+			return -2;
 
 		for (i = 0; i < plugin_count; ++i)
 		{
@@ -567,6 +602,7 @@ namespace
 
 			InterlockedExchange(&runtime_plugin.enabled, InterlockedCompareExchange(&descriptor.enabled, 0, 0));
 			InterlockedExchange(&runtime_plugin.bypass, InterlockedCompareExchange(&descriptor.bypass, 0, 0));
+			InterlockedExchange(&runtime_plugin.lane, InterlockedCompareExchange(&descriptor.lane, 0, 0));
 			runtime_plugin.runtime = 0;
 
 			if (!descriptor.path[0])
@@ -632,6 +668,8 @@ namespace
 		new_state->max_block_size = old_state->max_block_size;
 		new_state->num_channels = old_state->num_channels;
 		new_state->plugin_count = plugin_count;
+		if (!alloc_lane_buffers(new_state.get()))
+			return -2;
 
 		for (new_index = 0; new_index < plugin_count; ++new_index)
 		{
@@ -652,6 +690,7 @@ namespace
 
 			InterlockedExchange(&destination.enabled, InterlockedCompareExchange(&descriptor.enabled, 0, 0));
 			InterlockedExchange(&destination.bypass, InterlockedCompareExchange(&descriptor.bypass, 0, 0));
+			InterlockedExchange(&destination.lane, InterlockedCompareExchange(&descriptor.lane, 0, 0));
 			InterlockedExchange(&destination.load_state, InterlockedCompareExchange(&old_state->plugins[old_index].load_state, 0, 0));
 			destination.runtime = old_state->plugins[old_index].runtime;
 			ThetisPluginRuntime_Retain(destination.runtime);
@@ -692,6 +731,8 @@ namespace
 		new_state->max_block_size = old_state->max_block_size;
 		new_state->num_channels = old_state->num_channels;
 		new_state->plugin_count = plugin_count;
+		if (!alloc_lane_buffers(new_state.get()))
+			return -2;
 
 		for (new_index = 0; new_index < plugin_count; ++new_index)
 		{
@@ -701,6 +742,7 @@ namespace
 
 			InterlockedExchange(&destination.enabled, InterlockedCompareExchange(&descriptor.enabled, 0, 0));
 			InterlockedExchange(&destination.bypass, InterlockedCompareExchange(&descriptor.bypass, 0, 0));
+			InterlockedExchange(&destination.lane, InterlockedCompareExchange(&descriptor.lane, 0, 0));
 			destination.runtime = 0;
 
 			if (source_index >= 0 && source_index < old_state->plugin_count)
@@ -837,6 +879,8 @@ namespace
 		InterlockedExchange(&chain.bypass, 0);
 		InterlockedExchange(&chain.plugin_count, 0);
 		InterlockedExchange64(&chain.gain_bits, double_to_bits(1.0));
+		for (i = 0; i < VST_CHAIN_LANES; ++i)
+			InterlockedExchange64(&chain.lane_gain_bits[i], double_to_bits(0.5));
 		for (i = 0; i < VST_MAX_CHAIN_PLUGINS; ++i)
 			clear_descriptor(chain.plugins[i]);
 		ReleaseSRWLockExclusive(&chain.state_lock);
@@ -1020,6 +1064,8 @@ void VstChain_Initialize(VstChainState& chain)
 	InterlockedExchange(&chain.bypass, 0);
 	InterlockedExchange(&chain.plugin_count, 0);
 	InterlockedExchange64(&chain.gain_bits, double_to_bits(1.0));
+	for (i = 0; i < VST_CHAIN_LANES; ++i)
+		InterlockedExchange64(&chain.lane_gain_bits[i], double_to_bits(0.5));
 	for (i = 0; i < VST_MAX_CHAIN_PLUGINS; ++i)
 		clear_descriptor(chain.plugins[i]);
 
@@ -1134,6 +1180,26 @@ void VstChain_SetGain(VstChainState& chain, double gain)
 		gain = 1.0;
 
 	InterlockedExchange64(&chain.gain_bits, double_to_bits(gain));
+}
+
+void VstChain_SetLaneGain(VstChainState& chain, int lane, double gain)
+{
+	if (lane < 0 || lane >= VST_CHAIN_LANES)
+		return;
+	if (!std::isfinite(gain) || gain < 0.0)
+		gain = 0.5;
+
+	InterlockedExchange64(&chain.lane_gain_bits[lane], double_to_bits(gain));
+}
+
+double VstChain_GetLaneGain(const VstChainState& chain, int lane)
+{
+	double gain;
+
+	if (lane < 0 || lane >= VST_CHAIN_LANES)
+		return 0.0;
+	gain = bits_to_double(InterlockedCompareExchange64(const_cast<LONG64*>(&chain.lane_gain_bits[lane]), 0, 0));
+	return std::isfinite(gain) ? gain : 0.5;
 }
 
 double VstChain_GetGain(const VstChainState& chain)
@@ -1584,6 +1650,7 @@ int VstChain_GetPluginInfo(const VstChainState& chain, int index, VstPluginInfo*
 	info->bypass = InterlockedCompareExchange(const_cast<LONG*>(&descriptor->bypass), 0, 0) ? 1 : 0;
 	info->load_state = InterlockedCompareExchange(const_cast<LONG*>(&descriptor->load_state), 0, 0);
 	info->format = InterlockedCompareExchange(const_cast<LONG*>(&descriptor->format), 0, 0);
+	info->lane = InterlockedCompareExchange(const_cast<LONG*>(&descriptor->lane), 0, 0);
 	wcsncpy_s(info->path, VST_MAX_PLUGIN_PATH_CHARS, descriptor->path, _TRUNCATE);
 	wcsncpy_s(info->name, VST_MAX_PLUGIN_NAME_CHARS, descriptor->name, _TRUNCATE);
 	if (descriptor->cid[0])
@@ -1612,6 +1679,33 @@ int VstChain_SetPluginBypass(VstChainState& chain, int index, int bypass)
 	active_state = chain.active_state;
 	if (active_state && index < active_state->plugin_count)
 		InterlockedExchange(&active_state->plugins[index].bypass, bypass ? 1 : 0);
+	ReleaseSRWLockExclusive(&chain.state_lock);
+	LeaveCriticalSection(&chain.mutation_lock);
+	if (chain.state_dirty_callback)
+		chain.state_dirty_callback(chain.state_dirty_context);
+	return 0;
+}
+
+int VstChain_SetPluginLane(VstChainState& chain, int index, int lane)
+{
+	VstProcessingState* active_state;
+	int plugin_count;
+
+	lane = lane ? 1 : 0;
+	EnterCriticalSection(&chain.mutation_lock);
+	AcquireSRWLockExclusive(&chain.state_lock);
+	plugin_count = InterlockedCompareExchange(&chain.plugin_count, 0, 0);
+	if (index < 0 || index >= plugin_count)
+	{
+		ReleaseSRWLockExclusive(&chain.state_lock);
+		LeaveCriticalSection(&chain.mutation_lock);
+		return -1;
+	}
+
+	InterlockedExchange(&chain.plugins[index].lane, lane);
+	active_state = chain.active_state;
+	if (active_state && index < active_state->plugin_count)
+		InterlockedExchange(&active_state->plugins[index].lane, lane);
 	ReleaseSRWLockExclusive(&chain.state_lock);
 	LeaveCriticalSection(&chain.mutation_lock);
 	if (chain.state_dirty_callback)
@@ -1776,6 +1870,71 @@ void VstChain_SetStateDirtyCallback(VstChainState& chain, VstChainStateDirtyCall
 	release_processing_state(active_state);
 }
 
+namespace
+{
+	// runs the plugins of one path (-1 = all) in place; latency = sum of what they report
+	int process_lane(VstChainState& chain, VstProcessingState& state, double* buffer, int frames, int lane, int* latency)
+	{
+		int plugin_index;
+		int process_result;
+		int reported;
+
+		if (latency)
+			*latency = 0;
+		for (plugin_index = 0; plugin_index < state.plugin_count; ++plugin_index)
+		{
+			VstProcessingPlugin& plugin = state.plugins[plugin_index];
+
+			if (lane >= 0 && InterlockedCompareExchange(&plugin.lane, 0, 0) != lane)
+				continue;
+			if (!plugin.runtime)
+				continue;
+			if (!InterlockedCompareExchange(&plugin.enabled, 0, 0))
+				continue;
+			if (InterlockedCompareExchange(&plugin.bypass, 0, 0))
+				continue;
+			if (InterlockedCompareExchange(&plugin.load_state, 0, 0) != VST_PLUGIN_LOAD_ACTIVE)
+				continue;
+
+			process_result = ThetisPluginRuntime_Process(plugin.runtime, buffer, frames, state.num_channels);
+			if (process_result != 0)
+			{
+				InterlockedExchange(&plugin.load_state, VST_PLUGIN_LOAD_FAILED);
+				if (plugin_index < VST_MAX_CHAIN_PLUGINS)
+					InterlockedExchange(&chain.plugins[plugin_index].load_state, VST_PLUGIN_LOAD_FAILED);
+				return process_result;
+			}
+
+			if (latency)
+			{
+				reported = ThetisPluginRuntime_GetLatencySamples(plugin.runtime);
+				if (reported >= 0)
+					plugin.latency = reported;	// busy runtime lock keeps the last value
+				*latency += plugin.latency;
+			}
+		}
+		return 0;
+	}
+
+	// path A in place, path B on a copy of the input; the earlier path is delayed to the later one, then mixed
+	int process_parallel(VstChainState& chain, VstProcessingState& state, double* buffer, int frames)
+	{
+		int latency[VST_CHAIN_LANES];
+		int result;
+
+		memcpy(state.lane_buffer, buffer, static_cast<size_t>(frames) * state.num_channels * sizeof(double));
+		result = process_lane(chain, state, buffer, frames, 0, &latency[0]);
+		if (result == 0)
+			result = process_lane(chain, state, state.lane_buffer, frames, 1, &latency[1]);
+		if (result != 0)
+			return result;
+
+		vst_lane_align_and_mix(buffer, state.lane_buffer, frames, state.num_channels, latency, state.lane_delay,
+			state.lane_delay_pos, VST_LANE_MAX_DELAY_FRAMES, VstChain_GetLaneGain(chain, 0), VstChain_GetLaneGain(chain, 1));
+		return 0;
+	}
+}
+
 int VstChain_ProcessInterleavedDouble(VstChainState& chain, double* buffer, int frames)
 {
 	VstProcessingState* active_state;
@@ -1785,6 +1944,7 @@ int VstChain_ProcessInterleavedDouble(VstChainState& chain, double* buffer, int 
 	double gain;
 	int plugin_index;
 	int process_result;
+	int parallel;
 	int sample_count;
 	int i;
 
@@ -1817,28 +1977,21 @@ int VstChain_ProcessInterleavedDouble(VstChainState& chain, double* buffer, int 
 		return -2;
 	}
 
+	// a plugin on path B makes the chain two parallel paths; otherwise one serial path as before
+	parallel = 0;
 	for (plugin_index = 0; plugin_index < active_state->plugin_count; ++plugin_index)
 	{
-		VstProcessingPlugin& plugin = active_state->plugins[plugin_index];
+		if (InterlockedCompareExchange(&active_state->plugins[plugin_index].lane, 0, 0))
+			parallel = 1;
+	}
 
-		if (!plugin.runtime)
-			continue;
-		if (!InterlockedCompareExchange(&plugin.enabled, 0, 0))
-			continue;
-		if (InterlockedCompareExchange(&plugin.bypass, 0, 0))
-			continue;
-		if (InterlockedCompareExchange(&plugin.load_state, 0, 0) != VST_PLUGIN_LOAD_ACTIVE)
-			continue;
-
-		process_result = ThetisPluginRuntime_Process(plugin.runtime, buffer, frames, active_state->num_channels);
-		if (process_result != 0)
-		{
-			InterlockedExchange(&plugin.load_state, VST_PLUGIN_LOAD_FAILED);
-			if (plugin_index < VST_MAX_CHAIN_PLUGINS)
-				InterlockedExchange(&chain.plugins[plugin_index].load_state, VST_PLUGIN_LOAD_FAILED);
-			release_processing_state(active_state);
-			return process_result;
-		}
+	process_result = parallel
+		? process_parallel(chain, *active_state, buffer, frames)
+		: process_lane(chain, *active_state, buffer, frames, -1, nullptr);
+	if (process_result != 0)
+	{
+		release_processing_state(active_state);
+		return process_result;
 	}
 
 	gain = VstChain_GetGain(chain);
