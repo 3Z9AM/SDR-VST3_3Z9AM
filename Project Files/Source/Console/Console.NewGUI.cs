@@ -770,7 +770,7 @@ namespace Thetis
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
         // dark title bar (Windows 10 2004+), HUD caption / border / text colours (Windows 11; ignored before)
-        private static void ngDarkTitleBar(Form f)
+        internal static void ngDarkTitleBar(Form f)
         {
             try
             {
