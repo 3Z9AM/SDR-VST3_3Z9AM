@@ -577,6 +577,7 @@
     <Compile Include="TCIServer.cs" />
     <Compile Include="titlebar.cs" />
     <Compile Include="vsthost.cs" />
+    <Compile Include="VstWavesImport.cs" />
     <Compile Include="VstChainManagerForm.cs">
       <SubType>Form</SubType>
     </Compile>
