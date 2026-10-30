@@ -132,7 +132,7 @@ void plan_firopt (FIROPT a)
 {
 	// must call for change in 'nc', 'size', 'out'
 	int i;
-	a->nfor = a->nc / a->size;
+	a->nfor = (a->nc + a->size - 1) / a->size;	// ceil: SunSDR dsp_size (384) does not divide nc
 	a->buffidx = 0;
 	a->idxmask = a->nfor - 1;
 	a->fftin = (double *) malloc0 (2 * a->size * sizeof (complex));
@@ -163,7 +163,9 @@ void calc_firopt (FIROPT a)
 	{
 		// I right-justified the impulse response => take output from left side of output buff, discard right side
 		// Be careful about flipping an asymmetrical impulse response.
-		memcpy (&(a->maskgen[2 * a->size]), &(impulse[2 * a->size * i]), a->size * sizeof(complex));
+		int n = min (a->size, a->nc - a->size * i);
+		memset (&(a->maskgen[2 * a->size]), 0, a->size * sizeof(complex));
+		memcpy (&(a->maskgen[2 * a->size]), &(impulse[2 * a->size * i]), n * sizeof(complex));
 		fftw_execute (a->maskplan[i]);
 	}
 	_aligned_free (impulse);
@@ -240,9 +242,9 @@ void xfiropt (FIROPT a, int pos)
 				a->accum[2 * i + 0] += a->fftout[k][2 * i + 0] * a->fmask[j][2 * i + 0] - a->fftout[k][2 * i + 1] * a->fmask[j][2 * i + 1];
 				a->accum[2 * i + 1] += a->fftout[k][2 * i + 0] * a->fmask[j][2 * i + 1] + a->fftout[k][2 * i + 1] * a->fmask[j][2 * i + 0];
 			}
-			k = (k + a->idxmask) & a->idxmask;
+			k = (k + a->idxmask) % a->nfor;
 		}
-		a->buffidx = (a->buffidx + 1) & a->idxmask;
+		a->buffidx = (a->buffidx + 1) % a->nfor;
 		fftw_execute (a->crev);
 		memcpy (a->fftin, &(a->fftin[2 * a->size]), a->size * sizeof(complex));
 	}
@@ -291,7 +293,7 @@ void plan_fircore (FIRCORE a)
 {
 	// must call for change in 'nc', 'size', 'out', 'pfactor'
 	int i;
-	a->nfor = a->nc / a->size;
+	a->nfor = (a->nc + a->size - 1) / a->size;	// ceil: SunSDR dsp_size (384) does not divide nc
 	a->cset = 0;
 	a->buffidx = 0;
 	a->idxmask = a->nfor - 1;
@@ -333,7 +335,9 @@ void calc_fircore (FIRCORE a, int flip)
 	{
 		// I right-justified the impulse response => take output from left side of output buff, discard right side
 		// Be careful about flipping an asymmetrical impulse response.
-		memcpy (&(a->maskgen[2 * a->size]), &(a->imp[2 * a->size * i]), a->size * sizeof(complex));
+		int n = min (a->size, a->nc - a->size * i);
+		memset (&(a->maskgen[2 * a->size]), 0, a->size * sizeof(complex));
+		memcpy (&(a->maskgen[2 * a->size]), &(a->imp[2 * a->size * i]), n * sizeof(complex));
 		fftw_execute (a->maskplan[1 - a->cset][i]);
 	}
 	a->masks_ready = 1;
@@ -431,10 +435,10 @@ void xfircore (FIRCORE a)
 			accum[2 * i + 0] += fftout[k][2 * i + 0] * fmask[cset][j][2 * i + 0] - fftout[k][2 * i + 1] * fmask[cset][j][2 * i + 1];
 			accum[2 * i + 1] += fftout[k][2 * i + 0] * fmask[cset][j][2 * i + 1] + fftout[k][2 * i + 1] * fmask[cset][j][2 * i + 0];
 		}
-		k = (k + idxmask) & idxmask;
+		k = (k + idxmask) % nfor;
 	}
 	LeaveCriticalSection (&a->update);
-	a->buffidx = (a->buffidx + 1) & idxmask;
+	a->buffidx = (a->buffidx + 1) % nfor;
 	fftw_execute (a->crev);
 	memcpy (a->fftin, &(a->fftin[2 * a->size]), a->size * sizeof(complex));
 }
