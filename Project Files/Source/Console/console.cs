@@ -28541,7 +28541,9 @@ namespace Thetis
         // release exists, a status-bar label appears that opens the release page when clicked.
         // Silent on any failure (offline, rate limit) so it never bothers the user.
 
-        private const string c_UpdateCheckApiUrl = "https://api.github.com/repos/nubbyless/SDR-VST3/releases/latest";
+        private const string c_UpdateCheckApiUrl = "https://api.github.com/repos/3Z9AM/SDR-VST3_3Z9AM/releases?per_page=50";
+        // release tag suffix of this build: "" = main (v6.0.6.0), "-hl2" / "-sunsdr" on those branches
+        private const string c_UpdateTagSuffix = "";
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabel_Update;
 
         private void initUpdateCheck()
@@ -28586,27 +28588,28 @@ namespace Thetis
                     hc.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
                     string json = await hc.GetStringAsync(c_UpdateCheckApiUrl).ConfigureAwait(true);
 
-                    Newtonsoft.Json.Linq.JObject o = Newtonsoft.Json.Linq.JObject.Parse(json);
-                    tag = (string)o["tag_name"];
-                    htmlUrl = (string)o["html_url"];
+                    // newest published release of this build's variant (the main release is the only "latest")
+                    Version best = null;
+                    foreach (Newtonsoft.Json.Linq.JToken r in Newtonsoft.Json.Linq.JArray.Parse(json))
+                    {
+                        string t = (string)r["tag_name"];
+                        if ((bool?)r["draft"] == true || (bool?)r["prerelease"] == true || t == null) continue;
+                        Version v = ParseLooseVersion(t);
+                        string rest = System.Text.RegularExpressions.Regex.Replace(t, @"^\D*[\d.]+", ""); // "v6.0.6.0-hl2" -> "-hl2"
+                        if (v == null || !string.Equals(rest, c_UpdateTagSuffix, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (best == null || v > best) { best = v; tag = t; htmlUrl = (string)r["html_url"]; }
+                    }
                 }
 
                 if (IsDisposed || Disposing || string.IsNullOrEmpty(tag)) return;
 
                 Version latest = ParseLooseVersion(tag);
                 Version current = ParseLooseVersion(Application.ProductVersion);
-                if (latest != null && current != null && !string.IsNullOrEmpty(htmlUrl))
+                // only a newer release is shown - no "Up to date" label (user did not want a permanent status-bar label)
+                if (latest != null && current != null && !string.IsNullOrEmpty(htmlUrl) && latest > current)
                 {
-                    if (latest > current)
-                    {
-                        toolStripStatusLabel_Update.Text = "Update available : " + tag;
-                        toolStripStatusLabel_Update.ForeColor = System.Drawing.Color.Red;
-                    }
-                    else
-                    {
-                        toolStripStatusLabel_Update.Text = "Up to date : " + tag;
-                        toolStripStatusLabel_Update.ForeColor = System.Drawing.Color.LimeGreen;
-                    }
+                    toolStripStatusLabel_Update.Text = "Update available : " + tag;
+                    toolStripStatusLabel_Update.ForeColor = System.Drawing.Color.Red;
                     toolStripStatusLabel_Update.ToolTipText = "Click to open " + htmlUrl;
                     toolStripStatusLabel_Update.Tag = htmlUrl;
                     toolStripStatusLabel_Update.Visible = true;
@@ -46228,7 +46231,7 @@ namespace Thetis
             initGpuUsageMeter();
 
             // update check - quiet GitHub releases query, status-bar label only when a newer release exists
-            //initUpdateCheck(); // disabled on request: no red "Update available" label in the status bar
+            initUpdateCheck(); // 3Z9AM releases; the label appears only when a newer release exists
 
             // set the multifunction setting to the status bar
             DataTable multitable = AndromedaSet.Tables["Multifunction Settings"];
