@@ -1053,6 +1053,26 @@ namespace Thetis
             return true;
         }
 
+        /// <summary>Current bridge state blob of a plugin (refreshed from the host first), or null.</summary>
+        public static byte[] GetPluginStateBlob(VstChainKind kind, int index)
+        {
+            byte[] stateData;
+
+            if (!EnsureNativeAvailable()) return null;
+            NativeRefreshChainState(kind);
+            return TryGetPluginStateData(kind, index, out stateData) ? stateData : null;
+        }
+
+        public static bool SetPluginStateBlob(VstChainKind kind, int index, byte[] stateData)
+        {
+            if (!EnsureNativeAvailable() || stateData == null || stateData.Length == 0) return false;
+            if (NativeSetPluginState(kind, index, stateData, stateData.Length) != 0)
+                return false;
+
+            ScheduleStateSave(DeferredStateSaveDelayMs);
+            return true;
+        }
+
         public static bool OpenPluginEditorWindow(VstChainKind kind, int index)
         {
             if (!EnsureNativeAvailable()) return false;
