@@ -1116,7 +1116,8 @@ namespace Thetis
             int[] p1_rates = include_extra_p1_rate ? new int[] { 48000, 96000, 192000, 384000 } : new int[] { 48000, 96000, 192000 };
             int[] p2_rates = { 48000, 96000, 192000, 384000, 768000, 1536000 };
             int[] sunsdr_dx_rates = { 312500 }; // DX: native 312.5 kHz router path
-            int[] sunsdr_pro_rates = { 312500 }; // PRO: native 312.5 kHz like DX (sunsdr.c profile since Artemis v2.1.9); 384000 here left WDSP expecting 384 kHz -> VAC underflows
+            // PRO: native rates selected by STATE_SYNC bytes 56/58 (N0GQ capture); 312500 first = index 0 of older databases
+            int[] sunsdr_pro_rates = { 312500, 156250, 78125 };
 
             int[] rates = HardwareSpecific.Model == HPSDRModel.SUNSDR2DX ? sunsdr_dx_rates :
                           HardwareSpecific.Model == HPSDRModel.SUNSDR2PRO ? sunsdr_pro_rates :
@@ -7658,6 +7659,18 @@ namespace Thetis
 
         private bool m_bForceAudio = false;
 
+        // SunSDR native IQ rate used by the console power-on rate cascade; only the PRO can change it
+        public int SunSDRRate
+        {
+            get
+            {
+                if (HardwareSpecific.Model == HPSDRModel.SUNSDR2PRO && Int32.TryParse(comboAudioSampleRate1.Text, out int r) &&
+                    (r == 78125 || r == 156250 || r == 312500))
+                    return r;
+                return 312500;
+            }
+        }
+
         private void comboAudioSampleRate1_SelectedIndexChanged(object sender, System.EventArgs e)
         {
             // rx1 f/w sample rate
@@ -7683,6 +7696,21 @@ namespace Thetis
             {
                 switch (NetworkIO.CurrentRadioProtocol)
                 {
+                    case RadioProtocol.SUNSDR:
+                        {
+                            // the rate reaches the radio and the whole pipeline in the power-on cascade, so restart the radio;
+                            // RX2 runs at the same rate (cascade), keep its combo in step or a forced reset would set it back
+                            bool restart = !m_bForceAudio && console.PowerOn && SunSDRRate != console.SampleRateRX1;
+                            if (restart)
+                            {
+                                console.PowerOn = false;
+                                Thread.Sleep(100);
+                            }
+                            comboAudioSampleRateRX2.Enabled = false;
+                            comboAudioSampleRateRX2.SelectedIndex = comboAudioSampleRate1.SelectedIndex;
+                            if (restart) console.PowerOn = true;
+                        }
+                        break;
                     case RadioProtocol.ETH:
                         // turn OFF the DSP channels so they get flushed out (must do while data is flowing to get slew-down and flush)
                         WDSP.SetChannelState(WDSP.id(0, 1), 0, 0);

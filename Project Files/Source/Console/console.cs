@@ -28517,7 +28517,8 @@ namespace Thetis
                 // actually arrive at 312500 → pitch-shifted/"robotic" audio.
                 if (HardwareSpecific.IsCurrentSunSDRModel)
                 {
-                    int sunsdr_rate = 312500;
+                    int sunsdr_rate = IsSetupFormNull ? 312500 : SetupForm.SunSDRRate;
+                    NetworkIO.nativeSunSDRSetSampleRate(sunsdr_rate); // before Audio.Start -> SunSDRPowerOn sends it in STATE_SYNC
                     int sunsdr_bs   = cmaster.GetBuffSize(sunsdr_rate);
                     powerOnLog($"Rate cascade for SUNSDR: rate={sunsdr_rate} bs={sunsdr_bs}");
                     SampleRateRX1   = sunsdr_rate;

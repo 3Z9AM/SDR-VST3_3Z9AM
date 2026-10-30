@@ -1558,6 +1558,11 @@ PORT void nativeSunSDRSetMicSource(int state)
 	SunSDRSetMicSource(state);
 }
 
+PORT void nativeSunSDRSetSampleRate(int rate)
+{
+	SunSDRSetSampleRate(rate);
+}
+
 PORT int nativeSunSDRGetHwPttState(void)
 {
 	return SunSDRGetHwPttState();

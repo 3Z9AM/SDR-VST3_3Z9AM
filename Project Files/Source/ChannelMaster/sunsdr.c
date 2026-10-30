@@ -1287,9 +1287,23 @@ static int sunsdr_resample(int source, const double* in, int nsamples)
     return out_count;
 }
 
+/* PRO IQ rate index for STATE_SYNC bytes 56/58 (0 = 39062.5, 1 = 78125,
+ * 2 = 156250, 3 = 312500 Hz). Outside `sdr` because SunSDRInit memsets it;
+ * C# sets it before power-on (SunSDRSetSampleRate). DX stays at 312500. */
+static volatile LONG sunsdr_pro_rate_index = 3;
+
+static double sunsdr_rx_native_rate(void)
+{
+    if (sdr.profile == NULL) return 0.0;
+    if (sdr.profile->variant == SUNSDR_VARIANT_PRO)
+        return 39062.5 * (double)(1 << sunsdr_pro_rate_index);
+    return sdr.profile->rxNativeRate;
+}
+
 static int sunsdr_rx_uses_native_router_rate(void)
 {
-    return sdr.profile != NULL && fabs(sdr.profile->rxNativeRate - 312500.0) < 1.0;
+    /* 78125 / 156250 / 312500 go wire -> xrouter -> WDSP; only 39062.5 needs the upsampler */
+    return sunsdr_rx_native_rate() > 40000.0;
 }
 
 static int sunsdr_rx_router_feed_size(void)
@@ -1299,7 +1313,28 @@ static int sunsdr_rx_router_feed_size(void)
 
 static double sunsdr_rx_packet_rate(void)
 {
-    return sunsdr_rx_uses_native_router_rate() ? 1562.5 : 195.3125;
+    return sunsdr_rx_uses_native_router_rate() ? sunsdr_rx_native_rate() / SUNSDR_IQ_COMPLEX_PER_PKT : 195.3125;
+}
+
+/* Rate index into a parsed PRO STATE_SYNC packet (both redundant copies). */
+static void sunsdr_patch_pro_rate(unsigned char* pkt, int len)
+{
+    if (sunsdr_is_pro() && len > 58) {
+        pkt[56] = (unsigned char)sunsdr_pro_rate_index;
+        pkt[58] = (unsigned char)sunsdr_pro_rate_index;
+    }
+}
+
+/* PRO only, applied at the next power-on: 78125, 156250 or 312500 Hz. */
+void SunSDRSetSampleRate(int rate)
+{
+    LONG idx = rate == 78125 ? 1 : rate == 156250 ? 2 : rate == 312500 ? 3 : -1;
+    if (idx < 0) {
+        sdr_logf("SunSDRSetSampleRate: unsupported rate=%d — ignoring\n", rate);
+        return;
+    }
+    InterlockedExchange(&sunsdr_pro_rate_index, idx);
+    sdr_logf("SunSDRSetSampleRate(rate=%d idx=%ld)\n", rate, idx);
 }
 /* ========== Helpers ========== */
 
@@ -2553,8 +2588,14 @@ static void sunsdr_send_band_change_prelude(int toVhf)
 
 static void sunsdr_send_state_sync_count(int rx_count)
 {
-    if (sunsdr_is_pro())
-        sunsdr_send_hex_pkt(sunsdr_state_sync_template_hex(), 68);
+    if (sunsdr_is_pro()) {
+        unsigned char pkt[128];
+        unsigned char reply[128];
+        int len = sunsdr_parse_hex(sunsdr_state_sync_template_hex(), pkt, (int)sizeof(pkt));
+        sunsdr_patch_magic(pkt, len);
+        sunsdr_patch_pro_rate(pkt, len);
+        sunsdr_send_ctrl_and_recv(pkt, len, reply, (int)sizeof(reply));
+    }
     else
         sunsdr_send_hex_pkt_u8(sunsdr_state_sync_template_hex(), 0x36, (unsigned char)rx_count);
 }
@@ -2808,6 +2849,7 @@ static int sunsdr_run_macro(void)
         if (len >= 68 && pkt[1] == 0xff && pkt[2] == 0x01) {
             len = sunsdr_parse_hex(sunsdr_state_sync_template_hex(), pkt, (int)sizeof(pkt));
             sunsdr_patch_magic(pkt, len);
+            sunsdr_patch_pro_rate(pkt, len);
         }
 
         if (sdr.profile->macroStartIqValue >= 0 &&
@@ -2966,7 +3008,7 @@ int SunSDRInit(const char* radioIP, int ctrlPort, int streamPort, int modelId)
     sdr.profile = profile;
     sdr.variant = sdr.profile->variant;
     sdr_logf("SunSDR profile selected: %s (ctrl=%d stream=%d magic=0x%02X rxRate=%.4f)\n",
-        sdr.profile->name, sdr.ctrlPort, sdr.streamPort, (unsigned)sdr.profile->magic0, sdr.profile->rxNativeRate);
+        sdr.profile->name, sdr.ctrlPort, sdr.streamPort, (unsigned)sdr.profile->magic0, sunsdr_rx_native_rate());
     sdr.currentRxAntenna = 1;
     sdr.currentTxAntenna = 1;
     sunsdr_set_identity_defaults();

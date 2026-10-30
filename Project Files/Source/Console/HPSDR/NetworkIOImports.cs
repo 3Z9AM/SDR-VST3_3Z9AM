@@ -431,6 +431,9 @@ namespace Thetis
         public static extern void nativeSunSDRSetMicSource(int state);
 
         [DllImport("ChannelMaster.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void nativeSunSDRSetSampleRate(int rate);
+
+        [DllImport("ChannelMaster.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int nativeSunSDRGetHwPttState();
 
         [DllImport("ChannelMaster.dll", CallingConvention = CallingConvention.Cdecl)]

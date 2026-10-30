@@ -282,6 +282,7 @@ void SunSDRSetTune(int tune);
  * 2=0 dB (bypass), 3=+10 dB preamp. No-op if out of range. */
 void SunSDRSetPreampAtt(int state);
 void SunSDRSetMicSource(int state);
+void SunSDRSetSampleRate(int rate);
 int  SunSDRGetHwPttState(void);
 int  SunSDRGetAdcOverload(void);
 void SunSDRLogTuneState(const char* label, int chk_tun, int chk_mox, int tuning, int mox,
