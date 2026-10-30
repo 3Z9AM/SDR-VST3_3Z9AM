@@ -26173,6 +26173,9 @@ namespace Thetis
         // raw ADC value corresponds to ~25-50× less actual RF.
         private static (double K, double C) GetSunsdrPwrCal(Band b)
         {
+            // 2m: sunsdr.c already turns the VHF telemetry into watts and re-encodes them on this (DX 20m) scale -
+            // the PRO table fell back to (0.0002189, 149) and showed 0 W
+            if (b == Band.B2M) return (0.00412, 33.0);
             if (HardwareSpecific.Model == HPSDRModel.SUNSDR2PRO)
             {
                 // PRO cal — refined 2026-05-08 from Bernie F6Bernie's
