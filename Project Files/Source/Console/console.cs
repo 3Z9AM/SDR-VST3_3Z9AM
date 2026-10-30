@@ -31809,6 +31809,10 @@ namespace Thetis
 
         private void Console_MouseWheel(object sender, System.Windows.Forms.MouseEventArgs e)
         {
+            // the wheel a drawer control (new layout) did not use bubbles up here, and TuneHitTest only
+            // looks at bounds: with the drawer over VFO A it tuned VFO A along with the drawer value
+            if (ngDrawerUnderMouse()) return;
+
             if (this.ActiveControl is PrettyTrackBar)
             {
                 btnHidden.Focus();

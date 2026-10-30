@@ -4948,6 +4948,7 @@ namespace Thetis
                         }
                     }
 
+                    drawModernGlassDX2D(displayTargetWidth, displayTargetHeight);
                     drawModernPanelShadowsDX2D();
 
                     DrawCursorInfo(displayTargetWidth);

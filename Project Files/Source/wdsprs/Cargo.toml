@@ -1,0 +1,15 @@
+[package]
+name = "wdsprs"
+version = "0.1.0"
+edition = "2021"
+description = "Local WDSP additions in Rust, linked statically into wdsp.dll"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+
+[profile.dev]
+panic = "abort"

@@ -35,7 +35,7 @@ namespace Thetis
     // that reads, shows, hides or moves them behaves as before).
     public partial class Console
     {
-        private Panel _ngParking, _ngTop, _ngDock, _ngDrawer;
+        private Panel _ngParking, _ngTop, _ngInfo, _ngDock, _ngDrawer;
         private NgTile _ngOpen;
         private readonly List<NgTile> _ngTiles = new List<NgTile>();
         private List<NgTile> _ngTilesDefault;           // order as built, for Ctrl + Shift + click
@@ -78,13 +78,16 @@ namespace Thetis
                 collapseToolStripMenuItem.Visible = false;
 
                 _ngParking = new Panel { Name = "ngParking", Location = new Point(-20000, 0), Size = new Size(4000, 2000) };
-                _ngTop = new Panel { Name = "ngTop", BackColor = ModernTheme.Back };
+                _ngTop = new Panel { Name = "ngBar", BackColor = ModernTheme.Back };
                 _ngTop.Paint += (s, e) =>
                 {
                     ngPaintBar(e.Graphics, _ngTop, false);
-                    ngPaintShadows(e.Graphics, NgTopPanels.Where(c => c.Visible).Select(c => _ngTop.RectangleToClient(RectangleToScreen(c.Bounds))).Append(ngInfoRect()));
-                    ngPaintTopInfo(e.Graphics);
+                    ngPaintShadows(e.Graphics, NgTopPanels.Where(c => c.Visible).Select(c => _ngTop.RectangleToClient(RectangleToScreen(c.Bounds))));
                 };
+                // info panel between VFO A and B: its own PanelTS on the bar, so Shift + drag / wheel move and fade it
+                // like the other top panels (name "ngTop": keeps the position / opacity saved before)
+                _ngInfo = new PanelTS { Name = "ngTop", BackColor = ModernTheme.PanelBack };
+                _ngInfo.Paint += (s, e) => ngPaintTopInfo(e.Graphics, _ngInfo.ClientRectangle);
                 _ngDock = new Panel { Name = "ngDock", BackColor = ModernTheme.Back, Height = NgDockHeight };
                 _ngDock.Paint += (s, e) => ngPaintDock(e.Graphics);
                 ModernButtonPainter.PaintBehind = (b, g) =>
@@ -102,12 +105,13 @@ namespace Thetis
                     ModernTheme.ScanLines(e.Graphics, _ngDrawer.ClientRectangle);
                     ModernTheme.HudFrame(e.Graphics, new RectangleF(1.5f, 1.5f, _ngDrawer.Width - 3f, _ngDrawer.Height - 3f), ModernTheme.Accent, 10f);
                 };
-                foreach (Panel p in new[] { _ngTop, _ngDock, _ngDrawer })
+                foreach (Panel p in new[] { _ngTop, _ngInfo, _ngDock, _ngDrawer })
                     typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(p, true);
                 Dictionary<string, string> st = DB.GetVarsDictionary("State");
 
                 Controls.Add(_ngParking);
                 Controls.Add(_ngTop);
+                Controls.Add(_ngInfo);
                 Controls.Add(_ngDock);
                 Controls.Add(_ngDrawer);
 
@@ -215,6 +219,8 @@ namespace Thetis
                 // drawer see-through level (Shift + wheel); the classic loader only knows the native panels
                 if (st.TryGetValue(NativePanelOpacityKeyPrefix + _ngDrawer.Name, out string dop) && int.TryParse(dop, out int dpct))
                     _nativePanelOpacities[_ngDrawer.Name] = ClampNativePanelOpacity(dpct);
+                if (st.TryGetValue(NativePanelOpacityKeyPrefix + _ngInfo.Name, out string iop) && int.TryParse(iop, out int ipct))
+                    SetNativePanelOpacity(_ngInfo, ipct);
 
                 // the main frequency 1.5x larger: the whole VFO A box with its children and their fonts
                 grpVFOA.Scale(new SizeF(NgVfoAScale, NgVfoAScale));
@@ -238,8 +244,14 @@ namespace Thetis
                     c.LocationChanged += ngLayoutEvent;
                     c.SizeChanged += ngLayoutEvent;
                     c.VisibleChanged += ngLayoutEvent;
-                    // see-through levels from the classic layout (Shift + wheel) would dim the drawer and top bar
-                    SetNativePanelOpacity(c, 100);
+                    // see-through levels from the classic layout (Shift + wheel) would dim the drawer;
+                    // the top panels keep theirs
+                    if (Array.IndexOf(NgTopPanels, c) >= 0)
+                    {
+                        if (st.TryGetValue(NativePanelOpacityKeyPrefix + c.Name, out string op) && int.TryParse(op, out int pct))
+                            SetNativePanelOpacity(c, pct);
+                    }
+                    else SetNativePanelOpacity(c, 100);
                 }
                 chkRX2.CheckedChanged += ngLayoutEvent;
                 Resize += ngLayoutEvent;
@@ -254,14 +266,29 @@ namespace Thetis
                 _ngMenuRenderer = menu;
                 menuStrip1.Renderer = menu;
                 ngHudMenu(menuStrip1.Items, menu);
+                // room for the tile faces: upper-case HUD captions are wider than the plain menu text
+                menuStrip1.Padding = new Padding(NgGap, 3, NgGap, 3);
+                foreach (ToolStripItem i in menuStrip1.Items)
+                {
+                    i.Font = ModernTheme.HudFont(8f);
+                    i.Margin = new Padding(2, 0, 2, 0);
+                    i.Padding = new Padding(10, 4, 10, 4);
+                }
+                // the taller menu would cover the edge line under it
+                menuStrip1.SizeChanged += ngLayoutEvent;
+                ngLayout();
                 foreach (ContextMenuStrip cm in new[] { contextMenuStripFilterRX1, contextMenuStripFilterRX2, contextMenuStripNotch })
                 {
                     cm.Renderer = menu;
                     ngHudMenu(cm.Items, menu);
                 }
                 _ngClock = new Timer { Interval = 500 };
-                _ngClock.Tick += (s, e) => _ngTop.Invalidate();
+                _ngClock.Tick += (s, e) => _ngInfo.Invalidate();
                 _ngClock.Start();
+
+                // shadows / hover lift on the panorama follow the display when the layout moves it
+                panelDisplay.LocationChanged += (s, e) => updateModernPanelShadows();
+                panelDisplay.SizeChanged += (s, e) => updateModernPanelShadows();
 
                 infoBar.ApplyModernLook();
 
@@ -450,6 +477,7 @@ namespace Thetis
             int pct = _nativePanelOpacities.TryGetValue(_ngDrawer.Name, out int o) ? o : 100;
             _ngSlide = k >= 1f ? 0 : (int)Math.Round((1f - ease) * NgSlidePx);
             _ngDrawer.Location = new Point(_ngDrawerHome.X, _ngDrawerHome.Y + _ngSlide);
+            ngDrawerShadow(ease);
             if (k >= 1f)
             {
                 _ngFadeTimer.Stop();
@@ -497,12 +525,16 @@ namespace Thetis
                 Size meter = new Size(grpVFOB.Width + 80, grpVFOB.Height);
                 if (panelModernSMeter.Size != meter) panelModernSMeter.Size = meter;
                 int barH = Math.Max(grpVFOA.Height, panelModernSMeter.Height) + 2 * NgPad;
-                _ngTop.Bounds = new Rectangle(0, top, w, barH);
                 int meterX = NgGap, vfoBX = w - NgGap - grpVFOB.Width;
                 int vfoAX = Math.Max(meterX + panelModernSMeter.Width + NgGap, (w - grpVFOA.Width) / 2);
                 // info panel the size of VFO B, centred in the gap between VFO A and VFO B
                 int gapL = vfoAX + grpVFOA.Width, gapR = vfoBX;
-                _ngClockRect = new Rectangle(gapL + (gapR - gapL - grpVFOB.Width) / 2, (barH - grpVFOB.Height) / 2, grpVFOB.Width, grpVFOB.Height);
+                _ngTop.Bounds = new Rectangle(0, top, w, barH);
+                _ngClockRect = new Rectangle(gapL + (gapR - gapL - grpVFOB.Width) / 2, top + (barH - grpVFOB.Height) / 2, grpVFOB.Width, grpVFOB.Height);
+                Rectangle info = ngInfoRect();
+                _ngInfo.Visible = !info.IsEmpty;
+                if (!info.IsEmpty && _ngInfo.Size != info.Size) _ngInfo.Size = info.Size;
+                if (!info.IsEmpty) ngPlaceTop(_ngInfo, info.X, info.Y);
                 ngPlaceTop(panelModernSMeter, meterX, top + (barH - panelModernSMeter.Height) / 2);
                 ngPlaceTop(grpVFOB, vfoBX, top + (barH - grpVFOB.Height) / 2);
                 ngPlaceTop(grpVFOA, vfoAX, top + (barH - grpVFOA.Height) / 2);
@@ -602,6 +634,7 @@ namespace Thetis
             if (_ngOpen == null)
             {
                 _ngDrawer.Visible = false;
+                ngDrawerShadow(0f);
                 return;
             }
             _ngDrawer.Visible = true;
@@ -637,6 +670,15 @@ namespace Thetis
             _ngDrawerHome = new Point(left, _ngDock.Top - size.Height - NgGap);
             _ngDrawer.Bounds = new Rectangle(new Point(_ngDrawerHome.X, _ngDrawerHome.Y + _ngSlide), size);
             _ngDrawer.Invalidate();
+            ngDrawerShadow(1f - _ngSlide / (float)NgSlidePx);
+        }
+
+        // the open drawer floats highest: a deep shadow on the panorama (drawn by Display)
+        private void ngDrawerShadow(float k)
+        {
+            if (pnlDisplay == null || !pnlDisplay.IsHandleCreated) return;
+            Display.ModernDrawerRect = k > 0f && _ngDrawer.Visible ? pnlDisplay.RectangleToClient(RectangleToScreen(_ngDrawer.Bounds)) : Rectangle.Empty;
+            Display.ModernDim = _ngDrawer.Visible ? k : 0f;
         }
 
         // ---- top bar readout: info panel ----
@@ -649,7 +691,7 @@ namespace Thetis
         private const string NgPosKeyPrefix = "NgPos.";
         private readonly Dictionary<string, Point> _ngTopPos = new Dictionary<string, Point>(StringComparer.Ordinal);
         private Rectangle _ngClockRect;
-        private Control[] NgTopPanels => new Control[] { grpVFOA, grpVFOB, panelModernSMeter };
+        private Control[] NgTopPanels => new Control[] { grpVFOA, grpVFOB, panelModernSMeter, _ngInfo };
 
         private void ngPlaceTop(Control c, int x, int y)
         {
@@ -671,6 +713,7 @@ namespace Thetis
             if (reset) _ngTopPos.Remove(c.Name);
             else _ngTopPos[c.Name] = c.Location;
             ngLayout();
+            _ngTop.Invalidate();   // the panel's shadow on the bar moves with it
             return true;
         }
 
@@ -688,12 +731,7 @@ namespace Thetis
         private static int ngTileWidth(string text) => text.Length > 7 ? 108 : 90;
 
         // info panel between VFO A and VFO B (the clock is already in the status bar):
-        // estimated RX / TX DSP latency, TX attenuator + PureSignal state, network traffic from / to the radio
-
-        // WDSP block latency: one DSP buffer, plus half the filter for linear phase
-        // shortcut: DSP only - radio input buffer and the audio output (VAC/ASIO) are not counted
-        private static double ngDspLatencyMs(int buf, int filt, DSPFilterType type, int rate) =>
-            (buf + (type == DSPFilterType.Linear_Phase ? filt / 2 : 0)) * 1000.0 / rate;
+        // diversity per-section mode / clean AUTO bin share, TX attenuator + PureSignal state, network traffic from / to the radio
 
         private Rectangle ngInfoRect()
         {
@@ -729,25 +767,36 @@ namespace Thetis
             ngPaintShadows(g, _ngDock.Controls.OfType<CheckBoxTS>().Where(b => b.Visible && near(b.Bounds)).Select(b => b.Bounds));
         }
 
-        private void ngPaintTopInfo(Graphics g)
+        private void ngPaintTopInfo(Graphics g, Rectangle b)
         {
-            Rectangle b = ngInfoRect();
-            if (b.IsEmpty) return;
+            if (b.Width < 2 || b.Height < 2) return;
             ModernTheme.GlassFrame(g, new RectangleF(b.X + 0.5f, b.Y + 0.5f, b.Width - 1f, b.Height - 1f), ModernTheme.BorderStrong, 8f);
             TextFormatFlags c = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.HorizontalCenter |
                 TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis;
-            TextRenderer.DrawText(g, "LATENCY / FILTERS", ModernTheme.HudFont(7f), new Point(b.X + 12, b.Y + 4), ModernTheme.TextDim, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, "DIVERSITY / FILTERS", ModernTheme.HudFont(7f), new Point(b.X + 12, b.Y + 4), ModernTheme.TextDim, TextFormatFlags.NoPadding);
 
-            RadioDSPRX rx = radio.GetDSPRX(0, 0);
-            RadioDSPTX tx = radio.GetDSPTX(0);
-            double rxMs = ngDspLatencyMs(rx.BufferSize, rx.FilterSize, rx.FilterType, RX1DSPMode == DSPMode.FM ? 192000 : 48000);
-            double txMs = ngDspLatencyMs(tx.BufferSize, tx.FilterSize, tx.FilterType, 96000);
-            // three rows under the title: latency, TX attenuator + PureSignal, RX/TX filter
+            // three rows under the title: diversity, TX attenuator + PureSignal, RX/TX filter
             int rowTop = b.Y + 16, rowH = (b.Bottom - 3 - rowTop) / 3;
             Rectangle row(int i) => new Rectangle(b.X + 8, rowTop + i * rowH, b.Width - 16, rowH);
 
-            string lat = string.Format(CultureInfo.InvariantCulture, "RX ~{0:0} MS     TX ~{1:0} MS", rxMs, txMs);
-            TextRenderer.DrawText(g, lat, ModernTheme.HudFont(9f), row(0), ModernTheme.AccentSoft, c);
+            // per-section mode; with clean AUTO the share of bins it treats as station now (as "Auto: xx%" in the DSP drawer)
+            DiversityForm df = diversityForm;
+            string cap = df != null && !df.IsDisposed ? df.SectionCaption : null;
+            double share = cap != null && df.SectionClean < 0 ? df.SectionCleanShare : -1.0;
+            if (share >= 0.0)
+            {
+                Rectangle r0 = row(0);
+                int tw = r0.Width * 11 / 20;
+                TextRenderer.DrawText(g, "AUTO BIN " + (int)Math.Round(100.0 * share) + "%", ModernTheme.HudFont(9f),
+                    new Rectangle(r0.X, r0.Y, tw, r0.Height), ModernTheme.AccentSoft, c);
+                RectangleF bar = new RectangleF(r0.X + tw + 4, r0.Y + r0.Height / 2f - 3f, r0.Width - tw - 8, 6f);
+                using (SolidBrush track = new SolidBrush(Color.FromArgb(28, 255, 255, 255))) g.FillRectangle(track, bar);
+                using (SolidBrush fill = new SolidBrush(Color.FromArgb(210, ModernTheme.Accent)))
+                    g.FillRectangle(fill, bar.X, bar.Y, bar.Width * (float)Math.Min(1.0, share), bar.Height);
+            }
+            else
+                TextRenderer.DrawText(g, cap != null ? "DIV " + cap : "DIV OFF", ModernTheme.HudFont(9f), row(0),
+                    cap != null ? ModernTheme.AccentSoft : ModernTheme.TextDim, c);
 
             // attenuation the radio gets on TX; PS: feedback level (target colours) and whether the correction is applied
             string att = ATTOnTX ? TxAttenData + " DB" : "OFF";
@@ -817,7 +866,11 @@ namespace Thetis
             {
                 bool drop = e.ToolStrip is ToolStripDropDown;
                 using (SolidBrush b = new SolidBrush(drop ? ModernTheme.PanelBack : ModernTheme.Back)) e.Graphics.FillRectangle(b, e.AffectedBounds);
-                if (!drop) ModernTheme.ScanLines(e.Graphics, e.AffectedBounds);
+                if (!drop)
+                {
+                    ModernTheme.ScanLines(e.Graphics, e.AffectedBounds);
+                    if (e.ToolStrip is MenuStrip) ngPaintEdge(e.Graphics, e.ToolStrip.Width, 0);   // the same line above the menu tiles
+                }
             }
 
             protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
@@ -831,8 +884,22 @@ namespace Thetis
                 using (SolidBrush b = new SolidBrush(ModernTheme.PanelBack)) e.Graphics.FillRectangle(b, e.AffectedBounds);
             }
 
+            // top-level items of the main menu: small tiles like the dock buttons (caption drawn here too)
+            private static bool isTile(ToolStripItem i) => !i.IsOnDropDown && i.Owner is MenuStrip;
+
             protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
             {
+                if (isTile(e.Item))
+                {
+                    // a coloured caption (Diversity / SonoBus state) lights the tile in its colour
+                    Color c = e.Item.ForeColor;
+                    bool coloured = c.GetSaturation() >= 0.25f && c.GetBrightness() >= 0.4f;
+                    bool on = e.Item.Pressed || (e.Item is ToolStripMenuItem mi && mi.Checked);
+                    ModernTheme.DrawButton(e.Graphics, new Rectangle(Point.Empty, e.Item.Size), e.Item.Text.Replace("&", "").ToUpperInvariant(),
+                        e.Item.Font, null, on ? 1f : coloured ? 0.5f : 0f, e.Item.Selected ? 1f : 0f, e.Item.Pressed, e.Item.Enabled,
+                        coloured ? c : ModernTheme.Accent, ContentAlignment.MiddleCenter);
+                    return;
+                }
                 if (!e.Item.Enabled || (!e.Item.Selected && !e.Item.Pressed)) return;
                 Rectangle r = new Rectangle(2, 1, e.Item.Width - 5, e.Item.Height - 3);
                 using (SolidBrush b = new SolidBrush(Color.FromArgb(46, ModernTheme.Accent))) e.Graphics.FillRectangle(b, r);
@@ -841,6 +908,7 @@ namespace Thetis
 
             protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
             {
+                if (isTile(e.Item)) return;
                 // grey/white/dark captions take the HUD text colour; bright coloured ones (Diversity on) keep theirs
                 Color c = e.TextColor;
                 if (!e.Item.Enabled) e.TextColor = ModernTheme.TextDisabled;
@@ -897,7 +965,13 @@ namespace Thetis
                 edgeOnTop ? 90f : 270f))
                 g.FillRectangle(b, r);
             ModernTheme.ScanLines(g, r);
-            int y = edgeOnTop ? 0 : r.Bottom - 1;
+            ngPaintEdge(g, r.Width, edgeOnTop ? 0 : r.Bottom - 1);
+        }
+
+        // the glowing edge line: brighter in the middle, fading out to the sides
+        private static void ngPaintEdge(Graphics g, int width, int y)
+        {
+            Rectangle r = new Rectangle(0, 0, width, 1);
             using (Pen p = new Pen(ModernTheme.Border)) g.DrawLine(p, 0, y, r.Width, y);
             // brighter centre section of the edge, fading out to the sides
             using (var lb = new System.Drawing.Drawing2D.LinearGradientBrush(new Rectangle(0, 0, Math.Max(1, r.Width), 1), Color.Transparent, Color.Transparent, 0f))

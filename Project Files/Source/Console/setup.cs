@@ -639,6 +639,7 @@ namespace Thetis
             initRXReturnRampControls(); //prior to getOptions so the RX return delay/fade are saved/restored
             initSMeterTrimControls(); //prior to getOptions so the S-meter correction is saved/restored
             initBin2Controls(); //prior to getOptions so the BIN2 switch is saved/restored
+            initAnalogToneControls(); //after initBin2Controls (its page), prior to getOptions so analog tone is saved/restored
 
             // Yurij_eu2av: hardware-specific defaults for PureSignal advanced settings.
             // Done before getOptions() so a saved user override takes precedence.

@@ -550,6 +550,16 @@ void create_rxa (int channel)
 		2400,											// ring size for f_to_v converter
 		2000.0 );										// max freq for f_to_v converter									
 
+	// analog tone: treble roll-off of an analog audio chain (after the AGC, before BIN2)
+	rxa[channel].atone.p = create_atone (
+		0,												// run
+		ch[channel].dsp_size,							// size
+		rxa[channel].midbuff,							// pointer to input buffer
+		rxa[channel].midbuff,							// pointer to output buffer
+		ch[channel].dsp_rate,							// sample rate
+		2000.0,											// corner, Hz
+		8.0);											// depth, dB
+
 	// BIN2 spectral binaural (before the panel)
 	rxa[channel].bin2.p = create_bin2 (
 		ch[channel].dsp_size,
@@ -593,6 +603,7 @@ void destroy_rxa (int channel)
 	destroy_resample (rxa[channel].rsmpout.p);
 	destroy_panel (rxa[channel].panel.p);
 	destroy_bin2 (rxa[channel].bin2.p);
+	destroy_atone (rxa[channel].atone.p);
 	destroy_ssql (rxa[channel].ssql.p);
 	destroy_apfshadow(rxa[channel].apfshadow.p);
 	destroy_mpeak (rxa[channel].mpeak.p);
@@ -667,6 +678,7 @@ void flush_rxa (int channel)
 	flush_speak (rxa[channel].speak.p);
 	flush_mpeak (rxa[channel].mpeak.p);
 	flush_ssql (rxa[channel].ssql.p);
+	flush_atone (rxa[channel].atone.p);
 	flush_bin2 (rxa[channel].bin2.p);
 	flush_panel (rxa[channel].panel.p);
 	flush_resample (rxa[channel].rsmpout.p);
@@ -717,6 +729,7 @@ void xrxa (int channel)
 	xspeak (rxa[channel].speak.p);
 	xmpeak (rxa[channel].mpeak.p);
 	xssql (rxa[channel].ssql.p);
+	xatone (rxa[channel].atone.p);
 	xbin2 (rxa[channel].bin2.p, rxa[channel].panel.p->run && rxa[channel].panel.p->copy == 0);
 	xpanel (rxa[channel].panel.p);
 	xamsq (rxa[channel].amsq.p);
@@ -796,6 +809,7 @@ void setDSPSamplerate_rxa (int channel)
 	setSamplerate_speak (rxa[channel].speak.p, ch[channel].dsp_rate);
 	setSamplerate_mpeak (rxa[channel].mpeak.p, ch[channel].dsp_rate);
 	setSamplerate_ssql (rxa[channel].ssql.p, ch[channel].dsp_rate);
+	setSamplerate_atone (rxa[channel].atone.p, ch[channel].dsp_rate);
 	setSamplerate_bin2 (rxa[channel].bin2.p, ch[channel].dsp_rate);
 	setSamplerate_panel (rxa[channel].panel.p, ch[channel].dsp_rate);
 	// output resampler
@@ -880,6 +894,8 @@ void setDSPBuffsize_rxa (int channel)
 	setSize_mpeak (rxa[channel].mpeak.p, ch[channel].dsp_size);
 	setBuffers_ssql (rxa[channel].ssql.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_ssql (rxa[channel].ssql.p, ch[channel].dsp_size);
+	setBuffers_atone (rxa[channel].atone.p, rxa[channel].midbuff, rxa[channel].midbuff);
+	setSize_atone (rxa[channel].atone.p, ch[channel].dsp_size);
 	setBuffers_bin2 (rxa[channel].bin2.p, rxa[channel].midbuff, rxa[channel].midbuff);
 	setSize_bin2 (rxa[channel].bin2.p, ch[channel].dsp_size);
 	setBuffers_panel (rxa[channel].panel.p, rxa[channel].midbuff, rxa[channel].midbuff);
