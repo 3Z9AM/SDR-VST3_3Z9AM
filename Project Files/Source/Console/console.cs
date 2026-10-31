@@ -29098,6 +29098,19 @@ namespace Thetis
                 ptbRX2Gain_Scroll(this, EventArgs.Empty); //MW0LGE_21k9
             }
         }
+        // MUT is three-state (initNewGui): Checked (green) = only the radio's AF output, Indeterminate (red) = the whole
+        // RX1 (VAC, TCI, VST too). The old "mute will mute VAC1" option is what red does now.
+        private bool RX1MuteAll => chkMUT.CheckState == CheckState.Indeterminate;
+        private CheckState _mutLastState = CheckState.Unchecked;
+
+        // green <-> red keeps Checked true, so CheckedChanged does not fire
+        private void chkMUT_CheckStateChanged(object sender, EventArgs e)
+        {
+            bool bothOn = _mutLastState != CheckState.Unchecked && chkMUT.CheckState != CheckState.Unchecked;
+            _mutLastState = chkMUT.CheckState;
+            if (bothOn) chkMUT_CheckedChanged(sender, e);
+        }
+
         private void chkMUT_CheckedChanged(object sender, System.EventArgs e)
         {
             bool bOldMute = Audio.MuteRX1;
@@ -29106,10 +29119,15 @@ namespace Thetis
             {
                 Audio.MuteRX1 = true;
 
-                if (m_bMuteWillMuteVAC1)
+                if (RX1MuteAll)
                 {
                     radio.GetDSPRX(0, 0).RXOutputGain = 0.0; //MW0LGE_21j
                     radio.GetDSPRX(0, 1).RXOutputGain = 0.0; //MW0LGE_21j
+                }
+                else
+                {
+                    radio.GetDSPRX(0, 0).RXOutputGain = (double)ptbRX0Gain.Value / ptbRX0Gain.Maximum;
+                    radio.GetDSPRX(0, 1).RXOutputGain = (double)ptbRX1Gain.Value / ptbRX1Gain.Maximum;
                 }
 
                 chkMUT.BackColor = button_selected_color;
@@ -37530,7 +37548,7 @@ namespace Thetis
             //MWLGE_21k9 re-worked //[2.10.1.0] MW0LGE added eventargs empty
             if (!initializing && e != EventArgs.Empty && m_bRXAFSlidersWillUnmute && chkMUT.Checked) chkMUT.Checked = false;
 
-            if (chkMUT.Checked && m_bMuteWillMuteVAC1) //MW0LGE_21k9
+            if (chkMUT.Checked && RX1MuteAll) //MW0LGE_21k9
             {
                 radio.GetDSPRX(0, 0).RXOutputGain = 0.0;
             }
@@ -37570,7 +37588,7 @@ namespace Thetis
             //[2.10.1.0] MW0LGE consider mute when on vac
             if (!initializing && e != EventArgs.Empty && m_bRXAFSlidersWillUnmute && chkMUT.Checked) chkMUT.Checked = false;
 
-            if (chkMUT.Checked && m_bMuteWillMuteVAC1)
+            if (chkMUT.Checked && RX1MuteAll)
             {
                 radio.GetDSPRX(0, 1).RXOutputGain = 0.0;
             }
