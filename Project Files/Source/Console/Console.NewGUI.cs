@@ -289,8 +289,9 @@ namespace Thetis
                     cm.Renderer = menu;
                     ngHudMenu(cm.Items, menu);
                 }
-                _ngClock = new Timer { Interval = 500 };
-                _ngClock.Tick += (s, e) => _ngInfo.Invalidate();
+                // 100 ms for the TX AF level row; on RX every 5th tick as before
+                _ngClock = new Timer { Interval = 100 };
+                _ngClock.Tick += (s, e) => { if (_mox || ++_ngInfoTick % 5 == 0) _ngInfo.Invalidate(); };
                 _ngClock.Start();
 
                 // shadows / hover lift on the panorama follow the display when the layout moves it
@@ -791,12 +792,17 @@ namespace Thetis
             int rowTop = b.Y + 16, rowH = (b.Bottom - 3 - rowTop) / 3;
             Rectangle row(int i) => new Rectangle(b.X + 8, rowTop + i * rowH, b.Width - 16, rowH);
 
-            RadioDSPRX rx = radio.GetDSPRX(0, 0);
-            RadioDSPTX tx = radio.GetDSPTX(0);
-            double rxMs = ngDspLatencyMs(rx.BufferSize, rx.FilterSize, rx.FilterType, RX1DSPMode == DSPMode.FM ? 192000 : 48000);
-            double txMs = ngDspLatencyMs(tx.BufferSize, tx.FilterSize, tx.FilterType, 96000);
-            string lat = string.Format(CultureInfo.InvariantCulture, "RX ~{0:0} MS     TX ~{1:0} MS", rxMs, txMs);
-            TextRenderer.DrawText(g, lat, ModernTheme.HudFont(9f), row(0), ModernTheme.AccentSoft, c);
+            if (_mox)
+                ngPaintTxAfLevel(g, row(0), c);
+            else
+            {
+                RadioDSPRX rx = radio.GetDSPRX(0, 0);
+                RadioDSPTX tx = radio.GetDSPTX(0);
+                double rxMs = ngDspLatencyMs(rx.BufferSize, rx.FilterSize, rx.FilterType, RX1DSPMode == DSPMode.FM ? 192000 : 48000);
+                double txMs = ngDspLatencyMs(tx.BufferSize, tx.FilterSize, tx.FilterType, 96000);
+                string lat = string.Format(CultureInfo.InvariantCulture, "RX ~{0:0} MS     TX ~{1:0} MS", rxMs, txMs);
+                TextRenderer.DrawText(g, lat, ModernTheme.HudFont(9f), row(0), ModernTheme.AccentSoft, c);
+            }
 
             // attenuation the radio gets on TX; PS: feedback level (target colours) and whether the correction is applied
             string att = ATTOnTX ? TxAttenData + " DB" : "OFF";
@@ -811,6 +817,35 @@ namespace Thetis
             if (hi <= 0) { int t = lo; lo = -hi; hi = -t; }
             string filt = string.Format(CultureInfo.InvariantCulture, "RX {0}-{1} HZ     TX {2}-{3} HZ", lo, hi, TXFilterLow, TXFilterHigh);
             TextRenderer.DrawText(g, filt, ModernTheme.HudFont(8f), row(2), ModernTheme.TextDim, c);
+        }
+
+        private int _ngInfoTick;
+        private float _ngTxAfHold = -200f;
+        private DateTime _ngTxAfHoldAt;
+
+        // TX: mic peak in WDSP (after the TX VST chain), dBFS; red above 0 dB, number = peak held 1 s
+        private void ngPaintTxAfLevel(Graphics g, Rectangle r0, TextFormatFlags c)
+        {
+            const float lo = -30f, hi = 3f;
+            float pk = -WDSP.CalculateTXMeter(1, WDSP.MeterType.MIC_PK);
+            if (float.IsNaN(pk)) pk = -200f;
+            DateTime now = DateTime.UtcNow;
+            if (pk >= _ngTxAfHold || (now - _ngTxAfHoldAt).TotalSeconds > 1.0) { _ngTxAfHold = pk; _ngTxAfHoldAt = now; }
+            bool over = _ngTxAfHold > 0f;
+
+            int tw = r0.Width * 11 / 20;
+            string txt = _ngTxAfHold <= -100f ? "TX AF --" : string.Format(CultureInfo.InvariantCulture, "TX AF {0:+0.0;-0.0;0.0} DB", _ngTxAfHold);
+            TextRenderer.DrawText(g, txt, ModernTheme.HudFont(9f), new Rectangle(r0.X, r0.Y, tw, r0.Height),
+                over ? ModernTheme.Danger : ModernTheme.AccentSoft, c);
+            RectangleF bar = new RectangleF(r0.X + tw + 4, r0.Y + r0.Height / 2f - 3f, r0.Width - tw - 8, 6f);
+            float x(float db) => bar.X + bar.Width * (Math.Max(lo, Math.Min(hi, db)) - lo) / (hi - lo);
+            using (SolidBrush track = new SolidBrush(Color.FromArgb(28, 255, 255, 255))) g.FillRectangle(track, bar);
+            using (SolidBrush fill = new SolidBrush(Color.FromArgb(210, ModernTheme.Accent)))
+                g.FillRectangle(fill, bar.X, bar.Y, x(Math.Min(pk, 0f)) - bar.X, bar.Height);
+            if (pk > 0f)
+                using (SolidBrush red = new SolidBrush(ModernTheme.Danger)) g.FillRectangle(red, x(0f), bar.Y, x(pk) - x(0f), bar.Height);
+            using (Pen zero = new Pen(ModernTheme.Text, 1f)) g.DrawLine(zero, x(0f), bar.Y - 3f, x(0f), bar.Bottom + 3f);
+            using (Pen hold = new Pen(over ? ModernTheme.Danger : ModernTheme.Text, 2f)) if (_ngTxAfHold > lo) g.DrawLine(hold, x(_ngTxAfHold), bar.Y, x(_ngTxAfHold), bar.Bottom);
         }
 
         // ---- window chrome ----
