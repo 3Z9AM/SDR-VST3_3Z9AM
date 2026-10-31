@@ -1,4 +1,4 @@
-﻿/*
+/*
 *
 * Copyright (C) 2010-2018  Doug Wigley 
 * 
@@ -41,6 +41,9 @@ namespace Thetis
             spec_rx[cmaster.inid(0, 1)] = new SpecHPSDR(cmaster.inid(0, 1));
             spec_rx[cmaster.inid(1, 0)] = new SpecHPSDR(cmaster.inid(1, 0));
            // }
+            // the TX analyzer shows the same Hz as RX1, so the panadapter / waterfall / 3D keep their width on TX
+            spec_rx[cmaster.inid(0, 0)].MatchTx = spec_rx[cmaster.inid(1, 0)];
+            spec_rx[cmaster.inid(1, 0)].MatchRxSpan = true;
         }
 
         public SpecHPSDR GetSpecRX(int disp)
@@ -56,6 +59,11 @@ namespace Thetis
         {
             disp = d;
         }
+
+        // RX1: the TX analyzer to rebuild when the RX1 span changes; TX: take the span from RX1 (Hz) instead of
+        // the zoom/pan sliders - the same slider fraction gives other Hz at the TX sample rate
+        internal SpecHPSDR MatchTx;
+        internal bool MatchRxSpan;
 
         private bool update = false;
         public bool Update
@@ -567,6 +575,15 @@ namespace Thetis
                         span_clip_l = pan_slider * (intervals - width);
                         span_clip_h = intervals - width - span_clip_l;
 
+                        int rxLow = Display.RXDisplayLow, rxHigh = Display.RXDisplayHigh;
+                        if (MatchRxSpan && rxHigh > rxLow)
+                        {
+                            // shortcut: an RX1 span wider than the TX bandwidth is clamped, the TX view is then narrower
+                            width = Math.Max(intervals / zoom_limit, Math.Min(intervals, (rxHigh - rxLow) / bin_width));
+                            span_clip_l = Math.Max(0.0, Math.Min(intervals - width, intervals / 2.0 + rxLow / bin_width));
+                            span_clip_h = intervals - width - span_clip_l;
+                        }
+
                         //MW0LGE_21a
                         //this was causing an odd warping in the spectrum when zooming fully out    
                         //if (Display.RX1DSPMode == DSPMode.DRM)
@@ -590,8 +607,10 @@ namespace Thetis
             switch (disp)
             {
                 case 0:
+                    bool spanChanged = Display.RXDisplayLow != _low_freq || Display.RXDisplayHigh != _high_freq;
                     Display.RXDisplayLow = _low_freq;
                     Display.RXDisplayHigh = _high_freq;
+                    if (spanChanged && MatchTx != null && MatchTx.update) MatchTx.initAnalyzer();
                      break;
                 case 1:
                     Display.RX2DisplayLow = _low_freq;
