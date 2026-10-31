@@ -1,4 +1,4 @@
-﻿/*  enums.cs
+/*  enums.cs
 
 This file is part of a program that implements a Software-Defined Radio.
 
@@ -165,6 +165,7 @@ namespace Thetis
         MED,
         FAST,
         CUSTOM,
+        TUBE,       // like a tube receiver's AVC (WDSP custom mode; attack/slope overridden in radio.cs)
         LAST,
     }
 

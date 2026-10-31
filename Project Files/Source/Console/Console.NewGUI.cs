@@ -114,6 +114,13 @@ namespace Thetis
                 Controls.Add(_ngInfo);
                 Controls.Add(_ngDock);
                 Controls.Add(_ngDrawer);
+                // bar shadows follow the panels: repaint the bar when one moves, resizes or hides
+                foreach (Control c in NgTopPanels)
+                {
+                    c.Move += (s, e) => _ngTop.Invalidate();
+                    c.Resize += (s, e) => _ngTop.Invalidate();
+                    c.VisibleChanged += (s, e) => _ngTop.Invalidate();
+                }
 
                 _ngFilterShape = new FilterShapeView(this);
                 _ngDivMode = createDiversityModePanel();

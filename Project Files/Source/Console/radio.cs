@@ -374,6 +374,9 @@ namespace Thetis
             this.RXAnalogToneFollow = rx.rx_analog_tone_follow;
             this.RXAnalogToneFollowPct = rx.rx_analog_tone_follow_pct;
             this.RXAnalogToneRipple = rx.rx_analog_tone_ripple;
+            this.RXAnalogToneCrystal = rx.rx_analog_tone_crystal;
+            this.RXAnalogToneSkirt = rx.rx_analog_tone_skirt;
+            this.RXAnalogToneWarmth = rx.rx_analog_tone_warmth;
             this.RXAnalogTone = rx.rx_analog_tone;
             this.RXPreGenRun = rx.rx_pregen_run;
             this.RXPreGenMode = rx.rx_pregen_mode;
@@ -816,6 +819,8 @@ namespace Thetis
                         WDSP.SetRXAAGCMode(WDSP.id(thread, subrx), value);
 						rx_agc_mode_dsp = value;
 					}
+					RXAGCAttack = rx_agc_attack; // TUBE overrides attack and slope, other modes get the user's back
+					RXAGCSlope = rx_agc_slope;
 				}
 			}
 		}
@@ -1131,12 +1136,15 @@ namespace Thetis
 		// AGC attack time constant, ms (1-10; lookahead = 4 x attack)
 		private int rx_agc_attack_dsp = 1;
 		private int rx_agc_attack = 1;
+		// tube AGC: slow attack, soft regulation (slope x10 dB as WDSP takes it); decay/hang set by console
+		internal const int TubeAGCAttack = 10, TubeAGCSlope = 80, TubeAGCDecay = 600;
 		public int RXAGCAttack
 		{
 			get { return rx_agc_attack; }
 			set
 			{
 				rx_agc_attack = value;
+				if (rx_agc_mode == AGCMode.TUBE) value = TubeAGCAttack;
 				if (update)
 				{
 					if (value != rx_agc_attack_dsp || force)
@@ -1252,6 +1260,7 @@ namespace Thetis
 			set
 			{
 				rx_agc_slope = value;
+				if (rx_agc_mode == AGCMode.TUBE) value = TubeAGCSlope;
 				if(update)
 				{
 					if(value != rx_agc_slope_dsp || force)
@@ -1915,9 +1924,10 @@ namespace Thetis
 
         // analog tone: treble roll-off of an analog audio chain; off in digital modes (modems need a flat band)
         internal static bool AnalogToneMode(DSPMode m) => m != DSPMode.DIGU && m != DSPMode.DIGL && m != DSPMode.DRM && m != DSPMode.SPEC;
-        private bool rx_analog_tone = false, rx_analog_tone_follow = true;
+        private bool rx_analog_tone = false, rx_analog_tone_follow = true, rx_analog_tone_crystal = false;
         private double rx_analog_tone_corner = 2000, rx_analog_tone_depth = 8, rx_analog_tone_follow_pct = 70, rx_analog_tone_ripple = 0;
-        private (int, double, double, double, double, double) rx_analog_tone_dsp = (0, 2000, 8, 0, 0, 0);
+        private double rx_analog_tone_skirt = 3, rx_analog_tone_warmth = 0;
+        private (int, double, double, double, double, double, double, double) rx_analog_tone_dsp = (0, 2000, 8, 0, 0, 0, 0, 0);
         public bool RXAnalogTone { get { return rx_analog_tone; } set { rx_analog_tone = value; applyAnalogTone(); } }
         public double RXAnalogToneCorner { get { return rx_analog_tone_corner; } set { rx_analog_tone_corner = value; applyAnalogTone(); } }
         public double RXAnalogToneDepth { get { return rx_analog_tone_depth; } set { rx_analog_tone_depth = value; applyAnalogTone(); } }
@@ -1926,6 +1936,12 @@ namespace Thetis
         public double RXAnalogToneFollowPct { get { return rx_analog_tone_follow_pct; } set { rx_analog_tone_follow_pct = value; applyAnalogTone(); } }
         // crystal-filter ripple across the RX filter, dB peak to peak (0 = none)
         public double RXAnalogToneRipple { get { return rx_analog_tone_ripple; } set { rx_analog_tone_ripple = value; applyAnalogTone(); } }
+        // the crystal ripple has its own switch: works with or without the treble roll-off
+        public bool RXAnalogToneCrystal { get { return rx_analog_tone_crystal; } set { rx_analog_tone_crystal = value; applyAnalogTone(); } }
+        // crystal skirts: dB down at the RX filter edges (with the crystal switch)
+        public double RXAnalogToneSkirt { get { return rx_analog_tone_skirt; } set { rx_analog_tone_skirt = value; applyAnalogTone(); } }
+        // warmth: AF stage saturation, % (with analog tone)
+        public double RXAnalogToneWarmth { get { return rx_analog_tone_warmth; } set { rx_analog_tone_warmth = value; applyAnalogTone(); } }
 
         // the RX filter as audio Hz: SSB/CW edges by magnitude, a filter around the carrier (AM, FM, DSB) from 0
         private (double lo, double hi) rxAudioBand()
@@ -1940,9 +1956,11 @@ namespace Thetis
             if (!update) return;
             (double lo, double hi) = rxAudioBand();
             double corner = rx_analog_tone_follow ? Math.Max(100, hi * rx_analog_tone_follow_pct / 100.0) : rx_analog_tone_corner;
-            var v = (rx_analog_tone && AnalogToneMode(dsp_mode) ? 1 : 0, corner, rx_analog_tone_depth, rx_analog_tone_ripple, lo, hi);
+            var v = ((rx_analog_tone || rx_analog_tone_crystal) && AnalogToneMode(dsp_mode) ? 1 : 0, corner,
+                rx_analog_tone ? rx_analog_tone_depth : 0, rx_analog_tone_crystal ? rx_analog_tone_ripple : 0, lo, hi,
+                rx_analog_tone_crystal ? rx_analog_tone_skirt : 0, rx_analog_tone ? rx_analog_tone_warmth / 100.0 : 0);
             if (v == rx_analog_tone_dsp && !force) return;
-            WDSP.SetRXAAnalogTone(WDSP.id(thread, subrx), v.Item1, v.Item2, v.Item3, v.Item4, v.Item5, v.Item6);
+            WDSP.SetRXAAnalogTone(WDSP.id(thread, subrx), v.Item1, v.Item2, v.Item3, v.Item4, v.Item5, v.Item6, v.Item7, v.Item8);
             rx_analog_tone_dsp = v;
         }
 

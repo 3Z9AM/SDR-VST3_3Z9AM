@@ -30,6 +30,8 @@ void atone_destroy(AnalogTone* p);
 void atone_set(AnalogTone* p, double rate, double corner, double depth);
 // crystal-filter ripple across the RX filter (audio lo..hi Hz), peak to peak dB; 0 = none
 void atone_set_ripple(AnalogTone* p, double rate, double lo, double hi, double ripple_db);
+void atone_set_skirt(AnalogTone* p, double rate, double lo, double hi, double skirt_db);
+void atone_set_warmth(AnalogTone* p, double rate, double warmth);
 void atone_flush(AnalogTone* p);
 // n complex samples (2 n doubles, I/Q interleaved) filtered in place
 void atone_process(AnalogTone* p, double* buf, int n);

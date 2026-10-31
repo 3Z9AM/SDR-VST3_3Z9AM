@@ -28,9 +28,10 @@ namespace Thetis
     // radio.cs, which applies them once the WDSP channels exist.
     public partial class Setup
     {
-        private GroupBoxTS grpDSPAnalogTone;
-        private CheckBoxTS chkDSPAnalogTone, chkDSPAnalogToneFollow;
-        private NumericUpDownTS udDSPAnalogToneCorner, udDSPAnalogToneFollowPct, udDSPAnalogToneDepth, udDSPAnalogToneRipple;
+        private GroupBoxTS grpDSPAnalogTone, grpDSPCrystal;
+        private CheckBoxTS chkDSPAnalogTone, chkDSPAnalogToneFollow, chkDSPAnalogToneCrystal;
+        private NumericUpDownTS udDSPAnalogToneCorner, udDSPAnalogToneFollowPct, udDSPAnalogToneDepth, udDSPAnalogToneRipple,
+            udDSPAnalogToneWarmth, udDSPAnalogToneSkirt;
 
         private void initAnalogToneControls()
         {
@@ -47,20 +48,33 @@ namespace Thetis
                 "(e.g. 5 kHz) keeps its top and a narrow one gets the same character. Off = a fixed corner in Hz.");
             grpDSPAnalogTone.Controls.AddRange(new Control[] { chkDSPAnalogTone, chkDSPAnalogToneFollow });
 
-            udDSPAnalogToneFollowPct = addAnalogToneRow("Corner (% of filter)", "udDSPAnalogToneFollowPct", 68, 40, 100, 70, 5, 0,
+            udDSPAnalogToneFollowPct = addAnalogToneRow(grpDSPAnalogTone, "Corner (% of filter)", "udDSPAnalogToneFollowPct", 68, 40, 100, 70, 5, 0,
                 "With Follow RX filter: where the roll-off starts, as a % of the filter's upper edge (70% of 2.7 kHz = 1.9 kHz, of 5 kHz = 3.5 kHz).");
-            udDSPAnalogToneCorner = addAnalogToneRow("Corner (Hz)", "udDSPAnalogToneCorner", 94, 1000, 5000, 2000, 100, 0,
+            udDSPAnalogToneCorner = addAnalogToneRow(grpDSPAnalogTone, "Corner (Hz)", "udDSPAnalogToneCorner", 94, 1000, 5000, 2000, 100, 0,
                 "Without Follow RX filter: where the roll-off starts (about -3 dB). Lower = darker.");
-            udDSPAnalogToneDepth = addAnalogToneRow("Depth (dB)", "udDSPAnalogToneDepth", 120, 0, 12, 8, 1, 0,
+            udDSPAnalogToneDepth = addAnalogToneRow(grpDSPAnalogTone, "Depth (dB)", "udDSPAnalogToneDepth", 120, 0, 12, 8, 1, 0,
                 "The most it takes off at the top of the band. 0 = no change.");
-            udDSPAnalogToneRipple = addAnalogToneRow("Crystal ripple (dB)", "udDSPAnalogToneRipple", 146, 0, 2, 0, 0.1m, 1,
+            udDSPAnalogToneWarmth = addAnalogToneRow(grpDSPAnalogTone, "Warmth (%)", "udDSPAnalogToneWarmth", 146, 0, 100, 0, 5, 0,
+                "Soft, slightly asymmetric saturation of a tube / transformer AF stage: quiet sounds unchanged, peaks rounded off, " +
+                "mostly 2nd harmonic (then softened by the roll-off above). 0 = clean. Works with Analog tone on.");
+
+            grpDSPCrystal = new GroupBoxTS { Text = "Crystal filter (RX audio)", Name = "grpDSPCrystal", Location = new Point(346, 172), Size = new Size(330, 102) };
+            chkDSPAnalogToneCrystal = new CheckBoxTS { Text = "Crystal filter", Name = "chkDSPAnalogToneCrystal", Location = new Point(10, 20), AutoSize = true };
+            chkDSPAnalogToneCrystal.CheckedChanged += analogTone_Changed;
+            toolTip1.SetToolTip(chkDSPAnalogToneCrystal, "The passband of a 6-pole crystal filter (ripple and rounded skirts), on its own switch: " +
+                "works with or without Analog tone. Off by itself in digital modes (DIGU/DIGL).");
+            grpDSPCrystal.Controls.Add(chkDSPAnalogToneCrystal);
+            udDSPAnalogToneRipple = addAnalogToneRow(grpDSPCrystal, "Ripple (dB)", "udDSPAnalogToneRipple", 44, 0, 2, 1, 0.1m, 1,
                 "The uneven passband of a 6-pole crystal filter: gentle peaks and dips across the RX filter, denser toward its edges, " +
                 "with the group delay wandering like in the real thing. Peak to peak; 0 = flat. Follows the filter width.");
+            udDSPAnalogToneSkirt = addAnalogToneRow(grpDSPCrystal, "Skirt at edges (dB)", "udDSPAnalogToneSkirt", 70, 0, 6, 3, 0.5m, 1,
+                "A crystal filter rounds off toward its edges instead of the brick wall of the DSP filter: the RX filter edges are this much down, " +
+                "steeper on the high side than on the low side (like a ladder filter). 0 = none. Follows the filter width.");
 
-            tpDSPSpatial.Controls.Add(grpDSPAnalogTone);
+            tpDSPSpatial.Controls.AddRange(new Control[] { grpDSPAnalogTone, grpDSPCrystal });
         }
 
-        private NumericUpDownTS addAnalogToneRow(string label, string name, int y, decimal min, decimal max, decimal value, decimal step, int decimals, string tip)
+        private NumericUpDownTS addAnalogToneRow(GroupBoxTS grp, string label, string name, int y, decimal min, decimal max, decimal value, decimal step, int decimals, string tip)
         {
             LabelTS lbl = new LabelTS { Text = label, Name = "lbl" + name.Substring(2), Location = new Point(10, y + 2), Size = new Size(150, 16) };
             NumericUpDownTS ud = new NumericUpDownTS
@@ -71,8 +85,8 @@ namespace Thetis
             ud.ValueChanged += analogTone_Changed;
             toolTip1.SetToolTip(ud, tip);
             toolTip1.SetToolTip(lbl, tip);
-            grpDSPAnalogTone.Controls.Add(lbl);
-            grpDSPAnalogTone.Controls.Add(ud);
+            grp.Controls.Add(lbl);
+            grp.Controls.Add(ud);
             return ud;
         }
 
@@ -80,6 +94,8 @@ namespace Thetis
         {
             udDSPAnalogToneCorner.Enabled = !chkDSPAnalogToneFollow.Checked;
             udDSPAnalogToneFollowPct.Enabled = chkDSPAnalogToneFollow.Checked;
+            udDSPAnalogToneRipple.Enabled = udDSPAnalogToneSkirt.Enabled = chkDSPAnalogToneCrystal.Checked;
+            udDSPAnalogToneWarmth.Enabled = chkDSPAnalogTone.Checked;
             if (initializing) return;
             foreach (RadioDSPRX rx in new[] { console.radio.GetDSPRX(0, 0), console.radio.GetDSPRX(0, 1), console.radio.GetDSPRX(1, 0) })
             {
@@ -88,6 +104,9 @@ namespace Thetis
                 rx.RXAnalogToneFollow = chkDSPAnalogToneFollow.Checked;
                 rx.RXAnalogToneDepth = (double)udDSPAnalogToneDepth.Value;
                 rx.RXAnalogToneRipple = (double)udDSPAnalogToneRipple.Value;
+                rx.RXAnalogToneSkirt = (double)udDSPAnalogToneSkirt.Value;
+                rx.RXAnalogToneWarmth = (double)udDSPAnalogToneWarmth.Value;
+                rx.RXAnalogToneCrystal = chkDSPAnalogToneCrystal.Checked;
                 rx.RXAnalogTone = chkDSPAnalogTone.Checked;
             }
         }

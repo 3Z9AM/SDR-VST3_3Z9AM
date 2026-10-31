@@ -29691,6 +29691,19 @@ namespace Thetis
                     toolTip1.SetToolTip(comboAGC, "Automatic Gain Control Mode Setting:\n" +
                         "Custom - Set specifics in Setup Form -> DSP -> AGC/ALC");
                     break;
+                case AGCMode.TUBE:
+                    SetupForm.CustomRXAGCEnabled = false;
+
+                    radio.GetDSPRX(0, 0).RXAGCHang = 0;
+                    radio.GetDSPRX(0, 1).RXAGCHang = 0;
+                    radio.GetDSPRX(0, 0).RXAGCDecay = RadioDSPRX.TubeAGCDecay;
+                    radio.GetDSPRX(0, 1).RXAGCDecay = RadioDSPRX.TubeAGCDecay;
+
+                    WDSP.SetRXAAGCHangThreshold(WDSP.id(0, 0), 100);
+                    SetupForm.tbDSPAGCHangThreshold.Enabled = false;
+                    toolTip1.SetToolTip(comboAGC, "Automatic Gain Control Mode Setting:\n" +
+                        "Tube - like the AVC of a tube receiver (Attack 10ms, Hang OFF, Decay 600ms, Slope 8dB)");
+                    break;
                 case AGCMode.FIXD:
                     SetupForm.CustomRXAGCEnabled = false;
                     toolTip1.SetToolTip(comboAGC, "Automatic Gain Control Mode Setting:\n" +
@@ -42146,6 +42159,16 @@ namespace Thetis
 
                     toolTip1.SetToolTip(comboRX2AGC, "Automatic Gain Control Mode Setting:\n" +
                         "Custom - Set specifics in Setup Form -> DSP -> AGC/ALC");
+
+                    break;
+                case AGCMode.TUBE:
+                    SetupForm.CustomRX2AGCEnabled = false;
+                    SetupForm.tbDSPAGCRX2HangThreshold.Enabled = false;
+
+                    radio.GetDSPRX(1, 0).RXAGCHang = 0;
+                    radio.GetDSPRX(1, 0).RXAGCDecay = RadioDSPRX.TubeAGCDecay;
+                    toolTip1.SetToolTip(comboRX2AGC, "Automatic Gain Control Mode Setting:\n" +
+                        "Tube - like the AVC of a tube receiver (Attack 10ms, Hang OFF, Decay 600ms, Slope 8dB)");
 
                     break;
                 case AGCMode.FIXD:

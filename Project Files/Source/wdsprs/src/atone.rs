@@ -30,11 +30,24 @@
 //! edges (at the Chebyshev extrema cos(k pi / 6)), alternating +-ripple/2. Peaking biquads, so
 //! like the real filter it is minimum phase: the group delay wanders across the band too.
 
+//! Crystal skirts (optional): a crystal filter rounds the passband off toward its edges instead of
+//! the brick wall of the FIR. Butterworth biquads with the cutoff set so the RX filter edge is
+//! `skirt` dB down: 4th order on the high side, a gentler 2nd order on the low side (a ladder
+//! filter is asymmetric). Minimum phase, so the group delay rises toward the edges as well.
+
+//! Warmth (optional): the soft, slightly asymmetric saturation of a tube / transformer AF stage,
+//! y = (tanh(d (x + b)) - tanh(d b)) / slope at 0: unity gain for small signals, peaks rounded,
+//! mostly 2nd harmonic. The AGC output peaks near 1, so d = warmth sets how hard. A DC blocker
+//! (10 Hz) removes the offset the asymmetry leaves. Runs before the treble roll-off, which then
+//! softens the harmonics like the speaker does.
+
 use std::f64::consts::PI;
 
 const CRYSTAL_POLES: usize = 6;
+const WARM_BIAS: f64 = 0.25;
+const DC_HZ: f64 = 10.0;
 
-/// y = b0 x + b1 x[-1] - a1 y[-1], separately on I and Q; then the crystal ripple
+/// crystal ripple and skirts, warmth, then y = b0 x + b1 x[-1] - a1 y[-1]; separately on I and Q
 #[derive(Debug, Default, Clone)]
 pub struct AnalogTone {
     b0: f64,
@@ -43,6 +56,11 @@ pub struct AnalogTone {
     x: [f64; 2],
     y: [f64; 2],
     ripple: Vec<Biquad>,
+    skirt: Vec<Biquad>,
+    warm: f64,
+    dc_a: f64,
+    dc_x: [f64; 2],
+    dc_y: [f64; 2],
 }
 
 /// one peaking section (RBJ), direct form I, state for I and Q
@@ -63,6 +81,19 @@ impl Biquad {
         Biquad {
             b: [(1.0 + alpha * amp) / a0, -2.0 * w.cos() / a0, (1.0 - alpha * amp) / a0],
             a: [-2.0 * w.cos() / a0, (1.0 - alpha / amp) / a0],
+            ..Default::default()
+        }
+    }
+
+    /// RBJ low pass (hp = false) or high pass at f0 with quality q
+    fn pass(rate: f64, f0: f64, q: f64, hp: bool) -> Self {
+        let w = 2.0 * PI * f0 / rate;
+        let alpha = w.sin() / (2.0 * q);
+        let a0 = 1.0 + alpha;
+        let (b0, b1) = if hp { ((1.0 + w.cos()) / 2.0, -(1.0 + w.cos())) } else { ((1.0 - w.cos()) / 2.0, 1.0 - w.cos()) };
+        Biquad {
+            b: [b0 / a0, b1 / a0, b0 / a0],
+            a: [-2.0 * w.cos() / a0, (1.0 - alpha) / a0],
             ..Default::default()
         }
     }
@@ -94,6 +125,22 @@ fn crystal_sections(rate: f64, lo: f64, hi: f64, ripple_db: f64) -> Vec<Biquad> 
         .collect()
 }
 
+/// Butterworth sections putting the filter edges lo / hi (audio Hz) `skirt_db` down
+fn skirt_sections(rate: f64, lo: f64, hi: f64, skirt_db: f64) -> Vec<Biquad> {
+    if skirt_db <= 0.0 || hi - lo < 200.0 || hi >= 0.45 * rate {
+        return Vec::new();
+    }
+    // |H|^2 = 1 / (1 + (f/fc)^2n) is skirt_db down at the edge
+    let e = 10f64.powf(skirt_db / 10.0) - 1.0;
+    let fc_hi = (hi / e.powf(1.0 / 8.0)).min(0.45 * rate);
+    let mut s: Vec<Biquad> = [0.5412, 1.3066].iter().map(|&q| Biquad::pass(rate, fc_hi, q, false)).collect();
+    // the low edge only when there is one (not AM/FM from 0)
+    if lo >= 50.0 {
+        s.push(Biquad::pass(rate, lo * e.powf(1.0 / 4.0), std::f64::consts::FRAC_1_SQRT_2, true));
+    }
+    s
+}
+
 /// (b0, b1, a1) for a sample rate, corner (Hz) and depth (dB)
 pub fn coefs(rate: f64, corner: f64, depth: f64) -> (f64, f64, f64) {
     let g = 10f64.powf(-depth.max(0.0) / 20.0);
@@ -119,20 +166,26 @@ impl AnalogTone {
     /// crystal ripple across the RX filter (audio lo..hi Hz), peak to peak dB; 0 = none.
     /// The state is kept while the number of sections stays the same.
     pub fn set_ripple(&mut self, rate: f64, lo: f64, hi: f64, ripple_db: f64) {
-        let mut next = crystal_sections(rate, lo, hi, ripple_db);
-        if next.len() == self.ripple.len() {
-            for (n, old) in next.iter_mut().zip(&self.ripple) {
-                n.x = old.x;
-                n.y = old.y;
-            }
-        }
-        self.ripple = next;
+        self.ripple = keep_state(crystal_sections(rate, lo, hi, ripple_db), &self.ripple);
+    }
+
+    /// crystal skirts: the RX filter edges (audio lo..hi Hz) skirt_db down; 0 = none
+    pub fn set_skirt(&mut self, rate: f64, lo: f64, hi: f64, skirt_db: f64) {
+        self.skirt = keep_state(skirt_sections(rate, lo, hi, skirt_db), &self.skirt);
+    }
+
+    /// AF saturation 0..1 (0 = linear)
+    pub fn set_warmth(&mut self, rate: f64, warmth: f64) {
+        self.warm = warmth.clamp(0.0, 1.0);
+        self.dc_a = (-2.0 * PI * DC_HZ / rate).exp();
     }
 
     pub fn flush(&mut self) {
         self.x = [0.0; 2];
         self.y = [0.0; 2];
-        for s in &mut self.ripple {
+        self.dc_x = [0.0; 2];
+        self.dc_y = [0.0; 2];
+        for s in self.ripple.iter_mut().chain(self.skirt.iter_mut()) {
             s.x = [[0.0; 2]; 2];
             s.y = [[0.0; 2]; 2];
         }
@@ -142,17 +195,37 @@ impl AnalogTone {
     pub fn process(&mut self, buf: &mut [f64]) {
         for pair in buf.chunks_exact_mut(2) {
             for k in 0..2 {
-                let x = pair[k];
-                let mut y = self.b0 * x + self.b1 * self.x[k] - self.a1 * self.y[k];
+                let mut x = pair[k];
+                for s in self.ripple.iter_mut().chain(self.skirt.iter_mut()) {
+                    x = s.step(k, x);
+                }
+                if self.warm > 0.0 {
+                    let d = self.warm;
+                    let tb = (d * WARM_BIAS).tanh();
+                    let w = ((d * (x + WARM_BIAS)).tanh() - tb) / (d * (1.0 - tb * tb));
+                    // DC blocker: y = w - w[-1] + a y[-1]
+                    x = w - self.dc_x[k] + self.dc_a * self.dc_y[k];
+                    self.dc_x[k] = w;
+                    self.dc_y[k] = x;
+                }
+                let y = self.b0 * x + self.b1 * self.x[k] - self.a1 * self.y[k];
                 self.x[k] = x;
                 self.y[k] = y;
-                for s in &mut self.ripple {
-                    y = s.step(k, y);
-                }
                 pair[k] = y;
             }
         }
     }
+}
+
+/// new sections keep the old state while their number is the same (a slider move does not click)
+fn keep_state(mut next: Vec<Biquad>, old: &[Biquad]) -> Vec<Biquad> {
+    if next.len() == old.len() {
+        for (n, o) in next.iter_mut().zip(old) {
+            n.x = o.x;
+            n.y = o.y;
+        }
+    }
+    next
 }
 
 // ---- C interface (wdsprs.h); the C glue (wdsp/atone.c) owns the pointer ----
@@ -186,6 +259,24 @@ pub unsafe extern "C" fn atone_set(p: *mut AnalogTone, rate: f64, corner: f64, d
 pub unsafe extern "C" fn atone_set_ripple(p: *mut AnalogTone, rate: f64, lo: f64, hi: f64, ripple_db: f64) {
     if let Some(t) = p.as_mut() {
         t.set_ripple(rate, lo, hi, ripple_db);
+    }
+}
+
+/// # Safety
+/// `p` is null or a live pointer from `atone_create`
+#[no_mangle]
+pub unsafe extern "C" fn atone_set_skirt(p: *mut AnalogTone, rate: f64, lo: f64, hi: f64, skirt_db: f64) {
+    if let Some(t) = p.as_mut() {
+        t.set_skirt(rate, lo, hi, skirt_db);
+    }
+}
+
+/// # Safety
+/// `p` is null or a live pointer from `atone_create`
+#[no_mangle]
+pub unsafe extern "C" fn atone_set_warmth(p: *mut AnalogTone, rate: f64, warmth: f64) {
+    if let Some(t) = p.as_mut() {
+        t.set_warmth(rate, warmth);
     }
 }
 
@@ -294,6 +385,51 @@ mod tests {
     }
 
     #[test]
+    fn crystal_skirts_round_the_edges() {
+        let skirted = |rate: f64, lo: f64, hi: f64| {
+            let mut t = AnalogTone::new(rate, 2000.0, 0.0);
+            t.set_skirt(rate, lo, hi, 3.0);
+            t
+        };
+        for &rate in &[48000.0, 192000.0] {
+            assert_eq!(skirted(rate, 300.0, 2700.0).skirt.len(), 3);
+            for &edge in &[300.0, 2700.0] {
+                let g = measured_db_with(skirted(rate, 300.0, 2700.0), rate, edge);
+                assert!((g + 3.0).abs() < 0.3, "rate {rate} edge {edge}: {g:.2} dB");
+            }
+            let mid = measured_db_with(skirted(rate, 300.0, 2700.0), rate, 1200.0);
+            assert!(mid.abs() < 0.5, "rate {rate} mid: {mid:.2} dB");
+        }
+        // AM (filter from 0): only the high side
+        assert_eq!(skirted(48000.0, 0.0, 4000.0).skirt.len(), 2);
+    }
+
+    #[test]
+    fn warmth_small_signal_unity_peaks_rounded_no_dc() {
+        let rate = 48000.0;
+        let run = |amp: f64| {
+            let mut t = AnalogTone::new(rate, 2000.0, 0.0);
+            t.set_warmth(rate, 1.0);
+            let n = rate as usize;
+            let mut buf: Vec<f64> = (0..n)
+                .flat_map(|i| {
+                    let s = amp * (2.0 * PI * 500.0 * i as f64 / rate).sin();
+                    [s, s]
+                })
+                .collect();
+            t.process(&mut buf);
+            let tail: Vec<f64> = buf[n..].iter().step_by(2).copied().collect();
+            let mean = tail.iter().sum::<f64>() / tail.len() as f64;
+            let peak = tail.iter().fold(0f64, |m, v| m.max(v.abs()));
+            (mean, peak)
+        };
+        let (m, p) = run(0.01);
+        assert!((p / 0.01 - 1.0).abs() < 0.02 && m.abs() < 1e-4, "small: peak {p} mean {m}");
+        let (m, p) = run(1.0);
+        assert!(p < 0.95 && p > 0.5 && m.abs() < 0.01, "full: peak {p} mean {m}");
+    }
+
+    #[test]
     fn zero_depth_is_transparent() {
         let mut t = AnalogTone::new(48000.0, 2000.0, 0.0);
         let src: Vec<f64> = (0..2000).map(|i| ((i * 7919) % 1000) as f64 / 500.0 - 1.0).collect();
@@ -322,6 +458,8 @@ mod tests {
             atone_process(p, buf.as_mut_ptr(), 32);
             atone_set(p, 96000.0, 1500.0, 12.0);
             atone_set_ripple(p, 96000.0, 300.0, 2700.0, 1.0);
+            atone_set_skirt(p, 96000.0, 300.0, 2700.0, 3.0);
+            atone_set_warmth(p, 96000.0, 0.5);
             atone_process(p, buf.as_mut_ptr(), 32);
             atone_flush(p);
             atone_process(p, std::ptr::null_mut(), 32);
