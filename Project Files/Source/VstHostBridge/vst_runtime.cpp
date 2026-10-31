@@ -137,6 +137,7 @@ struct VstPluginRuntime
 	std::vector<Steinberg::Vst::Sample64*> output_ptrs_64;
 	std::vector<Steinberg::Vst::Sample32*> input_ptrs_32;
 	std::vector<Steinberg::Vst::Sample32*> output_ptrs_32;
+	std::vector<std::vector<double>> aux_buffers; // silent storage for side-chain/aux bus channels
 	int sample_rate = 0;
 	int max_block_size = 0;
 	int chain_channels = 0;
@@ -1009,6 +1010,28 @@ namespace
 			runtime.output_buffers_64.clear();
 			runtime.input_ptrs_64.clear();
 			runtime.output_ptrs_64.clear();
+		}
+
+		// prepare(..., 0, ...) leaves nullptr channels on every bus; only bus 0 gets our buffers in
+		// assign_process_buffers. Plugins with a side-chain bus (e.g. all Waves) read it anyway and
+		// output silence on nullptr, so give aux channels zeroed storage (a double block also fits floats).
+		runtime.aux_buffers.clear();
+		for (int dir = 0; dir < 2; ++dir)
+		{
+			Steinberg::Vst::AudioBusBuffers* buses = dir == 0 ? runtime.process_data.inputs : runtime.process_data.outputs;
+			int count = dir == 0 ? runtime.process_data.numInputs : runtime.process_data.numOutputs;
+			for (int b = 1; b < count; ++b)
+			{
+				for (int ch = 0; ch < buses[b].numChannels; ++ch)
+				{
+					runtime.aux_buffers.emplace_back(runtime.max_block_size, 0.0);
+					void* p = runtime.aux_buffers.back().data();
+					if (runtime.symbolic_sample_size == kSample64)
+						buses[b].channelBuffers64[ch] = static_cast<Steinberg::Vst::Sample64*>(p);
+					else
+						buses[b].channelBuffers32[ch] = static_cast<Steinberg::Vst::Sample32*>(p);
+				}
+			}
 		}
 
 		return true;
