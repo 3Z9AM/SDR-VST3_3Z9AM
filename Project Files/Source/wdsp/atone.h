@@ -40,7 +40,9 @@ typedef struct _atone
 	double corner;		// Hz where the roll-off starts
 	double depth;		// dB, the most it takes off at the top
 	double ripple;		// crystal-filter ripple across the RX filter, dB peak to peak
-	double lo, hi;		// RX filter as audio Hz (for the ripple)
+	double lo, hi;		// RX filter as audio Hz (for the ripple and skirts)
+	double skirt;		// crystal skirts: dB down at the RX filter edges
+	double warmth;		// AF saturation 0..1
 	AnalogTone* rs;
 } atone, *ATONE;
 
@@ -58,6 +60,6 @@ extern void setSamplerate_atone (ATONE a, int rate);
 
 extern void setSize_atone (ATONE a, int size);
 
-extern __declspec (dllexport) void SetRXAAnalogTone (int channel, int run, double corner, double depth, double ripple, double lo, double hi);
+extern __declspec (dllexport) void SetRXAAnalogTone (int channel, int run, double corner, double depth, double ripple, double lo, double hi, double skirt, double warmth);
 
 #endif

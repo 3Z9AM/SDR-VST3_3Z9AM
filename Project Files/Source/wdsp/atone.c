@@ -69,6 +69,8 @@ void setSamplerate_atone (ATONE a, int rate)
 	a->rate = rate;
 	atone_set (a->rs, a->rate, a->corner, a->depth);
 	atone_set_ripple (a->rs, a->rate, a->lo, a->hi, a->ripple);
+	atone_set_skirt (a->rs, a->rate, a->lo, a->hi, a->skirt);
+	atone_set_warmth (a->rs, a->rate, a->warmth);
 	atone_flush (a->rs);
 }
 
@@ -83,9 +85,10 @@ void setSize_atone (ATONE a, int size)
 *																										*
 ********************************************************************************************************/
 
-// corner Hz, depth dB; ripple dB peak to peak across the RX filter given as audio lo..hi Hz
+// corner Hz, depth dB; ripple dB peak to peak across the RX filter given as audio lo..hi Hz,
+// skirt dB down at its edges; warmth 0..1 AF saturation
 PORT
-void SetRXAAnalogTone (int channel, int run, double corner, double depth, double ripple, double lo, double hi)
+void SetRXAAnalogTone (int channel, int run, double corner, double depth, double ripple, double lo, double hi, double skirt, double warmth)
 {
 	ATONE a = rxa[channel].atone.p;
 	EnterCriticalSection (&ch[channel].csDSP);
@@ -96,7 +99,11 @@ void SetRXAAnalogTone (int channel, int run, double corner, double depth, double
 	a->ripple = ripple;
 	a->lo = lo;
 	a->hi = hi;
+	a->skirt = skirt;
+	a->warmth = warmth;
 	atone_set (a->rs, a->rate, corner, depth);
 	atone_set_ripple (a->rs, a->rate, lo, hi, ripple);
+	atone_set_skirt (a->rs, a->rate, lo, hi, skirt);
+	atone_set_warmth (a->rs, a->rate, warmth);
 	LeaveCriticalSection (&ch[channel].csDSP);
 }

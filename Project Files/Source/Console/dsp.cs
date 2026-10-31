@@ -444,7 +444,7 @@ namespace Thetis
         // analog tone (wdsp/atone.c, filter in wdsprs): flat to corner Hz, -6 dB/octave above, at most -depth dB;
         // crystal ripple dB peak to peak across the RX filter given as audio lo..hi Hz
         [DllImport("wdsp.dll", EntryPoint = "SetRXAAnalogTone", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetRXAAnalogTone(int channel, int run, double corner, double depth, double ripple, double lo, double hi);
+        public static extern void SetRXAAnalogTone(int channel, int run, double corner, double depth, double ripple, double lo, double hi, double skirt, double warmth);
 
         [DllImport("wdsp.dll", EntryPoint = "SetRXABin2Spatial", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXABin2Spatial(int channel, int spatial, double width, double speaker, double room);
