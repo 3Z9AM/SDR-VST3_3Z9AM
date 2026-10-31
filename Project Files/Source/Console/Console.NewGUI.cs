@@ -168,11 +168,10 @@ namespace Thetis
                 panelVFO.Height = chkVAC1.Top;
                 // MUT joins the VAC row (left of VAC2) so the Audio drawer does not grow; Expand restores from chk_mut_basis
                 chkMUT.Location = chk_mut_basis = chkVAC2.Location;
-                chkMUT.ThreeState = true;   // click: off -> radio AF (green) -> whole RX1 (red) -> off
-                _mutLastState = chkMUT.CheckState;
-                chkMUT.CheckStateChanged += chkMUT_CheckStateChanged;
+                chkMUT.AutoCheck = false;   // click: off -> radio AF (green) -> VAC1 (violet) -> whole RX1 (red) -> off
+                chkMUT.Click += chkMUT_ClickCycle;
                 toolTip1.SetToolTip(chkMUT, "Mute RX1. Green: only the radio's audio output (VAC, TCI, VST keep playing). " +
-                    "Red (second click): the whole receiver. Third click: off.");
+                    "Violet (second click): only VAC1, the radio keeps playing. Red (third click): the whole receiver. Fourth click: off.");
                 chkVAC2.Left += chkMUT.Width + 1;
                 ucVAC2UnderOver.Left += chkMUT.Width + 1;
                 // DSP drawer: AGC under the DSP buttons as wide as them, diversity mode above the filter shape

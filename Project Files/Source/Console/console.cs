@@ -29098,26 +29098,33 @@ namespace Thetis
                 ptbRX2Gain_Scroll(this, EventArgs.Empty); //MW0LGE_21k9
             }
         }
-        // MUT is three-state (initNewGui): Checked (green) = only the radio's AF output, Indeterminate (red) = the whole
-        // RX1 (VAC, TCI, VST too). The old "mute will mute VAC1" option is what red does now.
-        private bool RX1MuteAll => chkMUT.CheckState == CheckState.Indeterminate;
-        private CheckState _mutLastState = CheckState.Unchecked;
+        // MUT cycles on click (initNewGui): 0 off, 1 green = only the radio's AF output, 2 violet = only VAC1,
+        // 3 red = the whole RX1 (VAC, TCI, VST too). The old "mute will mute VAC1" option is what red does now.
+        private int _mutLevel = 0;
+        private bool RX1MuteAll => _mutLevel == 3;
 
-        // green <-> red keeps Checked true, so CheckedChanged does not fire
-        private void chkMUT_CheckStateChanged(object sender, EventArgs e)
+        // AutoCheck is off: the click picks the next level; green -> violet -> red keeps Checked true, so call the handler
+        private void chkMUT_ClickCycle(object sender, EventArgs e)
         {
-            bool bothOn = _mutLastState != CheckState.Unchecked && chkMUT.CheckState != CheckState.Unchecked;
-            _mutLastState = chkMUT.CheckState;
-            if (bothOn) chkMUT_CheckedChanged(sender, e);
+            _mutLevel = (_mutLevel + 1) % 4;
+            if (chkMUT.Checked == (_mutLevel > 0)) chkMUT_CheckedChanged(sender, e);
+            else chkMUT.Checked = _mutLevel > 0;
+            chkMUT.Invalidate();
         }
 
         private void chkMUT_CheckedChanged(object sender, System.EventArgs e)
         {
             bool bOldMute = Audio.MuteRX1;
 
+            // CAT / sliders set Checked directly: on = green, off = level 0
+            if (!chkMUT.Checked) _mutLevel = 0;
+            else if (_mutLevel == 0) _mutLevel = 1;
+
+            Audio.MuteVAC1 = _mutLevel == 2;
+
             if (chkMUT.Checked)
             {
-                Audio.MuteRX1 = true;
+                Audio.MuteRX1 = _mutLevel != 2;
 
                 if (RX1MuteAll)
                 {

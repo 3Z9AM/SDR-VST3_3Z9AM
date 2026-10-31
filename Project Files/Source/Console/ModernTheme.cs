@@ -45,6 +45,7 @@ namespace Thetis
         // warnings only, green = OK only ----
         public static readonly Color Danger = Color.FromArgb(255, 64, 96);
         public static readonly Color Ok = Color.FromArgb(40, 240, 170);
+        public static readonly Color Violet = Color.FromArgb(190, 110, 255);
         public static readonly Color Warn = Color.FromArgb(255, 196, 60);
 
         // the cyan design colours; SetAccent turns them to the hue of another accent colour

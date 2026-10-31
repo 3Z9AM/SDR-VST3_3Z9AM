@@ -770,7 +770,19 @@ namespace Thetis
             set
             {
                 vac_rx_scale = value;
-                ivac.SetIVACrxscale(0, value);
+                ivac.SetIVACrxscale(0, mute_vac1 ? 0.0 : value);
+            }
+        }
+
+        // MUT violet (console.cs): VAC1 silent, the stored scale stays
+        private static bool mute_vac1 = false;
+        public static bool MuteVAC1
+        {
+            get { return mute_vac1; }
+            set
+            {
+                mute_vac1 = value;
+                ivac.SetIVACrxscale(0, value ? 0.0 : vac_rx_scale);
             }
         }
 

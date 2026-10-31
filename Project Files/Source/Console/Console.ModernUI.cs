@@ -109,7 +109,7 @@ namespace Thetis
         private Color modernOnColour(ButtonBase b)
         {
             if (b.Tag is ButtonBase original && original != b) return modernOnColour(original);   // dock copies (Console.NewGUI.cs)
-            if (b == chkMUT) return RX1MuteAll ? ModernTheme.Danger : ModernTheme.Ok;   // green = radio AF only, red = whole RX1
+            if (b == chkMUT) return RX1MuteAll ? ModernTheme.Danger : _mutLevel == 2 ? ModernTheme.Violet : ModernTheme.Ok;   // green = radio AF, violet = VAC1, red = whole RX1
             if (b == chkMOX || b == chkTUN || b == chk2TONE || b == chkRX2Mute)
                 return ModernTheme.Danger;
             if (b == chkPower) return ModernTheme.Ok;
