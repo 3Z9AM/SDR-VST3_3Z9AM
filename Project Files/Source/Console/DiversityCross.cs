@@ -124,6 +124,64 @@ namespace Thetis
             }
         }
 
+        // phase-rate view (RX2 x conj RX1), per bin, frames one FFT length apart
+        private readonly LagAverage _phaseRate = new LagAverage();
+        private float[] _cre, _cim;
+        public void ResetPhaseRate() { _phaseRate.Reset(); }
+
+        // angle of rr/ri = how far the RX2-RX1 phase turned in one FFT length (swapped frame: sign flipped)
+        public void AveragePhaseRate(int lag, double fastFrames, double[] rr, double[] ri, double[] pm)
+        {
+            if (_cre == null) { _cre = new float[N]; _cim = new float[N]; }
+            for (int k = 0; k < N; k++)
+            {
+                _cre[k] = _re2[k] * _re1[k] + _im2[k] * _im1[k];
+                _cim[k] = _im2[k] * _re1[k] - _re2[k] * _im1[k];
+            }
+            _phaseRate.Add(lag, _cre, _cim, fastFrames, 1, rr, ri, null, null, pm);
+        }
+
+        // x_t conj(x_t-lag) per bin, lag Feeds = one FFT length apart: no window overlap, so noise
+        // decorrelates, and a bin-centre tone turns a whole number of times (no correction needed).
+        // fast fr/fi, optional slow sr/si; pm = mean |x_t||x_t-lag| (|fr + j fi| / pm = steadiness 0..1)
+        internal sealed class LagAverage                    // also the RX1 Doppler view (Display.Pan3DPhase.cs)
+        {
+            private float[][] _re, _im;
+            private int _head, _fill;
+            private long _n;                                // averaged frames since the reset
+
+            public void Reset() { _fill = 0; _n = 0; }
+
+            public void Add(int lag, float[] xre, float[] xim, double fastFrames, double slowFrames,
+                double[] fr, double[] fi, double[] sr, double[] si, double[] pm)
+            {
+                int n = xre.Length;
+                if (_re == null || _re.Length != lag || _re[0].Length != n)
+                {
+                    _re = new float[lag][]; _im = new float[lag][];
+                    for (int j = 0; j < lag; j++) { _re[j] = new float[n]; _im[j] = new float[n]; }
+                    _head = _fill = 0; _n = 0;
+                }
+                float[] pr = _re[_head], pi = _im[_head];   // the frame lag Feeds ago, overwritten below
+                if (_fill >= lag)
+                {
+                    _n++;
+                    double aFast = Math.Max(1 / fastFrames, 1.0 / _n), aSlow = Math.Max(1 / slowFrames, 1.0 / _n);
+                    for (int k = 0; k < n; k++)
+                    {
+                        double xr = xre[k], xi = xim[k];
+                        double dr = xr * pr[k] + xi * pi[k], di = xi * pr[k] - xr * pi[k];
+                        fr[k] += aFast * (dr - fr[k]); fi[k] += aFast * (di - fi[k]);
+                        if (sr != null) { sr[k] += aSlow * (dr - sr[k]); si[k] += aSlow * (di - si[k]); }
+                        pm[k] += aFast * (Math.Sqrt((xr * xr + xi * xi) * ((double)pr[k] * pr[k] + (double)pi[k] * pi[k])) - pm[k]);
+                    }
+                }
+                else _fill++;
+                Array.Copy(xre, pr, n); Array.Copy(xim, pi, n);
+                _head = (_head + 1) % lag;
+            }
+        }
+
         public bool Valid => _count > 0 && _f1 > 0 && _f2 > 0;
         public double Phase => Math.Atan2(-_fi, _fr);   // how far RX2 leads RX1 (the swap conjugates the cross term)
         public double Coherence => Math.Min(1, Math.Sqrt(_fr * _fr + _fi * _fi) / Math.Sqrt(_f1 * _f2));

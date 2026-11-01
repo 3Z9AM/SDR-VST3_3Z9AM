@@ -568,7 +568,7 @@ namespace Thetis
                 r.PhaseOn = true;
             }
             if (_wfPhaseRow == null || _wfPhaseRow.Length != r.Width) _wfPhaseRow = new uint[r.Width];
-            FillPhaseColours(_wfPhaseRow, r.Width);
+            FillWaterfallPhaseColours(_wfPhaseRow, r.Width);
             dc.UpdateSubresource(new ReadOnlySpan<uint>(_wfPhaseRow), r.PhaseTex, 0, pitch, 0,
                 new Box(0, r.Head, 0, r.Width, r.Head + 1, 1));
         }

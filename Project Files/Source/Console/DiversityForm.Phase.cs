@@ -59,10 +59,19 @@ namespace Thetis
             Controls.Add(btn);
 
             // named so Common.RestoreForm (after this in the constructor) keeps it
-            var chk = new CheckBoxTS { Name = "chkWaterfallPhase", Text = "WF phase", AutoSize = true, Location = new Point(84, 3), UseVisualStyleBackColor = true };
-            toolTip1.SetToolTip(chk, "GPU waterfall RX1: colour = phase RX2-RX1, brightness = level, grey = no coherence");
-            chk.CheckedChanged += delegate { Display.WaterfallPhaseView = chk.Checked; };
-            Controls.Add(chk);
+            var wfp = new ComboBoxTS { Name = "comboWaterfallPhase", DropDownStyle = ComboBoxStyle.DropDownList, Location = new Point(82, 1), Size = new Size(76, 21), DropDownWidth = 90 };
+            wfp.Items.AddRange(new object[] { "WF off", "WF phase", "WF Δphase" });
+            wfp.SelectedIndex = 0;
+            toolTip1.SetToolTip(wfp, "GPU waterfall RX1 (brightness = level, grey = no coherence):\n" +
+                "phase - colour = phase RX2-RX1\n" +
+                "Δphase - colour = how fast that phase turns: green = steady (local noise, groundwave - what null / max-SINR can take out),\n" +
+                "red / blue = turning one way or the other (skywave), full colour at half a turn per second");
+            wfp.SelectedIndexChanged += delegate
+            {
+                Display.WaterfallPhaseRate = wfp.SelectedIndex == 2;
+                Display.WaterfallPhaseView = wfp.SelectedIndex > 0;
+            };
+            Controls.Add(wfp);
             FormClosed += delegate { Display.WaterfallPhaseView = false; };
 
             var inv = new CheckBoxTS { Name = "chkPhaseRx1Rx2", Text = "RX1-RX2", AutoSize = true, Location = new Point(162, 3), UseVisualStyleBackColor = true };
@@ -130,6 +139,8 @@ namespace Thetis
             float[] fbi = null, fbq = null;                              // sliding window, 2*fine.N
             double[] cr3 = null, ci3 = null, p13 = null, p23 = null;   // phase views, all fine bins
             long count3 = 0;
+            double[] rrr = null, rri = null, rpm = null;       // WF phase rate view
+            long dCentre = long.MinValue;
             long lastPaint = 0;
 
             while (_phaseRun)
@@ -183,6 +194,21 @@ namespace Thetis
                                 double a3 = Math.Max(1 / dc.BinHz / PhaseViewAvgSeconds, 1.0 / (count3 - PhaseViewFine + 1));
                                 fine.AverageBins(0, a3, cr3, ci3, p13, p23);
                                 Display.SetPhaseSpectrum(fine.BinHz, cr3, ci3, p13, p23);
+                                if (Display.WaterfallPhaseView && Display.WaterfallPhaseRate)
+                                {
+                                    // retuned: the old frames and means belong to other frequencies
+                                    long cen = Display.RX1IqOffsetToHz(0);
+                                    if (rrr == null || rrr.Length != fine.N || cen != dCentre)
+                                    {
+                                        rrr = new double[fine.N]; rri = new double[fine.N]; rpm = new double[fine.N];
+                                        dCentre = cen;
+                                        fine.ResetPhaseRate();
+                                    }
+                                    // one hop = one meter frame = 1 / dc.BinHz s
+                                    fine.AveragePhaseRate(PhaseViewFine, dc.BinHz * PhaseViewAvgSeconds, rrr, rri, rpm);
+                                    Display.SetPhaseRateSpectrum(fine.BinHz, rrr, rri, rpm);
+                                }
+                                else rrr = null;
                             }
                         }
                         else count3 = 0;

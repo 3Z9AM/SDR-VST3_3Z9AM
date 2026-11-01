@@ -169,6 +169,7 @@
     <Compile Include="Setup.ModernVFO.cs" />
     <Compile Include="Console.ModernSMeter.cs" />
     <Compile Include="Console.FilterShape.cs" />
+    <Compile Include="Console.Magnifier.cs" />
     <Compile Include="Console.ModernUI.cs" />
     <Compile Include="Console.NewGUI.cs" />
     <Compile Include="Console.Activation.cs" />

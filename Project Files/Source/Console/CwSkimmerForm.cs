@@ -41,6 +41,24 @@ namespace Thetis
                 else _cwSkimmerForm.Show(this);
             };
             menuStrip1.Items.Insert(menuStrip1.Items.IndexOf(vstToolStripMenuItem) + 1, item);
+
+            // a green caption lights the HUD tile (NgMenuRenderer): skimmer on, audio through a VST chain, PureSignal on
+            Color off = SystemColors.ControlLightLight;
+            System.Windows.Forms.Timer t = new System.Windows.Forms.Timer { Interval = 500 };
+            t.Tick += delegate
+            {
+                bool vst = _vstEnabled && chkPower.Checked &&
+                           (chkRXVST.Checked || (chkTXVST.Checked && (MOX || chkVSTTest.Checked)));
+                setTileColour(item, _cwSkimmerForm.Running ? Color.LimeGreen : off);
+                setTileColour(vstToolStripMenuItem, vst ? Color.LimeGreen : off);
+                setTileColour(linearityToolStripMenuItem, psform != null && psform.PSEnabled ? Color.LimeGreen : off);
+            };
+            t.Start();
+        }
+
+        private static void setTileColour(ToolStripItem i, Color c)
+        {
+            if (i.ForeColor != c) i.ForeColor = c;
         }
     }
 
@@ -143,6 +161,8 @@ namespace Thetis
             _restoring = false;
             apply();
         }
+
+        internal bool Running => _worker != null;
 
         private void apply()
         {

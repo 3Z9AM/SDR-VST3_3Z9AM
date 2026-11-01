@@ -985,6 +985,7 @@ namespace Thetis
             if (!IsSetupFormNull) SetupForm.SetupCMAsio(_portAudioIssue, Common.HasArg(args, "-cmasioconfig"));
             vstToolStripMenuItem.Visible = _vstEnabled;
             initCwSkimmer();
+            initMagnifier();
             if (_vstEnabled) initSonoBus();
             chkTXVST.Visible = _vstEnabled;
             chkRXVST.Visible = _vstEnabled;
@@ -10918,6 +10919,7 @@ namespace Thetis
             set
             {
                 _diversity2 = value;
+                Display.DiversityOn = value;   // ionosphere drift arrows on the 3D sphere
                 AndromedaIndicatorCheck(EIndicatorActions.eINDiversityEnabled, false, _diversity2);
                 if (_diversity2)
                 {

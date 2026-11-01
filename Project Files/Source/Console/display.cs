@@ -7632,6 +7632,7 @@ namespace Thetis
                     if (m.HasTxLines) { Tick(m.TxL, 3f, wb); Tick(m.TxR, 3f, wb); }
                     if (m.HasCwTx) Tick(m.CwTxX, 3f, wb);
                     if (m.HasVfo) Tick(m.VfoX, 5f, Get3DBrush(255, 0, 0, 0.95f));
+                    if (rx != 2) DrawIonoDriftDX2D(nVerticalShift, W, H, ey, ry, inside);   // RX1 IQ only
                 }
 
                 // TX filter edges (receive: the 2D shows them as two vertical lines)
