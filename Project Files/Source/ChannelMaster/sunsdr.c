@@ -1186,7 +1186,7 @@ static sunsdr_resampler_state_t resampler[2];
  *
  * The wider value (e.g., 18 kHz) can be restored if voice quality
  * impact outweighs the spur cleanup. See sunsdr_tx_fir_design(). */
-#define SUNSDR_TX_FIR_CUTOFF_HZ  4000.0
+#define SUNSDR_TX_FIR_CUTOFF_HZ  18000.0 /* 4 kHz cut SSB TX to ~4.7 kHz regardless of TX filter; WDSP TXA bandpass sets width */
 
 /* Local PI — math.h is included but MSVC needs _USE_MATH_DEFINES before
  * the include for M_PI to be defined, and we don't want to fiddle with
