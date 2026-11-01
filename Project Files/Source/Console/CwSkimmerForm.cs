@@ -303,6 +303,7 @@ namespace Thetis
             SpotManager2.AddSpot(s.Call, DSPMode.CWU, hz, SpotColour, "",
                 new SpotManager2.JsonSpotData { Spotter = "SKIMMER", Comment = "CW " + s.Wpm + " WPM " + s.SnrDb + " dB" });
             Interlocked.Increment(ref _spots);
+            AoAAutoCal.OnSpot(s.Call, s.OffsetHz);
         }
 
         private void refreshList()

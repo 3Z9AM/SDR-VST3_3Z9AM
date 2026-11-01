@@ -4900,6 +4900,9 @@ namespace Thetis
                         _d2dRenderTarget.FillRectangle(new RectangleF(0, y, displayTargetWidth, 28), getDXBrushForColour(Color.Black, 160));
                         drawStringDX2D(cwText, fontDX2d_font14, getDXBrushForColour(Color.FromArgb(255, 190, 60), 255), 8, y + 3);
                     }
+                    // ionosphere drift + angle of arrival on one HUD glass plate
+                    DrawHudPlateDX2D(displayTargetWidth, m_nRX1DisplayHeight,
+                        !string.IsNullOrEmpty(cwText) && (rx1_dsp_mode == DSPMode.CWL || rx1_dsp_mode == DSPMode.CWU));
 
                     // HIGH swr display warning, PA warning
                     if (high_swr || _power_folded_back || _pa_issue)
@@ -11255,6 +11258,7 @@ namespace Thetis
         {
             if (fontDX2d_callout != null) fontDX2d_callout?.Dispose();
             if (fontDX2d_font9 != null) fontDX2d_font9?.Dispose();
+            releaseHudFont();
             if (fontDX2d_font9b != null) fontDX2d_font9b?.Dispose();
             if (fontDX2d_font9c != null) fontDX2d_font9c?.Dispose();
             if (fontDX2d_panafont != null) fontDX2d_panafont?.Dispose();

@@ -462,43 +462,23 @@ namespace Thetis
                 return;
             }
 
-            // the drawer rises a little and fades in; hidden before the panels move in,
-            // otherwise the half-painted new content shows in the old drawer for a frame
+            // at once (user: no slide/fade on click). Hidden while the panels move in, painted in one go,
+            // then shown: otherwise the half-painted new content shows in the old drawer for a frame
             ApplyNativePanelOpacity(_ngDrawer, 1);
-            _ngSlide = NgSlidePx;
+            _ngSlide = 0;
             ngLayout();
-            _ngFadeStart = Environment.TickCount;
-            if (_ngFadeTimer == null)
-            {
-                _ngFadeTimer = new Timer { Interval = 15 };
-                _ngFadeTimer.Tick += (s, e) => ngFadeTick();
-            }
-            _ngFadeTimer.Start();
-        }
-
-        private Timer _ngFadeTimer, _ngClock;
-        private int _ngFadeStart, _ngSlide;
-        private Point _ngDrawerHome;
-        private const int NgFadeMs = 170, NgSlidePx = 16;
-
-        private void ngFadeTick()
-        {
-            float k = Math.Min(1f, (Environment.TickCount - _ngFadeStart) / (float)NgFadeMs);
-            float ease = 1f - (1f - k) * (1f - k) * (1f - k);
-            // fades in to the level set with Shift + wheel
+            const uint RDW_INVALIDATE = 0x1, RDW_ALLCHILDREN = 0x80, RDW_UPDATENOW = 0x100;
+            RedrawWindow(_ngDrawer.Handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            // stays layered even at 100%: dropping WS_EX_LAYERED throws away the drawer's image
             int pct = _nativePanelOpacities.TryGetValue(_ngDrawer.Name, out int o) ? o : 100;
-            _ngSlide = k >= 1f ? 0 : (int)Math.Round((1f - ease) * NgSlidePx);
-            _ngDrawer.Location = new Point(_ngDrawerHome.X, _ngDrawerHome.Y + _ngSlide);
-            ngDrawerShadow(ease);
-            if (k >= 1f)
-            {
-                _ngFadeTimer.Stop();
-                // stays layered even at 100%: dropping WS_EX_LAYERED throws away the drawer's image
-                // and it flashes empty while every button repaints
-                SetLayeredWindowAttributes(_ngDrawer.Handle, 0, (byte)(pct * 255 / 100), LWA_ALPHA);
-            }
-            else ApplyNativePanelOpacity(_ngDrawer, Math.Max(1, (int)(pct * ease)));
+            SetLayeredWindowAttributes(_ngDrawer.Handle, 0, (byte)(pct * 255 / 100), LWA_ALPHA);
+            ngDrawerShadow(1f);
         }
+
+        private Timer _ngClock;
+        private int _ngSlide;
+        private Point _ngDrawerHome;
+        private const int NgSlidePx = 16;
 
         private void ngLayoutEvent(object sender, EventArgs e)
         {

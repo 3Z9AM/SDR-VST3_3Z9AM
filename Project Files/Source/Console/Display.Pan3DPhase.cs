@@ -84,6 +84,7 @@ namespace Thetis
         // RX1 only, so no Diversity window: its own copy of the RX1 IQ (waterfall_iq ring 7, cmaster.c).
         // FFT ~12 Hz bins slid by a quarter; frames 4 hops = one FFT apart are compared (DiversityCross.LagAverage).
         private const int DopplerRing = 7;
+        private static long _dopplerTxUntil;               // Environment.TickCount64: measuring again after TX
         private const double DopplerFastSeconds = 0.3, DopplerSlowSeconds = 5;
         // shortcut: drift is against the last minute (the transmitter's own offset is unknown, so a layer that moves
         // steadily for many minutes fades out); a GPS-locked carrier of known frequency would give the absolute value
@@ -111,7 +112,15 @@ namespace Thetis
                         int r = cmaster.GetInputRate(0, 0);
                         int avail = ExactGpuNative.CM_WaterfallIQ_Available(DopplerRing);
                         long refHz = RX1IqOffsetToHz(0);
-                        if (r <= 0 || Audio.MOX || refHz != lastRef || r != rate)
+                        // TX (and 0.5 s after it, relays / AGC): nothing measured, the averages kept for after it
+                        if (Audio.MOX) _dopplerTxUntil = Environment.TickCount64 + 500;
+                        if (rate > 0 && Environment.TickCount64 < _dopplerTxUntil)    // retuned during TX: reset on the first RX pass
+                        {
+                            ExactGpuNative.CM_WaterfallIQ_Skip(DopplerRing, avail);
+                            fill = 0; lag.Restart(); drift.Restart();
+                            continue;
+                        }
+                        if (r <= 0 || refHz != lastRef || r != rate)
                         {
                             ExactGpuNative.CM_WaterfallIQ_Skip(DopplerRing, avail);
                             lastRef = refHz; fill = 0; lag.Reset(); drift.Reset();
@@ -267,6 +276,9 @@ namespace Thetis
         // Label: weighted mean as vertical speed, v = c df / (2 f) (vertical incidence; oblique paths read lower).
         private const int DriftCols = 160;
         private static readonly double[] _drHz = new double[DriftCols], _drW = new double[DriftCols], _drCoh = new double[DriftCols];
+        // the same over the whole IQ band (the full sample rate, not only the visible span)
+        private const int FullCols = 512;
+        private static readonly double[] _fuHz = new double[FullCols], _fuW = new double[FullCols], _fuCoh = new double[FullCols], _fuOff = new double[FullCols];
         private static void DrawIonoDriftDX2D(int top, int W, int H, float ey, float ry, bool inside)
         {
             if (!IonoDriftActive || W < 50 || _d2dRenderTarget == null) return;
@@ -317,17 +329,61 @@ namespace Thetis
                 count++;
             }
 
-            string label;
-            if (count == 0) label = "IONO: no steady carrier";
-            else
+            // + Hz / + m/s = layer coming down; drawn on the HUD plate (Display.HudPlate.cs)
+            SetIonoHud(new DriftReading(sumHz, sumW, sumF, count), FullBandDrift());
+        }
+
+        internal readonly struct DriftReading
+        {
+            public readonly int N;
+            public readonly double Hz, V;
+            public DriftReading(double sumHz, double sumW, double sumF, int n)
             {
-                double hz = sumHz / sumW, f = sumF / sumW;
-                double v = 299792458.0 * hz / (2 * f);         // + = layer coming down
-                label = "IONO " + (Math.Abs(hz) < DriftDeadHz ? "= steady" : (hz > 0 ? "▼ down " : "▲ up ") + Math.Abs(v).ToString("0.0") + " m/s") +
-                        "  (" + hz.ToString("+0.00;-0.00") + " Hz, " + count + ")";
+                N = n;
+                Hz = n > 0 ? sumHz / sumW : 0;
+                V = n > 0 ? 299792458.0 * Hz / (2 * (sumF / sumW)) : 0;
             }
-            float ly = inside ? top + H - 18 : Math.Min(top + H - 18, ey + ry * 0.8f);
-            drawStringDX2D(label, fontDX2d_font9, Get3DBrush(230, 240, 245, 0.95f), W * 0.5f - label.Length * 3f, ly);
+            public bool Steady => Math.Abs(Hz) < DriftDeadHz;
+        }
+
+        // mean drift of every steady carrier in the IQ band: columns of n/FullCols bins, the same carrier test as
+        // the visible span, without the DC spur (+-200 Hz) and the band edges (filter roll-off)
+        private static DriftReading FullBandDrift()
+        {
+            int cols;
+            double binHz;
+            lock (_3dPhaseLock)
+            {
+                if (_drR == null) return default;
+                int n = _drR.Length;
+                binHz = _drBinHz;
+                cols = Math.Min(FullCols, n);
+                int per = n / cols;
+                for (int c = 0; c < cols; c++)
+                {
+                    double dr = 0, di = 0, p = 0;
+                    for (int j = 0; j < per; j++) { int k = (c * per + j - n / 2) & (n - 1); dr += _drR[k]; di += _drI[k]; p += _drP[k]; }
+                    _fuCoh[c] = p > 0 ? Math.Min(1, Math.Sqrt(dr * dr + di * di) / p) : 0;
+                    _fuHz[c] = Math.Atan2(di, dr) * binHz / (2 * Math.PI);
+                    _fuW[c] = p;
+                    _fuOff[c] = ((c + 0.5) * per - n / 2) * binHz;
+                }
+                binHz *= n;                                      // = sample rate
+            }
+            double[] sorted = new double[cols];
+            Array.Copy(_fuW, sorted, cols);
+            Array.Sort(sorted);
+            double floor = sorted[cols / 2] * 6, sumW = 0, sumHz = 0, sumF = 0;
+            int count = 0;
+            for (int c = 0; c < cols; c++)
+            {
+                if (_fuCoh[c] < 0.6 || _fuW[c] <= floor || Math.Abs(_fuOff[c]) < 200 || Math.Abs(_fuOff[c]) > 0.45 * binHz) continue;
+                if ((c > 0 && _fuW[c - 1] > _fuW[c]) || (c < cols - 1 && _fuW[c + 1] >= _fuW[c])) continue;
+                double w = _fuW[c] * _fuCoh[c];
+                sumW += w; sumHz += w * _fuHz[c]; sumF += w * RX1IqOffsetToHz(_fuOff[c]);
+                count++;
+            }
+            return new DriftReading(sumHz, sumW, sumF, count);
         }
 
         private const double DriftDeadHz = 0.02;

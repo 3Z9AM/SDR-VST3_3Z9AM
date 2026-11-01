@@ -143,6 +143,10 @@
     <Compile Include="Setup.SoftEdge.cs" />
     <Compile Include="Setup.SMeterTrim.cs" />
     <Compile Include="Setup.Bin2.cs" />
+    <Compile Include="AoAAutoCal.cs" />
+    <Compile Include="Setup.ShowHidden.cs" />
+    <Compile Include="Setup.AoA.cs" />
+    <Compile Include="Display.HudPlate.cs" />
     <Compile Include="Setup.AnalogTone.cs" />
     <Compile Include="Setup.AGCAttack.cs" />
     <Compile Include="Console.DiversityMini.cs" />
