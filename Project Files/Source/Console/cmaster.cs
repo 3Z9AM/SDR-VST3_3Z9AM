@@ -1374,12 +1374,14 @@ namespace Thetis
         public static void CMSetTXOutputLevelRun()
         {
             bool run = false; // /* Audio.console.CurrentModel != Model.HERMES && */ !Audio.console.PennyLanePresent;
+            // 3Z9AM: HL2 - the drive between its 16 hardware levels is made up digitally (Audio.HL2TxGain)
+            if (HardwareSpecific.Model == HPSDRModel.HERMESLITE) run = true;
             cmaster.SetTXFixedGainRun(0, run);
         }
 
         public static void CMSetTXOutputLevel()
         {
-            double level = Audio.RadioVolume * Audio.HighSWRScale;
+            double level = (HardwareSpecific.Model == HPSDRModel.HERMESLITE ? Audio.HL2TxGain : Audio.RadioVolume) * Audio.HighSWRScale;
             cmaster.SetTXFixedGain(0, level, level);
         }
         #endregion

@@ -29872,36 +29872,12 @@ namespace Thetis
                 sValue = drv.ToString();
             }
 
-            if (HardwareSpecific.Model == HPSDRModel.HERMESLITE)       // MI0BOT: HL2 has only 15 output power levels
+            if (HardwareSpecific.Model == HPSDRModel.HERMESLITE)       // HL2: smooth drive in dB (HL2DriveDb), 0 = off
             {
-                if (4 > drv)
-                {
-                    drv = 0;
-                }
-                else if (3 < drv && 6 > drv)
-                {
-                    drv = 6;
-                }
-                else if (87 < drv)
-                {
-                    drv = 90;
-                }
-                else if (84 < drv && 88 > drv)
-                {
-                    drv = 84;
-                }
-
-                lblPWR.Text = "Drive:  " + ((Math.Round(drv / 6.0) / 2) - 7.5).ToString() + "dB";
-
-                if (!bShowLimitValue)
-                {
-                    if (ptbPWR.IsConstrained)
-                        lblPWR.Text = "Drive:  (" + ((Math.Round(drv / 6.0) / 2) - 7.5).ToString() + "dB)";
-                }
-                else
-                {
-                    lblPWR.Text = "Limit:  " + ((Math.Round(drv / 6.0) / 2) - 7.5).ToString() + "dB";
-                }
+                double db = HL2DriveDb(drv);
+                string s = double.IsNegativeInfinity(db) ? "off" : db.ToString("0.0") + "dB";
+                if (bShowLimitValue) lblPWR.Text = "Limit:  " + s;
+                else lblPWR.Text = ptbPWR.IsConstrained ? "Drive:  (" + s + ")" : "Drive:  " + s;
             }
             else
             {
@@ -49425,11 +49401,25 @@ namespace Thetis
                 }
                 else
                 {
-                    Audio.RadioVolume = (double)Math.Min((hl2Power * (gbb / 100)) / 93.75, 1.0);  // MI0BOT: We want to jump in steps of 16 but getting 6.
-                }                                                                                 // Drive value is 0-255 but only top 4 bits used.
-            }                                                                                     // Need to correct for multiplication of 1.02 in Radio volume  
-                                                                                                  // Formula - 1/((16/6)/(255/1.02))
+                    // MI0BOT: drive value is 0-255 but the HL2 uses only the top 4 bits: 16 levels 0.5 dB apart (-7.5..0 dB).
+                    // 3Z9AM: smooth - the hardware takes the nearest level at or above the wanted dB, the rest is TX IQ gain
+                    // (cmaster txgain, after WDSP); also below -7.5 dB down to -40 dB (testers: minimum power)
+                    double db = HL2DriveDb(hl2Power * (gbb / 100));
+                    int lvl = double.IsNegativeInfinity(db) ? 0 : Math.Max(0, Math.Min(15, (int)Math.Ceiling((db + 7.5) * 2 - 1e-9)));
+                    Audio.HL2TxGain = double.IsNegativeInfinity(db) ? 0 : Math.Pow(10, (db - (lvl / 2.0 - 7.5)) / 20);
+                    Audio.RadioVolume = (lvl * 16 + 8) / (255 * 1.02);       // middle of the level's 16 byte values (x1.02 in SetOutputPower)
+                }
+            }
             return new_pwr;
+        }
+
+        // HL2 drive slider (0-100, x band gain) -> output dB re full power: 1/12 dB per step as the old label
+        // (-7.0 dB at 6, 0 dB from 90), below 6 steeper down to -40 dB; 0 = no output
+        internal static double HL2DriveDb(double x)
+        {
+            if (x <= 0) return double.NegativeInfinity;
+            if (x < 6) return -7.0 - (6 - x) * 5.5;
+            return Math.Min(0, x / 12 - 7.5);
         }
 
         private bool _bEnableAudioAmplifier = true;

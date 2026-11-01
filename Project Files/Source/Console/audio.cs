@@ -258,6 +258,9 @@ namespace Thetis
             }
         }
 
+        // 3Z9AM: HL2 TX IQ gain (0..1) under its hardware drive level, set before RadioVolume (cmaster.CMSetTXOutputLevel)
+        public static double HL2TxGain = 1.0;
+
         private static double radio_volume = 0.0;
         public static double RadioVolume
         {
