@@ -29875,6 +29875,9 @@ namespace Thetis
             if (HardwareSpecific.Model == HPSDRModel.HERMESLITE)       // HL2: smooth drive in dB (HL2DriveDb), 0 = off
             {
                 double db = HL2DriveDb(drv);
+                // CW comes from the HL2 firmware: no digital gain, lowest hardware level (-7.5 dB) is the minimum, never off
+                DSPMode txm = radio.GetDSPTX(0).CurrentDSPMode;
+                if (txm == DSPMode.CWL || txm == DSPMode.CWU) db = Math.Max(-7.5, db);
                 string s = double.IsNegativeInfinity(db) ? "off" : db.ToString("0.0") + "dB";
                 if (bShowLimitValue) lblPWR.Text = "Limit:  " + s;
                 else lblPWR.Text = ptbPWR.IsConstrained ? "Drive:  (" + s + ")" : "Drive:  " + s;
@@ -49052,6 +49055,7 @@ namespace Thetis
             string sHeader = "Tu | 2T";
             if (_tuneDrivePowerSource == DrivePowerSource.TUNE_SLIDER && _2ToneDrivePowerSource != DrivePowerSource.TUNE_SLIDER) sHeader = "Tune";
             if (_tuneDrivePowerSource != DrivePowerSource.TUNE_SLIDER && _2ToneDrivePowerSource == DrivePowerSource.TUNE_SLIDER) sHeader = "2Tone";
+            if (HardwareSpecific.Model == HPSDRModel.HERMESLITE) sHeader = "Tune";     // 3Z9AM: HL2 testers read "2Tone" as a wrong label
 
             bool bUsePower = SetupForm.GetPABandUsesMaxPower(TXBand);
 
