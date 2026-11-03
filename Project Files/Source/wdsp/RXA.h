@@ -199,6 +199,14 @@ struct _rxa
 	} bin2;
 	struct
 	{
+		RXLIM p;
+	} rxlim;
+	struct
+	{
+		MBAGC p;
+	} mbagc;
+	struct
+	{
 		PANEL p;
 	} panel;
 	struct

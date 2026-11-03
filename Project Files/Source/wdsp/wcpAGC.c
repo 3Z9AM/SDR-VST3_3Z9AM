@@ -144,11 +144,13 @@ void loadWcpAGC (WCPAGC a)
 	a->onemhang_backmult = 1.0 - a->hang_backmult;
 
 	a->hang_decay_mult = 1.0 - exp(-1.0 / (a->sample_rate * a->tau_hang_decay));
+	agcfloor_rate (a->floor, a->sample_rate);
 }
 
 void destroy_wcpagc (WCPAGC a)
 {
 	decalc_wcpagc (a);
+	agcfloor_destroy (a->floor);
 	_aligned_free (a);
 }
 
@@ -157,6 +159,7 @@ void flush_wcpagc (WCPAGC a)
 	memset ((void *)a->ring, 0, sizeof(double) * RB_SIZE * 2);
 	a->ring_max = 0.0;
 	memset ((void *)a->abs_ring, 0, sizeof(double)* RB_SIZE);
+	agcfloor_flush (a->floor);
 }
 
 void xwcpagc (WCPAGC a)
@@ -336,8 +339,12 @@ void xwcpagc (WCPAGC a)
 
 			if (a->volts < a->min_volts)
 				a->volts = a->min_volts;
-			a->gain = a->volts * a->inv_out_target;
-			mult = (a->out_target - a->slope_constant * min (0.0, log10(a->inv_max_input * a->volts))) / a->volts;
+			{
+				// dual-loop: in pauses the gain level stays near the slow station level (a->volts untouched)
+				double v = a->floor ? agcfloor_step (a->floor, a->ring_max, a->volts) : a->volts;
+				a->gain = v * a->inv_out_target;
+				mult = (a->out_target - a->slope_constant * min (0.0, log10(a->inv_max_input * v))) / v;
+			}
 			a->out[2 * i + 0] = a->out_sample[0] * mult;
 			a->out[2 * i + 1] = a->out_sample[1] * mult;
 		}
@@ -466,6 +473,26 @@ SetRXAAGCPopRatio (int channel, double pop_ratio)
 	if (pop_ratio > 1000.0) pop_ratio = 1000.0;
 	EnterCriticalSection (&ch[channel].csDSP);
 	rxa[channel].agc.p->pop_ratio = pop_ratio;
+	LeaveCriticalSection (&ch[channel].csDSP);
+}
+
+// local addition: dual-loop AGC ("pause hold"). In speech pauses the gain rises at most rise_db
+// over the gain during speech; the slow station level decays with tau_s (wdsprs/src/agcfloor.rs).
+PORT void
+SetRXAAGCFloor (int channel, int run, double rise_db, double tau_s)
+{
+	WCPAGC a = rxa[channel].agc.p;
+	EnterCriticalSection (&ch[channel].csDSP);
+	if (run)
+	{
+		if (!a->floor) a->floor = agcfloor_create (a->sample_rate, rise_db, tau_s);
+		else agcfloor_set (a->floor, a->sample_rate, rise_db, tau_s);
+	}
+	else if (a->floor)
+	{
+		agcfloor_destroy (a->floor);
+		a->floor = 0;
+	}
 	LeaveCriticalSection (&ch[channel].csDSP);
 }
 

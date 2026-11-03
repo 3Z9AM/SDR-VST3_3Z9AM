@@ -338,6 +338,15 @@ namespace Thetis
             this.RXAGCAttack = rx.rx_agc_attack;
             this.RXAGCFastDecay = rx.rx_agc_fast_decay;
             this.RXAGCPopRatio = rx.rx_agc_pop_ratio;
+            this.RXLimiter = rx.rx_limiter;
+            this.RXLimiterThresh = rx.rx_limiter_thresh;
+            this.RXLimiterRelease = rx.rx_limiter_release;
+            this.RXAGCFloor = rx.rx_agc_floor;
+            this.RXAGCFloorRise = rx.rx_agc_floor_rise;
+            this.RXAGCFloorTau = rx.rx_agc_floor_tau;
+            this.RXMultibandAGC = rx.rx_mb_agc;
+            this.RXMultibandAGCStrength = rx.rx_mb_agc_strength;
+            this.RXMultibandAGCMax = rx.rx_mb_agc_max;
             this.RXOutputGain = rx.rx_output_gain;
             this.RXAGCSlope = rx.rx_agc_slope;
             this.RXAGCHangThreshold = rx.rx_agc_hang_threshold;
@@ -463,6 +472,9 @@ namespace Thetis
 			RXAGCAttack = rx_agc_attack;
 			RXAGCFastDecay = rx_agc_fast_decay;
 			RXAGCPopRatio = rx_agc_pop_ratio;
+			RXLimiter = rx_limiter;
+			RXAGCFloor = rx_agc_floor;
+			RXMultibandAGC = rx_mb_agc;
 			RXOutputGain = rx_output_gain;
 			RXAGCSlope = rx_agc_slope;
 			RXAGCHangThreshold = rx_agc_hang_threshold;
@@ -1174,6 +1186,99 @@ namespace Thetis
 					}
 				}
 			}
+		}
+
+		// RX peak limiter at the end of RXA (look-ahead 1 ms), one call carries all three values
+		private bool rx_limiter = true;
+		private double rx_limiter_thresh = -1.0;
+		private double rx_limiter_release = 50.0;
+		private string rx_limiter_dsp = "";
+		private void sendRXLimiter()
+		{
+			if (!update) return;
+			string sig = rx_limiter + "|" + rx_limiter_thresh + "|" + rx_limiter_release;
+			if (sig != rx_limiter_dsp || force)
+			{
+				WDSP.SetRXALimiter(WDSP.id(thread, subrx), rx_limiter ? 1 : 0, rx_limiter_thresh, rx_limiter_release);
+				rx_limiter_dsp = sig;
+			}
+		}
+		public bool RXLimiter
+		{
+			get { return rx_limiter; }
+			set { rx_limiter = value; sendRXLimiter(); }
+		}
+		public double RXLimiterThresh
+		{
+			get { return rx_limiter_thresh; }
+			set { rx_limiter_thresh = value; sendRXLimiter(); }
+		}
+		public double RXLimiterRelease
+		{
+			get { return rx_limiter_release; }
+			set { rx_limiter_release = value; sendRXLimiter(); }
+		}
+
+		// dual-loop AGC "pause hold": in speech pauses the gain rises at most rise dB over the speech gain
+		private bool rx_agc_floor = false;
+		private double rx_agc_floor_rise = 10.0;
+		private double rx_agc_floor_tau = 3.0;
+		private string rx_agc_floor_dsp = "";
+		private void sendRXAGCFloor()
+		{
+			if (!update) return;
+			string sig = rx_agc_floor + "|" + rx_agc_floor_rise + "|" + rx_agc_floor_tau;
+			if (sig != rx_agc_floor_dsp || force)
+			{
+				WDSP.SetRXAAGCFloor(WDSP.id(thread, subrx), rx_agc_floor ? 1 : 0, rx_agc_floor_rise, rx_agc_floor_tau);
+				rx_agc_floor_dsp = sig;
+			}
+		}
+		public bool RXAGCFloor
+		{
+			get { return rx_agc_floor; }
+			set { rx_agc_floor = value; sendRXAGCFloor(); }
+		}
+		public double RXAGCFloorRise
+		{
+			get { return rx_agc_floor_rise; }
+			set { rx_agc_floor_rise = value; sendRXAGCFloor(); }
+		}
+		public double RXAGCFloorTau
+		{
+			get { return rx_agc_floor_tau; }
+			set { rx_agc_floor_tau = value; sendRXAGCFloor(); }
+		}
+
+		// multiband AGC after the broadband one: strength 0 (protect only) .. 1 (every band to its usual share)
+		private bool rx_mb_agc = false;
+		private double rx_mb_agc_strength = 0.3;
+		private double rx_mb_agc_max = 12.0;
+		private string rx_mb_agc_dsp = "";
+		private void sendRXMultibandAGC()
+		{
+			if (!update) return;
+			string sig = rx_mb_agc + "|" + rx_mb_agc_strength + "|" + rx_mb_agc_max;
+			if (sig != rx_mb_agc_dsp || force)
+			{
+				WDSP.SetRXAMultibandAGC(WDSP.id(thread, subrx), rx_mb_agc ? 1 : 0, rx_mb_agc_strength, rx_mb_agc_max);
+				rx_mb_agc_dsp = sig;
+			}
+		}
+		public bool RXMultibandAGC
+		{
+			get { return rx_mb_agc; }
+			set { rx_mb_agc = value; sendRXMultibandAGC(); }
+		}
+		public double RXMultibandAGCStrength
+		{
+			get { return rx_mb_agc_strength; }
+			set { rx_mb_agc_strength = value; sendRXMultibandAGC(); }
+		}
+		public double RXMultibandAGCMax
+		{
+			get { return rx_mb_agc_max; }
+			set { rx_mb_agc_max = value; sendRXMultibandAGC(); }
 		}
 
 		// AGC impulse recovery: level / 250 ms average above which a peak is treated as a pop

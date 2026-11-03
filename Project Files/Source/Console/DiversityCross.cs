@@ -33,6 +33,9 @@ namespace Thetis
         public const double NoiseSpanHz = 3000, NoiseLimit = 4;   // null band = filter +-3 kHz; signals > 4x median skipped
         private double _fr, _fi, _f1, _f2;      // short average: phase meter
         private double _sr, _si, _s1, _s2;      // long average of the noise floor around the filter: null target
+        private double _ar, _ai, _a1, _a2;      // AoA: signal bins in the filter only, frames with signal only
+        private long _acount;
+        public const double AoASeconds = 5;
         private long _count;
         private int _lo = int.MinValue, _hi;
 
@@ -50,7 +53,7 @@ namespace Thetis
 
         public void Feed(float[] bi, float[] bq, int lo, int hi)
         {
-            if (lo != _lo || hi != _hi) { _lo = lo; _hi = hi; _count = 0; }   // retuned: start over
+            if (lo != _lo || hi != _hi) { _lo = lo; _hi = hi; _count = 0; _acount = 0; }   // retuned: start over
 
             for (int k = 0; k < N; k++)
             {
@@ -96,6 +99,25 @@ namespace Thetis
                 n2 += _re2[k] * _re2[k] + _im2[k] * _im2[k];
             }
 
+            // AoA: filter bins above the noise limit around the filter (the stations, not the noise floor)
+            double ar = 0, ai = 0, a1 = 0, a2 = 0;
+            for (int b = (int)Math.Ceiling(lo / binHz); b <= (int)Math.Floor(hi / binHz); b++)
+            {
+                int j = b - b0;
+                if (j < 0 || j >= nb || _pw[j] <= limit) continue;
+                int k = b & (N - 1);
+                ar += _re2[k] * _re1[k] + _im2[k] * _im1[k];
+                ai += _im2[k] * _re1[k] - _re2[k] * _im1[k];
+                a1 += _re1[k] * _re1[k] + _im1[k] * _im1[k];
+                a2 += _re2[k] * _re2[k] + _im2[k] * _im2[k];
+            }
+            if (a1 > 0)
+            {
+                _acount++;
+                double aa = Math.Max(N / _rate / AoASeconds, 1.0 / _acount);
+                _ar += aa * (ar - _ar); _ai += aa * (ai - _ai); _a1 += aa * (a1 - _a1); _a2 += aa * (a2 - _a2);
+            }
+
             // plain mean until the average is full, so a fresh start is not stuck on its first frame
             _count++;
             double a = Math.Max(N / _rate / _fast, 1.0 / _count);
@@ -105,6 +127,14 @@ namespace Thetis
         }
 
         public double BinHz => _rate / N;
+
+        // the last Feed's power of bin b (swapped frame, may be negative) on each antenna
+        public void BinPower(int b, out double p1, out double p2)
+        {
+            int k = b & (N - 1);
+            p1 = _re1[k] * _re1[k] + _im1[k] * _im1[k];
+            p2 = _re2[k] * _re2[k] + _im2[k] * _im2[k];
+        }
 
         // Phase waterfall: exponential average (factor a) of the last Feed's cross spectrum over bins
         // b0 .. b0+cr.Length-1 (swapped frame, may be negative), same terms as the band sums above.
@@ -124,9 +154,75 @@ namespace Thetis
             }
         }
 
+        // phase-rate view (RX2 x conj RX1), per bin, frames one FFT length apart
+        private readonly LagAverage _phaseRate = new LagAverage();
+        private float[] _cre, _cim;
+        public void ResetPhaseRate() { _phaseRate.Reset(); }
+
+        // angle of rr/ri = how far the RX2-RX1 phase turned in one FFT length (swapped frame: sign flipped)
+        public void AveragePhaseRate(int lag, double fastFrames, double[] rr, double[] ri, double[] pm)
+        {
+            if (_cre == null) { _cre = new float[N]; _cim = new float[N]; }
+            for (int k = 0; k < N; k++)
+            {
+                _cre[k] = _re2[k] * _re1[k] + _im2[k] * _im1[k];
+                _cim[k] = _im2[k] * _re1[k] - _re2[k] * _im1[k];
+            }
+            _phaseRate.Add(lag, _cre, _cim, fastFrames, 1, rr, ri, null, null, pm);
+        }
+
+        // x_t conj(x_t-lag) per bin, lag Feeds = one FFT length apart: no window overlap, so noise
+        // decorrelates, and a bin-centre tone turns a whole number of times (no correction needed).
+        // fast fr/fi, optional slow sr/si; pm = mean |x_t||x_t-lag| (|fr + j fi| / pm = steadiness 0..1)
+        internal sealed class LagAverage                    // also the RX1 Doppler view (Display.Pan3DPhase.cs)
+        {
+            private float[][] _re, _im;
+            private int _head, _fill;
+            private long _n;                                // averaged frames since the reset
+
+            public void Reset() { _fill = 0; _n = 0; }
+            // after a gap (TX): the frames from before it must not pair with the new ones, the averages stay
+            public void Restart() { _fill = 0; }
+
+            public void Add(int lag, float[] xre, float[] xim, double fastFrames, double slowFrames,
+                double[] fr, double[] fi, double[] sr, double[] si, double[] pm)
+            {
+                int n = xre.Length;
+                if (_re == null || _re.Length != lag || _re[0].Length != n)
+                {
+                    _re = new float[lag][]; _im = new float[lag][];
+                    for (int j = 0; j < lag; j++) { _re[j] = new float[n]; _im[j] = new float[n]; }
+                    _head = _fill = 0; _n = 0;
+                }
+                float[] pr = _re[_head], pi = _im[_head];   // the frame lag Feeds ago, overwritten below
+                if (_fill >= lag)
+                {
+                    _n++;
+                    double aFast = Math.Max(1 / fastFrames, 1.0 / _n), aSlow = Math.Max(1 / slowFrames, 1.0 / _n);
+                    for (int k = 0; k < n; k++)
+                    {
+                        double xr = xre[k], xi = xim[k];
+                        double dr = xr * pr[k] + xi * pi[k], di = xi * pr[k] - xr * pi[k];
+                        fr[k] += aFast * (dr - fr[k]); fi[k] += aFast * (di - fi[k]);
+                        if (sr != null) { sr[k] += aSlow * (dr - sr[k]); si[k] += aSlow * (di - si[k]); }
+                        pm[k] += aFast * (Math.Sqrt((xr * xr + xi * xi) * ((double)pr[k] * pr[k] + (double)pi[k] * pi[k])) - pm[k]);
+                    }
+                }
+                else _fill++;
+                Array.Copy(xre, pr, n); Array.Copy(xim, pi, n);
+                _head = (_head + 1) % lag;
+            }
+        }
+
         public bool Valid => _count > 0 && _f1 > 0 && _f2 > 0;
         public double Phase => Math.Atan2(-_fi, _fr);   // how far RX2 leads RX1 (the swap conjugates the cross term)
         public double Coherence => Math.Min(1, Math.Sqrt(_fr * _fr + _fi * _fi) / Math.Sqrt(_f1 * _f2));
+        // the same over the signals in the filter, averaged AoASeconds (only frames that had one)
+        public bool AoAValid => _acount > 0 && _a1 > 0 && _a2 > 0;
+        public double AoAPhase => Math.Atan2(-_ai, _ar);
+        public double AoARatioDb => 10 * Math.Log10(_a2 / _a1);     // RX2-RX1 level of the signals, dB
+        public double RatioDb => 10 * Math.Log10(_f2 / _f1);        // the same over the whole filter, short average
+        public double AoACoherence => Math.Min(1, Math.Sqrt(_ar * _ar + _ai * _ai) / Math.Sqrt(_a1 * _a2));
 
         // RX2/RX1 ratio h (real IQ frame) of the strongest stable part of the noise floor around the
         // band over the long average: main eigenvector of the 2x2 cross-spectral matrix, which noise

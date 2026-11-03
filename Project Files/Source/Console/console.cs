@@ -987,6 +987,7 @@ namespace Thetis
             if (!IsSetupFormNull) SetupForm.SetupCMAsio(_portAudioIssue, Common.HasArg(args, "-cmasioconfig"));
             vstToolStripMenuItem.Visible = _vstEnabled;
             initCwSkimmer();
+            initMagnifier();
             if (_vstEnabled) initSonoBus();
             chkTXVST.Visible = _vstEnabled;
             chkRXVST.Visible = _vstEnabled;
@@ -11453,6 +11454,7 @@ namespace Thetis
             set
             {
                 _diversity2 = value;
+                Display.DiversityOn = value;   // ionosphere drift arrows on the 3D sphere
                 AndromedaIndicatorCheck(EIndicatorActions.eINDiversityEnabled, false, _diversity2);
                 if (_diversity2)
                 {
@@ -29773,14 +29775,16 @@ namespace Thetis
             toolStripStatusLabel_GPU.Visible = false; // shown once the monitor reports a value
             int insertAt = statusStripMain.Items.IndexOf(toolStripStatusLabelTXAnt);
             statusStripMain.Items.Insert(insertAt < 0 ? statusStripMain.Items.Count : insertAt + 1, toolStripStatusLabel_GPU);
+            statusStripMain.ShowItemToolTips = true;   // GPU details (clock, power) in the tooltip
 
-            _gpuUsageMonitor = new GpuUsageMonitor(gpuPercent =>
+            _gpuUsageMonitor = new GpuUsageMonitor((text, tip) =>
             {
                 if (IsDisposed || toolStripStatusLabel_GPU == null || toolStripStatusLabel_GPU.IsDisposed)
                     return;
-                toolStripStatusLabel_GPU.Visible = gpuPercent >= 0f; // -1 => counters unavailable
-                if (gpuPercent >= 0f)
-                    toolStripStatusLabel_GPU.Text = "GPU " + Math.Round(gpuPercent) + "%";
+                toolStripStatusLabel_GPU.Visible = text != null; // null => counters unavailable
+                if (text == null) return;
+                toolStripStatusLabel_GPU.Text = text;
+                toolStripStatusLabel_GPU.ToolTipText = tip;
             });
             _gpuUsageMonitor.Start();
         }

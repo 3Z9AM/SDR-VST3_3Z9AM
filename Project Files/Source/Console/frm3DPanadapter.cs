@@ -67,6 +67,8 @@ namespace Thetis
         private CheckBoxTS chk3DSphere;
         private CheckBoxTS chk3DSphereInside;
         private CheckBoxTS chk3DSphereStanding;
+        private CheckBoxTS chk3DSphereDoppler;
+        private CheckBoxTS chk3DIonoDrift;
         private LabelTS lbl3DTopsWidth;
         private TrackBarTS tb3DTopsWidth;
         private LabelTS lbl3DSphereBack;
@@ -168,6 +170,8 @@ namespace Thetis
             this.chk3DSphere = new System.Windows.Forms.CheckBoxTS();
             this.chk3DSphereInside = new System.Windows.Forms.CheckBoxTS();
             this.chk3DSphereStanding = new System.Windows.Forms.CheckBoxTS();
+            this.chk3DSphereDoppler = new System.Windows.Forms.CheckBoxTS();
+            this.chk3DIonoDrift = new System.Windows.Forms.CheckBoxTS();
             this.lbl3DTopsWidth = new System.Windows.Forms.LabelTS();
             this.tb3DTopsWidth = new System.Windows.Forms.TrackBarTS();
             this.lbl3DSphereBack = new System.Windows.Forms.LabelTS();
@@ -572,6 +576,30 @@ namespace Thetis
             this.toolTip1.SetToolTip(this.chk3DSphereStanding, "Inside view: signals as vertical walls facing the observer.\nOff: signals lie along the horizon toward the middle of the sphere.");
             this.chk3DSphereStanding.CheckedChanged += new System.EventHandler(this.chk3DSphereStanding_CheckedChanged);
             //
+            // chk3DSphereDoppler
+            //
+            this.chk3DSphereDoppler.AutoSize = true;
+            this.chk3DSphereDoppler.Image = null;
+            this.chk3DSphereDoppler.Location = new System.Drawing.Point(120, 586);
+            this.chk3DSphereDoppler.Name = "chk3DSphereDoppler";
+            this.chk3DSphereDoppler.Size = new System.Drawing.Size(95, 17);
+            this.chk3DSphereDoppler.TabIndex = 47;
+            this.chk3DSphereDoppler.Text = "Doppler";
+            this.toolTip1.SetToolTip(this.chk3DSphereDoppler, "Waterfall sphere lower half (also below the horizon in Inside view), or flat 3D with Phase view: RX1 frequency change against its 5 s mean instead of the RX2-RX1 phase.\nRed = up, green = steady, blue = down (full colour at +-1 Hz), grey = no steady carrier.");
+            this.chk3DSphereDoppler.CheckedChanged += new System.EventHandler(this.chk3DSphereDoppler_CheckedChanged);
+            //
+            // chk3DIonoDrift
+            //
+            this.chk3DIonoDrift.AutoSize = true;
+            this.chk3DIonoDrift.Image = null;
+            this.chk3DIonoDrift.Location = new System.Drawing.Point(12, 638);
+            this.chk3DIonoDrift.Name = "chk3DIonoDrift";
+            this.chk3DIonoDrift.Size = new System.Drawing.Size(150, 17);
+            this.chk3DIonoDrift.TabIndex = 48;
+            this.chk3DIonoDrift.Text = "Ionosphere drift arrows";
+            this.toolTip1.SetToolTip(this.chk3DIonoDrift, "Waterfall sphere: an arrow on the equator (Inside view: the horizon) at every steady carrier (RX1).\nDown (red) = frequency rising = the reflecting layer comes down; up (blue) = it rises; green dot = steady.\nMeasured against the last minute; the label gives the mean as vertical speed (vertical incidence).\nWorks with or without the Doppler colours; always on while diversity is enabled.");
+            this.chk3DIonoDrift.CheckedChanged += new System.EventHandler(this.chk3DIonoDrift_CheckedChanged);
+            //
             // lbl3DTopsWidth
             //
             this.lbl3DTopsWidth.Image = null;
@@ -775,7 +803,7 @@ namespace Thetis
             // btn3DResetDefaults
             //
             this.btn3DResetDefaults.Image = null;
-            this.btn3DResetDefaults.Location = new System.Drawing.Point(12, 638);
+            this.btn3DResetDefaults.Location = new System.Drawing.Point(12, 664);
             this.btn3DResetDefaults.Name = "btn3DResetDefaults";
             this.btn3DResetDefaults.Size = new System.Drawing.Size(208, 26);
             this.btn3DResetDefaults.TabIndex = 22;
@@ -787,7 +815,7 @@ namespace Thetis
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(232, 676);
+            this.ClientSize = new System.Drawing.Size(232, 702);
             this.Controls.Add(this.chk3DWaterfallSync);
             this.Controls.Add(this.chk3DSideWalls);
             this.Controls.Add(this.lbl3DXOffset);
@@ -820,6 +848,8 @@ namespace Thetis
             this.Controls.Add(this.chk3DSphere);
             this.Controls.Add(this.chk3DSphereInside);
             this.Controls.Add(this.chk3DSphereStanding);
+            this.Controls.Add(this.chk3DSphereDoppler);
+            this.Controls.Add(this.chk3DIonoDrift);
             this.Controls.Add(this.lbl3DTopsWidth);
             this.Controls.Add(this.tb3DTopsWidth);
             this.Controls.Add(this.lbl3DSphereBack);
@@ -874,6 +904,8 @@ namespace Thetis
             Display.Pan3DSphere = chk3DSphere.Checked;
             Display.Pan3DSphereInside = chk3DSphereInside.Checked;
             Display.Pan3DSphereStanding = chk3DSphereStanding.Checked;
+            Display.Pan3DSphereDoppler = chk3DSphereDoppler.Checked;
+            Display.Pan3DIonoDrift = chk3DIonoDrift.Checked;
             Display.Pan3DTopsWidth = tb3DTopsWidth.Value;
             UpdateTopsWidthLabel();
             Display.Pan3DSphereBack = tb3DSphereBack.Value / 100f;
@@ -980,6 +1012,18 @@ namespace Thetis
         {
             if (_initializing) return;
             Display.Pan3DSphereStanding = chk3DSphereStanding.Checked;
+        }
+
+        private void chk3DSphereDoppler_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_initializing) return;
+            Display.Pan3DSphereDoppler = chk3DSphereDoppler.Checked;
+        }
+
+        private void chk3DIonoDrift_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_initializing) return;
+            Display.Pan3DIonoDrift = chk3DIonoDrift.Checked;
         }
 
         private static readonly string[] InsideKeys = { "tb3DSphereBack", "tb3DSphereBend", "tb3DSphereRecede", "chk3DSphereStanding", "tb3DSphereTilt" };
@@ -1213,6 +1257,8 @@ namespace Thetis
             chk3DSphere.Checked = false;
             chk3DSphereInside.Checked = false;
             chk3DSphereStanding.Checked = false;
+            chk3DSphereDoppler.Checked = false;
+            chk3DIonoDrift.Checked = false;
             tb3DSphereBack.Value = 30;
             tb3DSphereBend.Value = 30;
             tb3DSphereRecede.Value = -20;
