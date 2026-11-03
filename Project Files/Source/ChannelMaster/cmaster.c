@@ -412,6 +412,8 @@ void xcmaster (int stream)
 		xnob (pcm->rcvr[rx].pnob);
 		CM_WaterfallIQ_Push(rx, pcm->xcm_insize[stream], pcm->in[stream]);																// nb2
 		if (rx == 0) CM_WaterfallIQ_Push(4, pcm->xcm_insize[stream], pcm->in[stream]);	// CW skimmer (no-op unless enabled)
+		if (rx == 0) CM_WaterfallIQ_Push(6, pcm->xcm_insize[stream], pcm->in[stream]);	// magnifier (Console.Magnifier.cs)
+		if (rx == 0) CM_WaterfallIQ_Push(7, pcm->xcm_insize[stream], pcm->in[stream]);	// 3D sphere Doppler (Display.Pan3DPhase.cs)
 		Spectrum0 (_InterlockedAnd (&pcm->rcvr[rx].run_pan, 0xffffffff), rx, 0, 0,				// panadapter 
 			pcm->in[stream]);
 

@@ -35,6 +35,8 @@ warren@wpratt.com
 
 #define AGCPORT				__declspec(dllexport)
 
+#include "../wdsprs/wdsprs.h"
+
 typedef struct _wcpagc
 {
 	int run;
@@ -99,6 +101,8 @@ typedef struct _wcpagc
 	double tau_hang_decay;
 	double hang_decay_mult;
 	int decay_type;
+
+	AgcFloor* floor;		// dual-loop "pause hold" (wdsprs/src/agcfloor.rs), RX only, NULL = off
 } wcpagc, *WCPAGC;
 
 extern void loadWcpAGC (WCPAGC a);
@@ -155,6 +159,8 @@ extern AGCPORT void SetRXAAGCHang (int channel, int hang);
 extern AGCPORT void SetRXAAGCFastDecay (int channel, double fast_decay_ms);
 
 extern AGCPORT void SetRXAAGCPopRatio (int channel, double pop_ratio);
+
+extern AGCPORT void SetRXAAGCFloor (int channel, int run, double rise_db, double tau_s);
 
 extern AGCPORT void GetRXAAGCHangLevel(int channel, double *hangLevel);
 

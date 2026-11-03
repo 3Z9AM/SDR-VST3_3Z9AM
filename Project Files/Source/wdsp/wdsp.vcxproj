@@ -183,6 +183,8 @@ popd</Command>
     <ClInclude Include="osctrl.h" />
     <ClInclude Include="patchpanel.h" />
     <ClInclude Include="bin2.h" />
+    <ClInclude Include="rxlim.h" />
+    <ClInclude Include="mbagc.h" />
     <ClInclude Include="atone.h" />
     <ClInclude Include="phrot.h" />
     <ClInclude Include="resample.h" />
@@ -265,6 +267,8 @@ popd</Command>
     <ClCompile Include="osctrl.c" />
     <ClCompile Include="patchpanel.c" />
     <ClCompile Include="bin2.c" />
+    <ClCompile Include="rxlim.c" />
+    <ClCompile Include="mbagc.c" />
     <ClCompile Include="atone.c" />
     <ClCompile Include="secdiv.c" />
     <ClCompile Include="phrot.c" />

@@ -10,11 +10,14 @@
 // stripped-down system) the monitor reports unavailable exactly once and
 // stays dormant - the UI hides the indicator in that case.
 //
-// Reported value = the busiest engine (as Task Manager), clamped to 100.
+// Reported value = the busiest engine (as Task Manager), clamped to 100. That is a share of the
+// time at the CURRENT clock; on an NVIDIA card (NVML from the driver) it is also scaled by
+// current / max graphics clock, so a card idling along at 1/3 clock no longer reads 3x busier.
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,7 +32,7 @@ namespace Thetis
 
         private readonly string _instancePrefix;
         private readonly SynchronizationContext _uiContext;
-        private readonly Action<float> _onSample; // float % on UI thread, -1 => unavailable
+        private readonly Action<string, string> _onSample; // label text + tooltip on UI thread, null text => unavailable
 
         private List<PerformanceCounter> _counters = new List<PerformanceCounter>();
         private Timer _sampleTimer;
@@ -38,7 +41,7 @@ namespace Thetis
         private bool _unavailableReported;
         private int _disposed;
 
-        public GpuUsageMonitor(Action<float> onSample)
+        public GpuUsageMonitor(Action<string, string> onSample)
         {
             _onSample = onSample ?? delegate { };
             _uiContext = SynchronizationContext.Current;
@@ -158,8 +161,88 @@ namespace Thetis
             }
 
             float max = 0f;
-            foreach (float v in perEngine.Values) max = Math.Max(max, v);
-            post(Math.Min(max, 100f));
+            string maxKey = null;
+            foreach (KeyValuePair<string, float> kv in perEngine)
+                if (kv.Value > max) { max = kv.Value; maxKey = kv.Key; }
+            max = Math.Min(max, 100f);
+
+            if (maxKey != null && Nvml.Read(luidOf(maxKey), out uint mhz, out uint maxMhz, out uint mw) && maxMhz > 0)
+            {
+                float real = max * mhz / maxMhz;
+                post("GPU " + real.ToString(real < 10f ? "0.0" : "0") + "%",
+                     "Thetis GPU load, scaled to the full clock: " + real.ToString("0.0") + "%\n" +
+                     "busiest engine " + max.ToString("0.0") + "% at " + mhz + " of " + maxMhz + " MHz" +
+                     (mw > 0 ? "\ncard power " + (mw / 1000.0).ToString("0.0") + " W" : ""));
+            }
+            else
+                post("GPU " + Math.Round(max) + "%", "Thetis GPU load: busiest engine " + max.ToString("0.0") + "% at the current clock");
+        }
+
+        // "luid_0x00000000_0x0001101a_phys_0_eng_3" -> "luid_0x00000000_0x0001101a"
+        private static string luidOf(string key)
+        {
+            int p = key.IndexOf("_phys_", StringComparison.OrdinalIgnoreCase);
+            return p > 0 ? key.Substring(0, p) : key;
+        }
+
+        // NVIDIA management library from the driver; DXGI adapter LUID -> NVML device by PCI ids
+        private static class Nvml
+        {
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+            private struct PciInfo
+            {
+                [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 16)] public string BusIdLegacy;
+                public uint Domain, Bus, Device, PciDeviceId, PciSubSystemId;
+                [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string BusId;
+            }
+            [DllImport("nvml.dll", EntryPoint = "nvmlInit_v2")] private static extern int Init();
+            [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetCount_v2")] private static extern int GetCount(out uint n);
+            [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetHandleByIndex_v2")] private static extern int GetHandle(uint i, out IntPtr dev);
+            [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetPciInfo_v3")] private static extern int GetPci(IntPtr dev, out PciInfo pci);
+            [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetClockInfo")] private static extern int GetClock(IntPtr dev, int type, out uint mhz);
+            [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetMaxClockInfo")] private static extern int GetMaxClock(IntPtr dev, int type, out uint mhz);
+            [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetPowerUsage")] private static extern int GetPower(IntPtr dev, out uint mw);
+
+            private static Dictionary<string, IntPtr> _byLuid;   // null = not tried yet, empty = none / no NVML
+            private const int ClockGraphics = 0;
+
+            public static bool Read(string luid, out uint mhz, out uint maxMhz, out uint mw)
+            {
+                mhz = maxMhz = mw = 0;
+                if (_byLuid == null) _byLuid = map();
+                if (!_byLuid.TryGetValue(luid, out IntPtr dev)) return false;
+                try
+                {
+                    if (GetClock(dev, ClockGraphics, out mhz) != 0 || GetMaxClock(dev, ClockGraphics, out maxMhz) != 0) return false;
+                    if (GetPower(dev, out mw) != 0) mw = 0;
+                    return true;
+                }
+                catch { return false; }
+            }
+
+            private static Dictionary<string, IntPtr> map()
+            {
+                var m = new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    if (Init() != 0 || GetCount(out uint n) != 0) return m;
+                    var devs = new List<(IntPtr dev, uint id)>();
+                    for (uint i = 0; i < n; i++)
+                        if (GetHandle(i, out IntPtr d) == 0 && GetPci(d, out PciInfo pci) == 0) devs.Add((d, pci.PciDeviceId));
+                    foreach (Display.AdaptorInfo a in Display.DX2Adaptors())
+                    {
+                        if (a.VendorId != 0x10DE) continue;
+                        uint id = ((uint)a.DeviceId << 16) | 0x10DE;
+                        int k = devs.FindIndex(x => x.id == id);
+                        if (k < 0) continue;
+                        // shortcut: two identical cards pair up in enumeration order, not by bus
+                        m["luid_0x" + ((uint)(a.AdapterLuid >> 32)).ToString("x8") + "_0x" + ((uint)a.AdapterLuid).ToString("x8")] = devs[k].dev;
+                        devs.RemoveAt(k);
+                    }
+                }
+                catch { }   // no NVIDIA driver: nvml.dll missing
+                return m;
+            }
         }
 
         // "pid_1234_luid_0x..._0x..._phys_0_eng_3_engtype_3D" -> "luid_0x..._0x..._phys_0_eng_3"
@@ -175,17 +258,17 @@ namespace Thetis
             if (_unavailableReported)
                 return;
             _unavailableReported = true;
-            post(-1f);
+            post(null, null);
         }
 
-        private void post(float value)
+        private void post(string text, string tip)
         {
             SynchronizationContext ctx = _uiContext;
-            Action<float> cb = _onSample;
+            Action<string, string> cb = _onSample;
             if (ctx != null)
-                ctx.Post(delegate { cb(value); }, null);
+                ctx.Post(delegate { cb(text, tip); }, null);
             else
-                cb(value);
+                cb(text, tip);
         }
 
         private static void disposeList(List<PerformanceCounter> list)

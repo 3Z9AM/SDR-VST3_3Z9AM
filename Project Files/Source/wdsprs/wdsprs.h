@@ -36,4 +36,35 @@ void atone_flush(AnalogTone* p);
 // n complex samples (2 n doubles, I/Q interleaved) filtered in place
 void atone_process(AnalogTone* p, double* buf, int n);
 
+// RX peak limiter (src/limit.rs): look-ahead 1 ms, I/Q = left/right share one gain, never above thresh dBFS
+typedef struct Limiter Limiter;
+Limiter* limit_create(double rate, double thresh_db, double release_ms);
+void limit_destroy(Limiter* p);
+// new threshold / release; a new rate also flushes
+void limit_set(Limiter* p, double rate, double thresh_db, double release_ms);
+void limit_flush(Limiter* p);
+// n complex samples (2 n doubles) in place, delayed by the look-ahead
+void limit_process(Limiter* p, double* buf, int n);
+
+// dual-loop AGC "pause hold" (src/agcfloor.rs): slow station level next to the WDSP AGC
+typedef struct AgcFloor AgcFloor;
+AgcFloor* agcfloor_create(double rate, double rise_db, double tau_s);
+void agcfloor_destroy(AgcFloor* p);
+void agcfloor_set(AgcFloor* p, double rate, double rise_db, double tau_s);
+void agcfloor_rate(AgcFloor* p, double rate);
+void agcfloor_flush(AgcFloor* p);
+// peak = AGC look-ahead peak, volts = AGC level; returns the level the gain is computed from
+double agcfloor_step(AgcFloor* p, double peak, double volts);
+
+// multiband RX AGC (src/mbagc.rs): ERB bands across the RX filter after the broadband AGC, delay one STFT frame (512 @ 48 kHz)
+typedef struct MbAgc MbAgc;
+MbAgc* mbagc_create(double rate, double strength, double max_db);
+void mbagc_destroy(MbAgc* p);
+// strength 0 = only protect from one dominating band .. 1 = every band to its usual share
+void mbagc_set(MbAgc* p, double strength, double max_db);
+// RX filter edges, signed Hz as RXA has them (USB +, LSB -, AM across 0); new bands, learning restarts
+void mbagc_set_band(MbAgc* p, double f_low, double f_high);
+void mbagc_flush(MbAgc* p);
+void mbagc_process(MbAgc* p, double* buf, int n);
+
 #endif

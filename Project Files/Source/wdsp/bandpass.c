@@ -406,6 +406,7 @@ void SetRXABandpassFreqs (int channel, double f_low, double f_high)
 		setUpdate_fircore (a->p);
 		LeaveCriticalSection (&ch[channel].csDSP);
 		setFreqs_bin2 (channel, f_low, f_high);
+		setFreqs_mbagc (channel, f_low, f_high);
 	}
 }
 
