@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="Sfc.cs" />
     <Compile Include="../../Project Files/Source/Console/CwSkimmer.cs" />
     <Compile Include="../../Project Files/Source/Console/DiversityDecimator.cs" />
   </ItemGroup>

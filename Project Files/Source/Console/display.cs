@@ -6240,7 +6240,9 @@ namespace Thetis
                 RectangleF clipRect = new RectangleF(0, nVerticalShift, W, H);
                 // waterfall sphere: the live 2D trace would lie across the lower hemisphere - clip
                 // it all away (the data/noise-floor work below still runs)
-                if (draw3DHistory && _pan3DSphere && GpuMesh3DServed(rx)) clipRect.Height = 0;
+                // nothing of the live trace can show then: keep the data work, skip the ~4 D2D calls per column
+                bool noDraw = draw3DHistory && _pan3DSphere && GpuMesh3DServed(rx);
+                if (noDraw) clipRect.Height = 0;
                 _d2dRenderTarget.PushAxisAlignedClip(clipRect, AntialiasMode.Aliased);
 
                 // modify the data for visual notches
@@ -6321,7 +6323,7 @@ namespace Thetis
                 // effects graph and composited under the overlays.
                 // Skipped automatically on the WARP software path - a gaussian pass over
                 // a full-size layer per frame would eat the frame budget (see GPU fallback rule 2)
-                bool bGlowTrace = m_bSpectrumGlow && m_eRenderPath == DXRenderPath.Hardware;
+                bool bGlowTrace = m_bSpectrumGlow && m_eRenderPath == DXRenderPath.Hardware && !noDraw;
                 List<(Vector2 a, Vector2 b, ID2D1Brush brush, float width)> glowSegs = null;
                 if (bGlowTrace)
                 {
@@ -6344,7 +6346,7 @@ namespace Thetis
                 // touched, mirroring the D2D strokes it replaces. Any failure leaves the
                 // D2D peak strokes in the column loop untouched (GPU fallback 1).
                 bool bOverlayMesh = false;
-                if (bSpectralPeakHold && spectralPeaks != null &&
+                if (bSpectralPeakHold && spectralPeaks != null && !noDraw &&
                     (draw3DHistory || bSpecFillMesh || !pan_fill))
                 {
                     bOverlayMesh = TryRenderSpectrumOverlayMesh(rx, nVerticalShift, W, H,
@@ -6438,7 +6440,7 @@ namespace Thetis
                     }
 
                     //pana fill
-                    if ((pan_fill || liveCustomFill) && !bSpecFillMesh)
+                    if ((pan_fill || liveCustomFill) && !bSpecFillMesh && !noDraw)
                     {
                         // draw vertical line, this is so much faster than FillGeometry as the geo created would be so complex any fill alogorthm would struggle
                         bottomPoint.X = point.X;
@@ -6675,12 +6677,12 @@ namespace Thetis
 
                             if (bActivePeakFill)
                             {
-                                if (!bOverlayMesh)
+                                if (!bOverlayMesh && !noDraw)
                                     _d2dRenderTarget.DrawLine(point, spectralPeakPoint, fillPeaksBrush, local_Decimation);
                             }
                             else
                             {
-                                if (!bOverlayMesh)
+                                if (!bOverlayMesh && !noDraw)
                                     _d2dRenderTarget.DrawLine(oldSpectralPeakPoint, spectralPeakPoint, fillPeaksBrush, line_width);
                                 oldSpectralPeakPoint = spectralPeakPoint;
                             }
@@ -6692,6 +6694,8 @@ namespace Thetis
                             }
                         }
                     }
+
+                    if (noDraw) { previousPoint = point; continue; }
 
                     // ignore point if same Y as last point
                     // lines will get longer if flat, reducing number of total points

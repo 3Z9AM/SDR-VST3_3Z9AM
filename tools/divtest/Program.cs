@@ -45,7 +45,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Thetis;
 
-static class Program
+static partial class Program
 {
     const int AudioRate = 24000, Na = 2048;        // audio IFFT; analysis N = rate * Na / AudioRate
 
@@ -58,6 +58,7 @@ static class Program
         if (args.Length == 0) { Console.WriteLine("usage: divtest <Diversity_...wav> [1,5,10,20,40] [0.2] | synth"); return 1; }
         if (args[0] == "decimate") return DecimateCheck(args[1]);
         if (args[0] == "dirs") return Dirs(args[1]);
+        if (args[0] == "sfc") return Sfc(args.Skip(1).ToArray());
         if (args[0] == "replay") return Replay(args[1], args.Skip(2).Select(int.Parse).ToArray());
         if (args[0] == "inject")
         {

@@ -130,6 +130,18 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetRXAAGCPopRatio", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXAAGCPopRatio(int channel, double pop_ratio);
 
+        // RX peak limiter at the end of RXA (wdsp/rxlim.c): thresh dBFS, release ms
+        [DllImport("wdsp.dll", EntryPoint = "SetRXALimiter", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXALimiter(int channel, int run, double thresh, double release);
+
+        // dual-loop AGC "pause hold" (wdsp/wcpAGC.c + wdsprs agcfloor): gain rise in pauses dB, slow level decay s
+        [DllImport("wdsp.dll", EntryPoint = "SetRXAAGCFloor", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXAAGCFloor(int channel, int run, double rise_db, double tau_s);
+
+        // multiband AGC (wdsp/mbagc.c): strength 0..1, max dB
+        [DllImport("wdsp.dll", EntryPoint = "SetRXAMultibandAGC", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetRXAMultibandAGC(int channel, int run, double strength, double maxdb);
+
         [DllImport("wdsp.dll", EntryPoint = "SetRXAAGCSlope", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetRXAAGCSlope(int channel, int slope);
 
