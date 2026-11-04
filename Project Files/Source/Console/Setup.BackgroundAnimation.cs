@@ -64,20 +64,20 @@ namespace Thetis
             chkBackgroundAnimation = new CheckBoxTS();
             chkBackgroundAnimation.Text = "Animate";
             chkBackgroundAnimation.Location = new Point(6, 16);
-            chkBackgroundAnimation.Size = new Size(64, 17);
+            chkBackgroundAnimation.Size = new Size(76, 17);
             chkBackgroundAnimation.Checked = true;
             chkBackgroundAnimation.Name = "chkBackgroundAnimation";
             chkBackgroundAnimation.CheckedChanged += chkBackgroundAnimation_CheckedChanged;
 
             lblBackgroundAnimationFps = new LabelTS();
-            lblBackgroundAnimationFps.Location = new Point(70, 18);
-            lblBackgroundAnimationFps.Size = new Size(72, 16);
+            lblBackgroundAnimationFps.Location = new Point(78, 18);
+            lblBackgroundAnimationFps.Size = new Size(82, 16);
             lblBackgroundAnimationFps.Name = "lblBackgroundAnimationFps";
 
             tbBackgroundAnimationFps = new TrackBarTS();
             tbBackgroundAnimationFps.AutoSize = false;
-            tbBackgroundAnimationFps.Location = new Point(142, 14);
-            tbBackgroundAnimationFps.Size = new Size(146, 22);
+            tbBackgroundAnimationFps.Location = new Point(160, 14);
+            tbBackgroundAnimationFps.Size = new Size(128, 22);
             tbBackgroundAnimationFps.Minimum = 1;
             tbBackgroundAnimationFps.Maximum = 60;
             tbBackgroundAnimationFps.SmallChange = 1;
@@ -94,8 +94,8 @@ namespace Thetis
 
             tbBackgroundAnimationCache = new TrackBarTS();
             tbBackgroundAnimationCache.AutoSize = false;
-            tbBackgroundAnimationCache.Location = new Point(142, 36);
-            tbBackgroundAnimationCache.Size = new Size(146, 22);
+            tbBackgroundAnimationCache.Location = new Point(160, 36);
+            tbBackgroundAnimationCache.Size = new Size(128, 22);
             tbBackgroundAnimationCache.Minimum = 1;      // 32 MB
             tbBackgroundAnimationCache.Maximum = 32;     // 1024 MB
             tbBackgroundAnimationCache.SmallChange = 1;
@@ -137,7 +137,7 @@ namespace Thetis
             chkBackgroundAnimationMeter = new CheckBoxTS();
             chkBackgroundAnimationMeter.Text = "Follow meter";
             chkBackgroundAnimationMeter.Location = new Point(6, 18);
-            chkBackgroundAnimationMeter.Size = new Size(92, 17);
+            chkBackgroundAnimationMeter.Size = new Size(98, 17);
             chkBackgroundAnimationMeter.Name = "chkBackgroundAnimationMeter";
             chkBackgroundAnimationMeter.CheckedChanged += chkBackgroundAnimationMeter_CheckedChanged;
 

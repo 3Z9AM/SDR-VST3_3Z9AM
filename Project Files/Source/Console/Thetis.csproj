@@ -184,6 +184,7 @@
     <Compile Include="Display.ModernUI.cs" />
     <Compile Include="Setup.ModernUI.cs" />
     <Compile Include="Console.RXReturnRamp.cs" />
+    <Compile Include="Setup.ModernFit.cs" />
     <Compile Include="Setup.PureVST.cs" />
     <Compile Include="Setup.RXReturnRamp.cs" />
     <Compile Include="Setup.GPUWaterfall.Hook.cs" />
