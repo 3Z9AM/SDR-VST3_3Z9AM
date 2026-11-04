@@ -855,6 +855,9 @@ namespace Thetis
         public static extern void SetTXACFCOMPPrePeq(int channel, double prepeq);
 
         // phrot
+        [DllImport("wdsp.dll", EntryPoint = "SetTXAPureVST", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetTXAPureVST(int channel, int run);
+
         [DllImport("wdsp.dll", EntryPoint = "SetTXAPHROTRun", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetTXAPHROTRun(int channel, int run);
 

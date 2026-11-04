@@ -637,6 +637,7 @@ namespace Thetis
             initBackgroundAnimationControls(); //prior to getOptions so the background animation settings are saved/restored
             initModernVFOControls(); //prior to getOptions so the modern VFO switch is saved/restored
             initRXReturnRampControls(); //prior to getOptions so the RX return delay/fade are saved/restored
+            initPureVSTControls(); //prior to getOptions so the Pure VST TX switch is saved/restored
             initSMeterTrimControls(); //prior to getOptions so the S-meter correction is saved/restored
             initBin2Controls(); //prior to getOptions so the BIN2 switch is saved/restored
             initAoAControls(); //prior to getOptions so the AoA antennas/switches are saved/restored
@@ -3144,6 +3145,7 @@ namespace Thetis
             chkModernUI_CheckedChanged(this, e);
             chkModernHighDpi_CheckedChanged(this, e);
             udRXReturnRamp_ValueChanged(this, e);
+            chkTXPureVST_CheckedChanged(this, e);
             chkDSPBin2_CheckedChanged(this, e);
             tbBackgroundAnimationSmooth_ValueChanged(this, e);
             udBackgroundAnimationTxMax_ValueChanged(this, e);
