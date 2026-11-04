@@ -192,6 +192,7 @@ extern void setDSPBuffsize_txa (int channel);
 // TXA Properties
 
 extern __declspec (dllexport) void SetTXAMode (int channel, int mode);
+extern __declspec (dllexport) void SetTXAPureVST (int channel, int run);
 
 extern __declspec(dllexport) void SetTXAMonitorPre(int channel, int pre);
 

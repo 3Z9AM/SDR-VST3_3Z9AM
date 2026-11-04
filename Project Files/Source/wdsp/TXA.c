@@ -615,28 +615,46 @@ void flush_txa (int channel)
 	flush_meter (txa[channel].outmeter.p);
 }
 
+// "Pure VST" TX (own addition): the audio shaping is done by the VST chain, so the WDSP dynamics/EQ blocks are
+// skipped whatever their own switches say (switched back on unchanged when this is cleared). Outside the txa
+// struct so it can be set before the channel exists.
+static volatile int txa_pure[MAX_CHANNELS];
+
+PORT
+void SetTXAPureVST (int channel, int run)
+{
+	txa_pure[channel] = run;
+}
+
 //void xsnoop(channel);
 void xtxa (int channel)
 {
+	int pure = txa_pure[channel];
 	xresample (txa[channel].rsmpin.p);				// input resampler
 	xgen (txa[channel].gen0.p);						// input signal generator
 	xpanel (txa[channel].panel.p);					// includes MIC gain
-	xphrot (txa[channel].phrot.p);					// phase rotator
+	if (!pure) xphrot (txa[channel].phrot.p);		// phase rotator
 	xmeter (txa[channel].micmeter.p);				// MIC meter
-	xamsqcap (txa[channel].amsq.p);					// downward expander capture
-	xamsq (txa[channel].amsq.p);					// downward expander action
-	xeqp (txa[channel].eqp.p);						// pre-EQ
+	if (!pure)
+	{
+		xamsqcap (txa[channel].amsq.p);				// downward expander capture
+		xamsq (txa[channel].amsq.p);				// downward expander action
+		xeqp (txa[channel].eqp.p);					// pre-EQ
+	}
 	xmeter (txa[channel].eqmeter.p);				// EQ meter
 	xemphp (txa[channel].preemph.p, 0);				// FM pre-emphasis (first option)
-	xwcpagc (txa[channel].leveler.p);				// Leveler
+	if (!pure) xwcpagc (txa[channel].leveler.p);	// Leveler
 	xmeter (txa[channel].lvlrmeter.p);				// Leveler Meter
-	xcfcomp (txa[channel].cfcomp.p, 0);				// Continuous Frequency Compressor with post-EQ
+	if (!pure) xcfcomp (txa[channel].cfcomp.p, 0);	// Continuous Frequency Compressor with post-EQ
 	xmeter (txa[channel].cfcmeter.p);				// CFC+PostEQ Meter
-	xbandpass (txa[channel].bp0.p, 0);				// primary bandpass filter
-	xcompressor (txa[channel].compressor.p);		// COMP compressor
-	xbandpass (txa[channel].bp1.p, 0);				// aux bandpass (runs if COMP)
-	xosctrl (txa[channel].osctrl.p);				// CESSB Overshoot Control
-	xbandpass (txa[channel].bp2.p, 0);				// aux bandpass (runs if CESSB)
+	xbandpass (txa[channel].bp0.p, 0);				// primary bandpass filter (gain 2: 0 dBFS sine = full PEP)
+	if (!pure)
+	{
+		xcompressor (txa[channel].compressor.p);	// COMP compressor
+		xbandpass (txa[channel].bp1.p, 0);			// aux bandpass (runs if COMP)
+		xosctrl (txa[channel].osctrl.p);			// CESSB Overshoot Control
+		xbandpass (txa[channel].bp2.p, 0);			// aux bandpass (runs if CESSB)
+	}
 	xmeter (txa[channel].compmeter.p);				// COMP meter
 	xwcpagc (txa[channel].alc.p);					// ALC
 	if (!txa[channel].mon_pre) capture_txmon(channel); // after ALC, before modulation

@@ -773,7 +773,12 @@ namespace Thetis
             Rectangle row(int i) => new Rectangle(b.X + 8, rowTop + i * rowH, b.Width - 16, rowH);
 
             if (_mox)
-                ngPaintTxAfLevel(g, row(0), c);
+            {
+                // TX: mic peak after the VST chain (0 dB = full scale) and SSB envelope at the ALC (0 dB = full PEP)
+                ngPaintTxLevel(g, row(0), c, "TX AF", -WDSP.CalculateTXMeter(1, WDSP.MeterType.MIC_PK), ref _ngTxAfHold, ref _ngTxAfHoldAt);
+                ngPaintTxLevel(g, row(1), c, "TX PEP", Math.Max(-30f, -WDSP.CalculateTXMeter(1, WDSP.MeterType.ALC_PK))
+                    + Math.Max(0f, -WDSP.CalculateTXMeter(1, WDSP.MeterType.ALC_G)), ref _ngTxPepHold, ref _ngTxPepHoldAt);
+            }
             else
             {
                 RadioDSPRX rx = radio.GetDSPRX(0, 0);
@@ -789,8 +794,10 @@ namespace Thetis
             string ps = !PureSignalEnabled ? "PS OFF"
                 : "PS FB " + puresignal.FeedbackLevel + (puresignal.CorrectionsBeingApplied ? "  CORR" : "  --");
             Color psColour = PureSignalEnabled && puresignal.CorrectionsBeingApplied ? puresignal.FeedbackColourLevel : ModernTheme.TextDim;
-            TextRenderer.DrawText(g, "ATT " + att, ModernTheme.HudFont(8f), new Rectangle(row(1).X, row(1).Y, row(1).Width / 2, rowH), ModernTheme.Text, c);
-            TextRenderer.DrawText(g, ps, ModernTheme.HudFont(8f), new Rectangle(row(1).X + row(1).Width / 2, row(1).Y, row(1).Width / 2, rowH), psColour, c);
+            Rectangle ra = row(_mox ? 2 : 1);           // on TX the filter row gives way to the two level meters
+            TextRenderer.DrawText(g, "ATT " + att, ModernTheme.HudFont(8f), new Rectangle(ra.X, ra.Y, ra.Width / 2, rowH), ModernTheme.Text, c);
+            TextRenderer.DrawText(g, ps, ModernTheme.HudFont(8f), new Rectangle(ra.X + ra.Width / 2, ra.Y, ra.Width / 2, rowH), psColour, c);
+            if (_mox) return;
 
             // LSB-side modes keep negative RX edges; shown as audio low..high like TX
             int lo = RX1FilterLow, hi = RX1FilterHigh;
@@ -802,19 +809,22 @@ namespace Thetis
         private int _ngInfoTick;
         private float _ngTxAfHold = -200f;
         private DateTime _ngTxAfHoldAt;
+        private float _ngTxPepHold = -200f;
+        private DateTime _ngTxPepHoldAt;
 
-        // TX: mic peak in WDSP (after the TX VST chain), dBFS; red above 0 dB, number = peak held 1 s
-        private void ngPaintTxAfLevel(Graphics g, Rectangle r0, TextFormatFlags c)
+        // TX level bar, -30..+6 dB, red above 0 dB, number = peak held 1 s. TX PEP is the SSB envelope at the ALC input
+        // (as Reading.ALC_GROUP): it peaks 3-6 dB above the audio, so 0 dB TX AF alone never gave full power
+        private void ngPaintTxLevel(Graphics g, Rectangle r0, TextFormatFlags c, string name, float pk, ref float hold, ref DateTime holdAt)
         {
-            const float lo = -30f, hi = 3f;
-            float pk = -WDSP.CalculateTXMeter(1, WDSP.MeterType.MIC_PK);
+            const float lo = -30f, hi = 6f;
             if (float.IsNaN(pk)) pk = -200f;
             DateTime now = DateTime.UtcNow;
-            if (pk >= _ngTxAfHold || (now - _ngTxAfHoldAt).TotalSeconds > 1.0) { _ngTxAfHold = pk; _ngTxAfHoldAt = now; }
-            bool over = _ngTxAfHold > 0f;
+            if (pk >= hold || (now - holdAt).TotalSeconds > 1.0) { hold = pk; holdAt = now; }
+            float held = hold;
+            bool over = held > 0f;
 
             int tw = r0.Width * 11 / 20;
-            string txt = _ngTxAfHold <= -100f ? "TX AF --" : string.Format(CultureInfo.InvariantCulture, "TX AF {0:+0.0;-0.0;0.0} DB", _ngTxAfHold);
+            string txt = held <= -100f ? name + " --" : string.Format(CultureInfo.InvariantCulture, "{0} {1:+0.0;-0.0;0.0} DB", name, held);
             TextRenderer.DrawText(g, txt, ModernTheme.HudFont(9f), new Rectangle(r0.X, r0.Y, tw, r0.Height),
                 over ? ModernTheme.Danger : ModernTheme.AccentSoft, c);
             RectangleF bar = new RectangleF(r0.X + tw + 4, r0.Y + r0.Height / 2f - 3f, r0.Width - tw - 8, 6f);
@@ -825,7 +835,7 @@ namespace Thetis
             if (pk > 0f)
                 using (SolidBrush red = new SolidBrush(ModernTheme.Danger)) g.FillRectangle(red, x(0f), bar.Y, x(pk) - x(0f), bar.Height);
             using (Pen zero = new Pen(ModernTheme.Text, 1f)) g.DrawLine(zero, x(0f), bar.Y - 3f, x(0f), bar.Bottom + 3f);
-            using (Pen hold = new Pen(over ? ModernTheme.Danger : ModernTheme.Text, 2f)) if (_ngTxAfHold > lo) g.DrawLine(hold, x(_ngTxAfHold), bar.Y, x(_ngTxAfHold), bar.Bottom);
+            using (Pen hp = new Pen(over ? ModernTheme.Danger : ModernTheme.Text, 2f)) if (held > lo) g.DrawLine(hp, x(held), bar.Y, x(held), bar.Bottom);
         }
 
         // ---- window chrome ----
