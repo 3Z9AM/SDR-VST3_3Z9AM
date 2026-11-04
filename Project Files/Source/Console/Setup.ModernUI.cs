@@ -110,6 +110,7 @@ namespace Thetis
             _modernColours.Apply(this);
             layoutModernSetup(true);
             rebuildModernTree();
+            queueModernFit();
         }
 
         // ---- tab headers -> category tree ----
@@ -401,6 +402,7 @@ namespace Thetis
                 }
             }
             finally { _modernTreeUpdating = false; }
+            queueModernFit();
         }
 
         private void modernTree_DrawNode(object sender, DrawTreeNodeEventArgs e)

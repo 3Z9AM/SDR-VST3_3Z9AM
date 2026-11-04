@@ -39,7 +39,7 @@ namespace Thetis
             grp.Name = "grpTXPureVST";
             grp.Text = "Pure VST TX";
             grp.Location = new Point(8, 8);
-            grp.Size = new Size(460, 112);
+            grp.Size = new Size(460, 132);
 
             chkTXPureVST = new CheckBoxTS();
             chkTXPureVST.Name = "chkTXPureVST";
@@ -54,7 +54,7 @@ namespace Thetis
                         "comes only from the TX VST chain. Only the TX filter and ALC remain: TX AF 0 dB = full power " +
                         "(see TX AF / TX PEP above the panorama). Off: everything works as before.";
             info.Location = new Point(12, 46);
-            info.Size = new Size(436, 58);
+            info.Size = new Size(436, 78);
 
             toolTip1.SetToolTip(chkTXPureVST, info.Text);
             grp.Controls.Add(chkTXPureVST);

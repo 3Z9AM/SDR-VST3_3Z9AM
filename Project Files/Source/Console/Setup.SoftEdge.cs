@@ -110,6 +110,8 @@ namespace Thetis
                 lblDSPSoftEdgeCarrierRX, tbDSPSoftEdgeCarrierRX,
                 lblDSPSoftEdgeCarrierTX, tbDSPSoftEdgeCarrierTX });
             tpDSPOptions.Controls.Add(grpDSPSoftEdgeCarrier);
+            // three lines of 9 pt text ran into the title of the group below
+            chkFilter_high_resolution_characteristics.Font = new Font(chkFilter_high_resolution_characteristics.Font.FontFamily, 8f);
 
             // extra for chosen testers (activation code): locked = sharp edges in WDSP (radio.cs), sliders greyed
             string edgeText = grpDSPSoftEdge.Text, carrierText = grpDSPSoftEdgeCarrier.Text;
