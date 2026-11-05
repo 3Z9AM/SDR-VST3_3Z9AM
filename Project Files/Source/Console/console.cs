@@ -986,6 +986,7 @@ namespace Thetis
             vstToolStripMenuItem.Visible = _vstEnabled;
             initCwSkimmer();
             initMagnifier();
+            initTranslator();
             if (_vstEnabled) initSonoBus();
             chkTXVST.Visible = _vstEnabled;
             chkRXVST.Visible = _vstEnabled;

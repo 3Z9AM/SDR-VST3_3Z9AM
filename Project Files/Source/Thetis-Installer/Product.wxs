@@ -125,6 +125,16 @@
               KeyPath="yes"
               />
       </Component>
+      <!-- Translator (Console.Translator.cs): whisper.cpp through Whisper.net, CPU fallback + Vulkan -->
+      <Component Guid="*" Directory="RtWinX64Dir"><File Id="WhCpu0" Source="$(var.FilesPath)runtimes\win-x64\whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtWinX64Dir"><File Id="WhCpu1" Source="$(var.FilesPath)runtimes\win-x64\ggml-whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtWinX64Dir"><File Id="WhCpu2" Source="$(var.FilesPath)runtimes\win-x64\ggml-base-whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtWinX64Dir"><File Id="WhCpu3" Source="$(var.FilesPath)runtimes\win-x64\ggml-cpu-whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtVulkanX64Dir"><File Id="WhVk0" Source="$(var.FilesPath)runtimes\vulkan\win-x64\whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtVulkanX64Dir"><File Id="WhVk1" Source="$(var.FilesPath)runtimes\vulkan\win-x64\ggml-whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtVulkanX64Dir"><File Id="WhVk2" Source="$(var.FilesPath)runtimes\vulkan\win-x64\ggml-base-whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtVulkanX64Dir"><File Id="WhVk3" Source="$(var.FilesPath)runtimes\vulkan\win-x64\ggml-cpu-whisper.dll" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="RtVulkanX64Dir"><File Id="WhVk4" Source="$(var.FilesPath)runtimes\vulkan\win-x64\ggml-vulkan-whisper.dll" KeyPath="yes"/></Component>
     </ComponentGroup>
 
     <!-- [4.6] third-party license texts shipped with every install (see lib\licenses) -->
@@ -137,6 +147,7 @@
       <Component Guid="*" Directory="LicensesDir"><File Id="LicDiscordNet" Source="$(var.LicensesPath)LICENSE-Discord.Net.txt" KeyPath="yes"/></Component>
       <Component Guid="*" Directory="LicensesDir"><File Id="LicHtmlAgilityPack" Source="$(var.LicensesPath)LICENSE-HtmlAgilityPack.txt" KeyPath="yes"/></Component>
       <Component Guid="*" Directory="LicensesDir"><File Id="LicMarkdig" Source="$(var.LicensesPath)LICENSE-Markdig.txt" KeyPath="yes"/></Component>
+      <Component Guid="*" Directory="LicensesDir"><File Id="LicWhisperNet" Source="$(var.LicensesPath)LICENSE-Whisper.net.txt" KeyPath="yes"/></Component>
       <Component Guid="*" Directory="LicensesDir"><File Id="LicNewtonsoft" Source="$(var.LicensesPath)LICENSE-Newtonsoft.Json.txt" KeyPath="yes"/></Component>
       <Component Guid="*" Directory="LicensesDir"><File Id="LicFirewallHelper" Source="$(var.LicensesPath)LICENSE-WindowsFirewallHelper.txt" KeyPath="yes"/></Component>
       <Component Guid="*" Directory="LicensesDir"><File Id="LicExCSS" Source="$(var.LicensesPath)LICENSE-ExCSS.txt" KeyPath="yes"/></Component>
@@ -215,6 +226,9 @@
               </Directory>
               <Directory Id="RtWinX64Dir" Name="win-x64">
                 <Directory Id="RtNativeDir" Name="native"/>
+              </Directory>
+              <Directory Id="RtVulkanDir" Name="vulkan">
+                <Directory Id="RtVulkanX64Dir" Name="win-x64"/>
               </Directory>
             </Directory>
             <Directory Id="LicensesDir" Name="Licenses"/>
@@ -690,6 +704,13 @@
 		<Component Guid="*">
 			<File Id="Newtonsoft.JsonDLL"
 				  Source="$(var.FilesPath)Newtonsoft.Json.dll"
+				  KeyPath="yes"
+              />
+		</Component>
+
+		<Component Guid="*">
+			<File Id="WhisperNetDLL"
+				  Source="$(var.FilesPath)Whisper.net.dll"
 				  KeyPath="yes"
               />
 		</Component>

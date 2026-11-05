@@ -5,6 +5,24 @@ A fork of **SDR-VST3** by SQ4KOU (itself based on **Thetis**, the OpenHPSDR cons
 **Download:** [Releases](../../releases) – take the `.msi` (needs the .NET 10 Desktop Runtime x64; the installer says so if it is missing).
 Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, branch `sunsdr`), not tested by me on a radio – feedback welcome.
 
+## Zmiany / Changelog
+Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
+
+- **6.0.7.11** (5.11.2026)
+  - **Tłumacz RX** – kafelek menu „Translator”: Off / Transcribe (napisy w języku mówiącego) / Translate to English. Mowa z RX1 rozpoznawana lokalnie przez Whisper (karta graficzna przez Vulkan, bez karty – procesor), napisy na szklanej płytce nad IONO, dwie ostatnie linie z kodem języka (np. `RU › …`), znikają po 20 s ciszy. Model (1,1 GB) pobiera się przy pierwszym włączeniu – postęp na płytce; potem „warming up” (pierwsze uruchomienie na GPU ok. 10 s). Napis pojawia się 1–3 s po przerwie w mowie (przy ciągłej mowie co 8 s). Przy słabym sygnale tekst bywa zmyślony.
+  - VAC: nazwy urządzeń audio z polskimi (i innymi) znakami wyświetlane poprawnie; zapisane wcześniej ustawienia VAC i profili TX dopasowywane do nowych nazw.
+- **6.0.7.10** (4.11.2026) – okno Setup (Modern Look): ucinane napisy, pola i przyciski poszerzane w wolne miejsce, ramki z ukrytymi opcjami zwijane, ciemne paski przewijania.
+- **6.0.7.9** (4.11.2026) – „Pure VST TX” (Setup > Audio > TX Advanced – bez obróbki WDSP, 0 dB z VST = pełna moc), mierniki TX AF / TX PEP w panelu między VFO.
+- **6.0.7.8** (3.11.2026) – ogranicznik szczytów RX, AGC pasmowe (Multiband AGC), AGC Pause Hold, kula 3D bez niewidocznego śladu 2D (mniej pracy procesora).
+- **6.0.7.7** (1.11.2026) – płytka HUD dryfu jonosfery (IONO / FULL / Δh), kąt przyjścia fali z dwóch anten diversity z auto kalibracją ze skimmera, szuflady bez animacji, okno Setup bez białych prostokątów.
+- **6.0.7.6** (1.11.2026) – strzałki dryfu jonosfery i „Doppler” na kuli 3D, lupa „Magnifier”, diversity WF dphase, kafelki menu świecą na zielono (CW Skimmer / VST Chains / Linearity).
+- **6.0.7.5** (1.11.2026) – w czasie TX pierwszy wiersz panelu DIVERSITY / FILTERS pokazuje poziom m.cz. (szczyt mikrofonu za łańcuchem VST TX, -30..+3 dBFS, powyżej 0 dB czerwony).
+- **6.0.7.4** (31.10.2026) – VST3: dodatkowe szyny audio wtyczek (sidechain, np. Waves) dostają wyzerowane bufory – naprawia wtyczki, które grały ciszą.
+- **6.0.7.3** (31.10.2026) – MUT w 4 stanach (klik): zielony = cisza w głośniku, fioletowy = cisza na VAC1, czerwony = cisza wszędzie.
+- **6.0.7.2** (31.10.2026) – analizator TX bierze zakres częstotliwości z RX1.
+- **6.0.7.1** (31.10.2026) – Crystal filter, Warmth i tryb AGC „Tube” (Setup > DSP), cienie paneli.
+- **6.0.7.0** (31.10.2026) – jeden numer wersji dla wszystkich wariantów (ANAN / HL2 / SunSDR).
+
 ## What is new in this fork
 - **New HUD-style interface** – full-window panadapter, top bar with VFOs and S-meter, dock with drawers for the original panels, movable panels (Shift + drag), accent colour.
 - **3D panadapter** on the GPU – depth history, floor marks, peak skyline, "waterfall sphere" and inside (planetarium) view.

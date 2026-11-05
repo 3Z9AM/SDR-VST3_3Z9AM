@@ -1440,6 +1440,7 @@ namespace Thetis
             // the RADE-encoded audio the modem receives.
             if (!RadeActive)
                 VstHost.ProcessRxAudio(buffer, frames);
+            RxTranslator.Feed(buffer, frames, Audio.OutRate);
             NativeFeedIVACPostRxAudio(frames, buffer);
             NativeFeedTCIPostRxAudio(frames, buffer);
             try

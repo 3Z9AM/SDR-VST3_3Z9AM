@@ -66,6 +66,9 @@
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
     <PackageReference Include="WinForms.DataVisualization" Version="1.10.2" />
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
     <PackageReference Include="Svg" Version="3.4.7" />
     <PackageReference Include="System.CodeDom" Version="10.0.8" />
     <PackageReference Include="System.Collections.Immutable" Version="10.0.8" />
@@ -174,6 +177,7 @@
     <Compile Include="Console.ModernSMeter.cs" />
     <Compile Include="Console.FilterShape.cs" />
     <Compile Include="Console.Magnifier.cs" />
+    <Compile Include="Console.Translator.cs" />
     <Compile Include="Console.ModernUI.cs" />
     <Compile Include="Console.NewGUI.cs" />
     <Compile Include="Console.Activation.cs" />

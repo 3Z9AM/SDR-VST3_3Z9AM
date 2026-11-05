@@ -275,9 +275,9 @@ namespace Thetis
                         result = PA19.PA_IsFormatSupported(&inputParams, &outputParams, 48000.0);
                     }
 
-                    if (result == 0 && hasInput && hasOutput && !string.IsNullOrEmpty(devInfo.name))
+                    if (result == 0 && hasInput && hasOutput && !string.IsNullOrEmpty(devInfo.ansiName))
                     {
-                        string name = devInfo.name.Left(32);
+                        string name = devInfo.ansiName.Left(32);
                         AsioDeviceInfo device = new AsioDeviceInfo(name, devInfo.maxInputChannels, devInfo.maxOutputChannels, i);
                         asioDevices.Add(device);
                     }
