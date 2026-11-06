@@ -67,4 +67,19 @@ void mbagc_set_band(MbAgc* p, double f_low, double f_high);
 void mbagc_flush(MbAgc* p);
 void mbagc_process(MbAgc* p, double* buf, int n);
 
+// station pick by the RX2-RX1 phase (src/pick.rs): per STFT cell of the RX filter, strong cells whose
+// z1 conj(z2) points away from the (tracked) slider phase go down to -depth dB
+typedef struct Pick Pick;
+Pick* pick_create(void);
+void pick_destroy(Pick* p);
+// phase rad, depth dB, alpha = reference tracking step per frame; a new phase restarts the reference
+void pick_set(Pick* p, double phase, double depth_db, double alpha);
+void pick_reset(Pick* p);
+// the tracked phase of the station as a whole, rad
+double pick_phase(const Pick* p);
+// phase steadiness in the filter 0..1; *active = 0 when it is too random and the mask stepped aside
+double pick_steady(const Pick* p, int* active);
+// z1, z2: nb filter bins (re, im), noise = RX1 noise power per bin (0 = unknown: gains 1); nb gains out
+void pick_frame(Pick* p, const double* z1, const double* z2, int nb, double noise, int learn, double* gain);
+
 #endif

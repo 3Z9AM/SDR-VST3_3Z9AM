@@ -988,6 +988,7 @@ namespace Thetis
             vstToolStripMenuItem.Visible = _vstEnabled;
             initCwSkimmer();
             initMagnifier();
+            initTranslator();
             if (_vstEnabled) initSonoBus();
             chkTXVST.Visible = _vstEnabled;
             chkRXVST.Visible = _vstEnabled;
@@ -20586,6 +20587,7 @@ namespace Thetis
             get { return m_RX1agcMode; }
             set
             {
+                if ((int)value < 0 || (int)value >= comboAGC.Items.Count) value = AGCMode.MED; // mode saved by a removed build (e.g. Transparent)
                 m_RX1agcMode = value;
                 comboAGC.SelectedIndex = (int)value;
                 lblAGCLabel.Text = "AGC: " + comboAGC.Text;
@@ -20600,6 +20602,7 @@ namespace Thetis
             }
             set
             {
+                if ((int)value < 0 || (int)value >= comboRX2AGC.Items.Count) value = AGCMode.MED; // mode saved by a removed build (e.g. Transparent)
                 m_RX2agcMode = value;
                 comboRX2AGC.SelectedIndex = (int)value;
                 lblRX2AGCLabel.Text = "AGC: " + comboRX2AGC.Text;

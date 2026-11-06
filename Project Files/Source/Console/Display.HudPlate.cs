@@ -65,7 +65,7 @@ namespace Thetis
         {
             _hudFont?.Dispose();
             _hudFont = null;
-            _hudName = 0;
+            _hudName = 0; _hudH = 0; _trW = 0;
         }
 
         private static float hudWidth(string s, out float h)
@@ -79,18 +79,18 @@ namespace Thetis
 
         // a fixed plate at the bottom of RX1 (above the CW text bar); every piece of text in its own column so
         // nothing moves when the values change: name | arrow | speed (right aligned) | detail
-        private static void DrawHudPlateDX2D(int W, int rx1Height, bool cwBar)
+        // returns the plate's top (or where it would sit when hidden), the translator plate goes above it
+        private static float DrawHudPlateDX2D(int W, int rx1Height, bool cwBar)
         {
+            float bottom = rx1Height - (cwBar ? 40f : 12f);
+            if (fontFactory == null || _d2dRenderTarget == null || rx1Height < 60) return bottom;
+            ensureHudFont();
             // always on while the drift runs (user); the last values held through TX and a few seconds after it,
             // otherwise "--" 1 s after the last reading (Δh keeps its sum)
-            if (!IonoDriftActive || !IonoHudOn) return;
+            if (!IonoDriftActive || !IonoHudOn) return bottom;
             long now = DateTime.UtcNow.Ticks;
             if (Audio.MOX) _hudHoldUntil = now + 30000000;
             bool stale = now - _ionoHudTicks > 10000000 && now > _hudHoldUntil;
-            if (fontFactory == null || _d2dRenderTarget == null || rx1Height < 60) return;
-            if (_hudFont == null)
-                _hudFont = fontFactory.CreateTextFormat("Bahnschrift", FontWeight.SemiBold, Vortice.DirectWrite.FontStyle.Normal,
-                    15f * _d2dRenderTarget.Dpi.Width / 96f);
             if (_hudName <= 0)
             {
                 _hudName = hudWidth("IONO  ", out _hudH);
@@ -101,9 +101,66 @@ namespace Thetis
             float side = _hudName + _hudArrow + _hudSpeed + _hudDetail, gap = 28f;
             float pw = (float)Math.Round(2 * side + gap + 32f), ph = (float)Math.Round(_hudH + 12f), c = 7f;
             float x = (float)Math.Round((W - pw) / 2f);
-            float y = (float)Math.Round(rx1Height - ph - (cwBar ? 40f : 12f));
+            float y = (float)Math.Round(bottom - ph);
 
             Color accent = ModernTheme.Accent;
+            hudGlass(x, y, pw, ph, c, accent);
+
+            float ty = y + 6f;
+            hudSide("IONO", stale ? default : _ionoView, true, x + 16f, ty, accent, stale ? float.NaN : _ionoElev);
+            hudSide("FULL", stale ? default : _ionoFull, false, x + 16f + side + gap, ty, accent);
+            return y;
+        }
+
+        private static void ensureHudFont()
+        {
+            if (_hudFont == null)
+                _hudFont = fontFactory.CreateTextFormat("Bahnschrift", FontWeight.SemiBold, Vortice.DirectWrite.FontStyle.Normal,
+                    15f * _d2dRenderTarget.Dpi.Width / 96f);
+            if (_hudH <= 0) hudWidth("IONO  ", out _hudH);
+        }
+
+        // translator subtitles (Console.Translator.cs): the last two lines on a plate like IONO, gone 20 s after the last
+        private static string[] _trShown = new string[0], _trFit = new string[0];
+        private static int _trW;
+        private static void DrawTranslatorPlateDX2D(int W, float bottom)
+        {
+            if (RxTranslator.Mode == 0 || _hudFont == null) return;
+            string status = RxTranslator.Status;
+            string[] lines = RxTranslator.Lines(out long ticks);
+            if (status != null) lines = new[] { status };
+            else if (lines.Length == 0 || DateTime.UtcNow.Ticks - ticks > 200000000) return;
+
+            float pw = Math.Min(W - 40f, 1100f), inner = pw - 32f;
+            if (inner < 100) return;
+            // fit each line once per change: drop leading words until it fits (the newest words matter)
+            if (W != _trW || lines.Length != _trShown.Length || !System.Linq.Enumerable.SequenceEqual(lines, _trShown))
+            {
+                _trW = W;
+                _trShown = lines;
+                _trFit = new string[lines.Length];
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string s = lines[i];
+                    while (s.Length > 0 && hudWidth(s, out _) > inner)
+                    {
+                        int sp = s.IndexOf(' ', 1);
+                        s = sp < 0 ? s.Substring(1) : "…" + s.Substring(sp);
+                        if (s == "…") break;
+                    }
+                    _trFit[i] = s;
+                }
+            }
+            float lh = _hudH + 2f, ph = (float)Math.Round(lh * _trFit.Length + 10f);
+            float x = (float)Math.Round((W - pw) / 2f), y = (float)Math.Round(bottom - 6f - ph);
+            Color accent = ModernTheme.Accent;
+            hudGlass(x, y, pw, ph, 7f, accent);
+            for (int i = 0; i < _trFit.Length; i++) hudText(_trFit[i], x + 16f, y + 5f + i * lh, accent);
+        }
+
+        // dark smoked glass with chamfered corners, a sheen on its upper half, glowing edge
+        private static void hudGlass(float x, float y, float pw, float ph, float c, Color accent)
+        {
             using (ID2D1PathGeometry geo = _d2dFactory.CreatePathGeometry())
             {
                 using (ID2D1GeometrySink sink = geo.Open())
@@ -134,10 +191,6 @@ namespace Thetis
                 _d2dRenderTarget.DrawGeometry(geo, getDXBrushForColour(accent, 25), 5f);
                 _d2dRenderTarget.DrawGeometry(geo, getDXBrushForColour(accent, 140), 1f);
             }
-
-            float ty = y + 6f;
-            hudSide("IONO", stale ? default : _ionoView, true, x + 16f, ty, accent, stale ? float.NaN : _ionoElev);
-            hudSide("FULL", stale ? default : _ionoFull, false, x + 16f + side + gap, ty, accent);
         }
 
         private static void hudSide(string name, DriftReading r, bool hzDetail, float x0, float ty, Color accent, float elev = float.NaN)
