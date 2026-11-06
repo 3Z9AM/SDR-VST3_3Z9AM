@@ -86,6 +86,44 @@ namespace Thetis
         public const PaStreamCallbackFlags paPrimingOutput = (PaStreamCallbackFlags)0x10;
         #endregion
 
+        private static readonly UTF8Encoding _strictUtf8 = new UTF8Encoding(false, true);
+
+        // PortAudio (MME/DS/WASAPI/WDM-KS) gives UTF-8 names; ASIO drivers may give ANSI - keep ANSI when not valid UTF-8
+        public static string PaString(IntPtr p)
+        {
+            if (p == IntPtr.Zero) return null;
+            int n = 0;
+            while (Marshal.ReadByte(p, n) != 0) n++;
+            byte[] b = new byte[n];
+            Marshal.Copy(p, b, 0, n);
+            try { return _strictUtf8.GetString(b); }
+            catch (DecoderFallbackException) { return Marshal.PtrToStringAnsi(p); }
+        }
+
+        // device name saved by older versions (UTF-8 bytes read as ANSI, e.g. "GĹ‚oĹ›niki") -> current form; null when not such a name
+        public static string FixLegacyName(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return null;
+            IntPtr p = Marshal.StringToHGlobalAnsi(s);
+            try
+            {
+                int n = 0;
+                bool high = false;
+                byte c;
+                while ((c = Marshal.ReadByte(p, n)) != 0) { if (c >= 0x80) high = true; n++; }
+                if (!high) return null; // ASCII (or chars ANSI can't hold -> '?'): not a legacy name
+                byte[] b = new byte[n];
+                Marshal.Copy(p, b, 0, n);
+                string f;
+                try { f = _strictUtf8.GetString(b); }
+                catch (DecoderFallbackException) { return null; }
+                return f == s ? null : f;
+            }
+            finally { Marshal.FreeHGlobal(p); }
+        }
+
+        public static string CurrentDeviceName(string saved) => FixLegacyName(saved) ?? saved;
+
         #region Enums
 
         public enum PaErrorCode
@@ -128,7 +166,7 @@ namespace Thetis
         [StructLayout(LayoutKind.Sequential)]
         public struct PaHostApiInfo
         {
-            public string name => _name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(_name);
+            public string name => PaString(_name);
 
             public int structVersion;
             public int type;
@@ -152,7 +190,9 @@ namespace Thetis
         [StructLayout(LayoutKind.Sequential)]
         public struct PaDeviceInfo
         {
-            public string name => _name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(_name);
+            public string name => PaString(_name);
+            // as read before (system ANSI) - ASIO driver names go to the registry in this form
+            public string ansiName => _name == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(_name);
 
             public int structVersion;
             private IntPtr _name;

@@ -2140,6 +2140,8 @@ namespace Thetis
                         }
                     }
 
+                    if (found < 0) found = findLegacyDeviceName(comboBox, value);
+
                     if (found >= 0)
                     {
                         comboBox.SelectedIndex = found;
@@ -2207,6 +2209,16 @@ namespace Thetis
             }
 
             return false;
+        }
+
+        // saved device name from an older version (UTF-8 read as ANSI) -> index of the same device in the combo, or -1
+        private static int findLegacyDeviceName(ComboBox combo, string value)
+        {
+            string fixedName = PA19.FixLegacyName(value);
+            if (fixedName == null) return -1;
+            for (int i = 0; i < combo.Items.Count; i++)
+                if (string.Equals(combo.Items[i]?.ToString(), fixedName, StringComparison.Ordinal)) return i;
+            return -1;
         }
 
         private void getOptions(List<string> recoveryList = null)
@@ -3845,8 +3857,8 @@ namespace Thetis
             if (DB.ConvertFromDBVal<int>(dr["VAC1_Latency_PAOut_Duration"]) != (int)udAudioLatencyPAOut.Value) return true;
 
             if (DB.ConvertFromDBVal<string>(dr["VAC1_AudioDriver"]) != (string)comboAudioDriver2.Text) return true;
-            if (DB.ConvertFromDBVal<string>(dr["VAC1_AudioInput"]) != (string)comboAudioInput2.Text) return true;
-            if (DB.ConvertFromDBVal<string>(dr["VAC1_AudioOutput"]) != (string)comboAudioOutput2.Text) return true;
+            if (PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC1_AudioInput"])) != (string)comboAudioInput2.Text) return true;
+            if (PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC1_AudioOutput"])) != (string)comboAudioOutput2.Text) return true;
 
             if (DB.ConvertFromDBVal<bool>(dr["VAC1_Exclusive_In"]) != (bool)chkVAC1ExclusiveIn.Checked) return true;
             if (DB.ConvertFromDBVal<bool>(dr["VAC1_Exclusive_Out"]) != (bool)chkVAC1ExclusiveOut.Checked) return true;
@@ -3874,8 +3886,8 @@ namespace Thetis
             if (DB.ConvertFromDBVal<int>(dr["VAC2_Latency_PAOut_Duration"]) != (int)udVAC2LatencyPAOut.Value) return true;
 
             if (DB.ConvertFromDBVal<string>(dr["VAC2_AudioDriver"]) != (string)comboAudioDriver3.Text) return true;
-            if (DB.ConvertFromDBVal<string>(dr["VAC2_AudioInput"]) != (string)comboAudioInput3.Text) return true;
-            if (DB.ConvertFromDBVal<string>(dr["VAC2_AudioOutput"]) != (string)comboAudioOutput3.Text) return true;
+            if (PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC2_AudioInput"])) != (string)comboAudioInput3.Text) return true;
+            if (PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC2_AudioOutput"])) != (string)comboAudioOutput3.Text) return true;
 
             if (DB.ConvertFromDBVal<bool>(dr["VAC2_Exclusive_In"]) != (bool)chkVAC2ExclusiveIn.Checked) return true;
             if (DB.ConvertFromDBVal<bool>(dr["VAC2_Exclusive_Out"]) != (bool)chkVAC2ExclusiveOut.Checked) return true;
@@ -10288,8 +10300,8 @@ namespace Thetis
             if (chkRestoreVAC1DeviceDetailsFromTXProfile.Checked)
             {
                 comboAudioDriver2.Text = DB.ConvertFromDBVal<string>(dr["VAC1_AudioDriver"]);
-                comboAudioInput2.Text = DB.ConvertFromDBVal<string>(dr["VAC1_AudioInput"]);
-                comboAudioOutput2.Text = DB.ConvertFromDBVal<string>(dr["VAC1_AudioOutput"]);
+                comboAudioInput2.Text = PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC1_AudioInput"]));
+                comboAudioOutput2.Text = PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC1_AudioOutput"]));
 
                 chkVAC1ExclusiveIn.Checked = (bool)dr["VAC1_Exclusive_In"];
                 chkVAC1ExclusiveOut.Checked = (bool)dr["VAC1_Exclusive_Out"];
@@ -10318,8 +10330,8 @@ namespace Thetis
             if (chkRestoreVAC2DeviceDetailsFromTXProfile.Checked)
             {
                 comboAudioDriver3.Text = DB.ConvertFromDBVal<string>(dr["VAC2_AudioDriver"]);
-                comboAudioInput3.Text = DB.ConvertFromDBVal<string>(dr["VAC2_AudioInput"]);
-                comboAudioOutput3.Text = DB.ConvertFromDBVal<string>(dr["VAC2_AudioOutput"]);
+                comboAudioInput3.Text = PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC2_AudioInput"]));
+                comboAudioOutput3.Text = PA19.CurrentDeviceName(DB.ConvertFromDBVal<string>(dr["VAC2_AudioOutput"]));
 
                 chkVAC2ExclusiveIn.Checked = (bool)dr["VAC2_Exclusive_In"];
                 chkVAC2ExclusiveOut.Checked = (bool)dr["VAC2_Exclusive_Out"];
