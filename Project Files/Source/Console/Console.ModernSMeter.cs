@@ -81,6 +81,10 @@ namespace Thetis
             private bool _tx, _off;
             private float _watts, _swr;
             public bool Average = true;   // AVG at every start, a click toggles MAX/AVG
+            // right click cycles the reading's averaging time (s), so the digits and bar do not jump
+            public static readonly float[] SmoothSteps = { 0f, 0.5f, 1f, 2f, 4f };
+            public int SmoothIndex;
+            private float _smoothed = MinDbm;
             private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
             private double _lastMs;
             // phosphor bar: a segment lights up at once and its glow fades out like an old CRT
@@ -100,8 +104,9 @@ namespace Thetis
             protected override void OnMouseClick(MouseEventArgs e)
             {
                 base.OnMouseClick(e);
-                if (e.Button != MouseButtons.Left) return;
-                Average = !Average;
+                if (e.Button == MouseButtons.Right) SmoothIndex = (SmoothIndex + 1) % SmoothSteps.Length;
+                else if (e.Button == MouseButtons.Left) Average = !Average;
+                else return;
                 Invalidate();
             }
 
@@ -131,7 +136,7 @@ namespace Thetis
                 if (_off)
                 {
                     // radio off: the meter returns garbage, show "--" and an empty bar
-                    _shown = _peak = MinDbm;
+                    _shown = _peak = _smoothed = MinDbm;
                     Array.Clear(_glow, 0, _glow.Length);
                     Invalidate();
                     return;
@@ -146,7 +151,12 @@ namespace Thetis
                 {
                     level = _c.RX1SignalDbm(Average);
                     if (float.IsNaN(level) || float.IsInfinity(level)) level = MinDbm;
+                    float tau = SmoothSteps[SmoothIndex];
+                    // averaged in dB; starts from the current reading after TX / power off
+                    if (tau > 0f && _smoothed > MinDbm) level = _smoothed + (level - _smoothed) * (1f - (float)Math.Exp(-dt / tau));
+                    _smoothed = level;
                 }
+                if (_tx) _smoothed = MinDbm;
 
                 _shown = level > _shown ? level : Math.Max(level, _shown - DecayDbPerSec * dt);
                 if (level >= _peak || now - _peakTime > PeakHoldMs)
@@ -197,7 +207,7 @@ namespace Thetis
                 string big = _off ? "--" : _tx ? _watts.ToString("0.0") + " W" : sUnits(_shown);
                 bool swr = _tx && _watts > 0.5f && _swr >= 1f;   // no reading without forward power
                 string small = _off ? "-- dBm" : _tx ? (swr ? "SWR " + _swr.ToString("f2") : "TX") : _shown.ToString("f1") + " dBm";
-                if (!_tx) small = (Average ? "AVG  " : "MAX  ") + small;
+                if (!_tx) small = (Average ? "AVG" : "MAX") + (SmoothIndex > 0 ? " " + SmoothSteps[SmoothIndex].ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "s " : "  ") + small;
                 if (_fBig == null) return;
                 Font fBig = _fBig, fSmall = _fSmall;
                 using (SolidBrush glow = new SolidBrush(Color.FromArgb(40, accent)))

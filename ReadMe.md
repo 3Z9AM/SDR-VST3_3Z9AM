@@ -8,6 +8,10 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 ## Zmiany / Changelog
 Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
 
+- **6.0.7.14** (6.11.2026)
+  - Modern S-metr: **prawy klik = uśrednianie odczytu** (wył. / 0,5 / 1 / 2 / 4 s, zapamiętywane), cyfry i pasek nie skaczą; wybrany czas na napisie (np. `AVG 1s`). Lewy klik dalej MAX/AVG.
+  - Szuflada Audio: lista **ATT** i pole **S-ATT** (tłumik krokowy 0–31 dB co 1 dB) obok siebie – S-ATT pojawia się po zaznaczeniu Setup > General > Hardware Config > Step Atten „Enable RX1”; usunięty pasek wystający spod listy ATT.
+  - Setup: podświetlenie w drzewie kategorii pokazuje stronę faktycznie otwartą (także po kliknięciu kategorii i rozwinięciu gałęzi); ramka „Spectrum Grid” na stronach Display RX1/RX2 nazywa się „Spectrum Grid / Waterfall 3D” (tam ustawia się też poziomy 3D).
 - **6.0.7.13** (6.11.2026) – szuflada Display: przyciski **KULA** (kula wodospadu 3D oglądana z zewnątrz) i **SFERA** (widok z wnętrza kuli – planetarium); każdy włącza 3D, drugie kliknięcie wraca do płaskiego 3D; płaskie 3D i kula zachowują osobne ustawienia.
 - **6.0.7.12** (6.11.2026)
   - **PICK – wybór stacji po fazie RX2-RX1** (diversity, ANAN z dwoma odbiornikami) – przycisk PICK i kolorowy suwak fazy -180..180° obok RX1 Pan. Słychać stację, której faza między antenami zgadza się z suwakiem; silne sygnały o innej fazie są ściszane o 15 dB, a każdy z nich jest śledzony, gdy jego faza wędruje. Suwak sam podąża za wybraną stacją (chwycenie suwaka = nowa faza); kolor toru = kolory widoków fazy. Napis przy suwaku pokazuje stałość fazy w filtrze: „steady 0.34” = PICK działa, „random 0.19 – off” = faza losowa (tęcza w widokach fazy), PICK usuwa się wtedy z drogi, aż faza się ustabilizuje. Wymaga Diversity z RX1 + RX2 i otwartego (może być zminimalizowane) okna Diversity, najlepiej z „fine”. Najwięcej daje, gdy obie anteny słyszą stacje podobnie, a faza przeszkadzającej stacji różni się o ~90° lub więcej (w testach do ok. +8 dB względem samego miksu); przy fazie losowej (często 80 m) nie pomaga – wtedy lepszy jest filtr.

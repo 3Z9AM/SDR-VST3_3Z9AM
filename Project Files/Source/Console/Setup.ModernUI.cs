@@ -225,6 +225,14 @@ namespace Thetis
             };
             _modernTree.DrawNode += modernTree_DrawNode;
             _modernTree.AfterSelect += (s, e) => { if (!_modernTreeUpdating && e.Node?.Tag is TabPage p) showModernPage(p); };
+            // a branch opened by the user (double click, keyboard) becomes the selection, so the bar marks the open topic
+            _modernTree.AfterExpand += (s, e) =>
+            {
+                if (_modernTreeUpdating || e.Node == null) return;
+                for (TreeNode k = _modernTree.SelectedNode; k != null; k = k.Parent) if (k == e.Node) return;
+                TreeNode n = e.Node;
+                _modernTree.BeginInvoke(new Action(() => { if (n.TreeView != null) _modernTree.SelectedNode = n; }));
+            };
             _modernTree.HandleCreated += (s, e) => ModernTheme.SetDarkWindowTheme(_modernTree, true);
 
             _modernResults = new ListBox
@@ -402,6 +410,8 @@ namespace Thetis
                 }
             }
             finally { _modernTreeUpdating = false; }
+            // a category shows its sub page: move the selection bar onto the page actually shown
+            if (IsHandleCreated) BeginInvoke(new MethodInvoker(selectModernTreeNodeForCurrentPage));
             queueModernFit();
         }
 
