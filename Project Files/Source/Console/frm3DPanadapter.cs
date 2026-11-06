@@ -994,6 +994,14 @@ namespace Thetis
             PushAllSettings();
         }
 
+        // 0 = flat 3D, 1 = sphere, 2 = sphere inside view; through the check boxes so each mode keeps its settings
+        public void SetSphereMode(int mode)
+        {
+            chk3DSphere.Checked = mode > 0;
+            if (mode > 0) chk3DSphereInside.Checked = mode == 2;
+            Common.SaveForm(this, "3DPanadapter");
+        }
+
         private void chk3DSphereInside_CheckedChanged(object sender, EventArgs e)
         {
             if (_initializing) return;
