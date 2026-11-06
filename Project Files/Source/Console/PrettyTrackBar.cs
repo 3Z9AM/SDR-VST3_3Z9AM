@@ -604,6 +604,8 @@ namespace Thetis
         }
         // Modern UI: fill the track from the centre instead of the left/bottom end (pan, shift)
         public bool ModernCenterFill { get; set; }
+        // Modern UI: colour of the track at each value (e.g. a phase hue scale) instead of the accent fill; the thumb ring takes the colour at its value
+        public Func<double, Color> ModernTrackColour { get; set; }
         private bool _modernHover;
 
         protected override void OnMouseEnter(EventArgs e)
@@ -704,8 +706,17 @@ namespace Thetis
                 }
             }
 
+            Func<double, Color> tc = Enabled ? ModernTrackColour : null;
+            if (tc != null)
+            {
+                accent = tc(val);
+                for (float s = Math.Min(a0, a1); s < Math.Max(a0, a1); s += 2f)
+                    using (SolidBrush b = new SolidBrush(tc(min + (s - a0) / (a1 - a0) * span)))
+                        g.FillRectangle(b, trackR(s, s + 2.2f));
+            }
             float from = a0;
             if (ModernCenterFill) from = min < 0 && max > 0 ? a0 + (-min / span) * (a1 - a0) : (a0 + a1) / 2f;
+            if (tc == null)
             using (System.Drawing.Drawing2D.GraphicsPath p = ModernTheme.RoundedRect(trackR(from, pos), thick / 2f))
             using (System.Drawing.Drawing2D.LinearGradientBrush b = new System.Drawing.Drawing2D.LinearGradientBrush(
                 horiz ? new PointF(a0 - 1, 0) : new PointF(0, a0 + 1), horiz ? new PointF(a1 + 1, 0) : new PointF(0, a1 - 1),

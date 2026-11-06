@@ -46,6 +46,7 @@ Streaming STFT, sqrt-Hann at 50% overlap, ~47 Hz bins: delay = one FFT (21 ms at
 
 #include "comm.h"
 #include <float.h>
+#include "../wdsprs/wdsprs.h"
 
 typedef struct _secdiv
 {
@@ -75,6 +76,11 @@ typedef struct _secdiv
 	double g;											// RX2 scale of the last frame (divtest inject)
 	double cshare;										// mean clean share over the filter bins of the last frame (-1 off)
 	double *p2n, *p222, *p2r, *p2i;						// its count, <|z2|^2>, <y z2*> per bin
+	// station pick (console slider by RX1 Pan): mask on the output by the RX2-RX1 phase, runs with mode 0 too (then RX1 alone)
+	int pick, prate;									// prate: the last rate pushed, to allocate when pick comes on with mode 0
+	double pick_ph, pick_depth;							// rad in the native frame, dB
+	Pick *pk;
+	double *pz1, *pz2, *pg;
 	fftw_plan p1, p2, pr;
 	CRITICAL_SECTION cs;
 } secdiv;
@@ -104,7 +110,8 @@ static void sd_free (void)
 		&sd.r11, &sd.r22, &sd.cr, &sd.ci, &sd.s11, &sd.s22, &sd.scr, &sd.sci, &sd.wr, &sd.wi, &sd.wv,
 		&sd.q11, &sd.q22, &sd.qr, &sd.qi, &sd.t11, &sd.t22, &sd.tr, &sd.ti, &sd.o1, &sd.o2, &sd.otmp,
 		&sd.md1, &sd.md2, &sd.b11, &sd.b22, &sd.bcr, &sd.bci, &sd.bcn, &sd.n11, &sd.n22, &sd.nr, &sd.ni,
-		&sd.p2n, &sd.p222, &sd.p2r, &sd.p2i, &sd.gc, &sd.g11, &sd.g22, &sd.gr, &sd.gi, &sd.u11, &sd.u22, &sd.ucr, &sd.uci, &sd.sp };
+		&sd.p2n, &sd.p222, &sd.p2r, &sd.p2i, &sd.gc, &sd.g11, &sd.g22, &sd.gr, &sd.gi, &sd.u11, &sd.u22, &sd.ucr, &sd.uci, &sd.sp,
+		&sd.pz1, &sd.pz2, &sd.pg };
 	for (int i = 0; i < sizeof (b) / sizeof (b[0]); i++) { _aligned_free (*b[i]); *b[i] = 0; }
 	_aligned_free (sd.oidx); sd.oidx = 0;
 	sd.N = 0;
@@ -118,12 +125,12 @@ static void sd_alloc (int rate)
 	sd.N = N; sd.hop = N / 2; sd.pos = 0;
 	sd.win = (double *) malloc0 (N * sizeof (double));
 	for (int i = 0; i < N; i++) sd.win[i] = sqrt (0.5 - 0.5 * cos (TWOPI * i / N));
-	double **c[] = { &sd.in1, &sd.in2, &sd.ola, &sd.x1, &sd.x2, &sd.y };
+	double **c[] = { &sd.in1, &sd.in2, &sd.ola, &sd.x1, &sd.x2, &sd.y, &sd.pz1, &sd.pz2 };
 	for (int i = 0; i < sizeof (c) / sizeof (c[0]); i++) *c[i] = (double *) malloc0 (N * sizeof (complex));
 	sd.outq = (double *) malloc0 (sd.hop * sizeof (complex));
 	double **r[] = { &sd.cnt, &sd.r11, &sd.r22, &sd.cr, &sd.ci, &sd.wr, &sd.wi, &sd.wv, &sd.q11, &sd.q22, &sd.qr, &sd.qi,
 		&sd.o1, &sd.o2, &sd.otmp, &sd.md1, &sd.md2, &sd.b11, &sd.b22, &sd.bcr, &sd.bci, &sd.bcn, &sd.n11, &sd.n22, &sd.nr, &sd.ni,
-		&sd.p2n, &sd.p222, &sd.p2r, &sd.p2i, &sd.gc, &sd.g11, &sd.g22, &sd.gr, &sd.gi, &sd.sp };
+		&sd.p2n, &sd.p222, &sd.p2r, &sd.p2i, &sd.gc, &sd.g11, &sd.g22, &sd.gr, &sd.gi, &sd.sp, &sd.pg };
 	for (int i = 0; i < sizeof (r) / sizeof (r[0]); i++) *r[i] = (double *) malloc0 (N * sizeof (double));
 	sd.oidx = (int *) malloc0 (N * sizeof (int));
 	double **s[] = { &sd.s11, &sd.s22, &sd.scr, &sd.sci, &sd.t11, &sd.t22, &sd.tr, &sd.ti, &sd.u11, &sd.u22, &sd.ucr, &sd.uci };
@@ -567,6 +574,8 @@ static void sd_frame (void)
 		}
 	}
 
+	if (sd.mode == 0)															// pick alone: RX1, not the radar weight
+		for (int k = 0; k < N; k++) { sd.wv[k] = 1.0; sd.wr[k] = sd.wi[k] = 0.0; }
 	for (int k = 0; k < N; k++)
 	{
 		double br = sd.x2[2 * k], bi = sd.x2[2 * k + 1];
@@ -599,6 +608,23 @@ static void sd_frame (void)
 			sd.y[2 * k + 1] += wr * bi + wi * br;
 		}
 	}
+	if (sd.pick && sd.pk)
+	{
+		// reference phase follows the station over ~2 s (its RX2-RX1 phase wanders; faster slipped onto the other one - divtest picktune)
+		pick_set (sd.pk, sd.pick_ph, sd.pick_depth, min (1.0, hop / (2.0 * sd.rate)));
+		for (int j = 0; j < nb; j++)
+		{
+			int k = (k0 + j) & (N - 1);
+			sd.pz1[2 * j] = sd.x1[2 * k]; sd.pz1[2 * j + 1] = sd.x1[2 * k + 1];
+			sd.pz2[2 * j] = sd.x2[2 * k]; sd.pz2[2 * j + 1] = sd.x2[2 * k + 1];
+		}
+		pick_frame (sd.pk, sd.pz1, sd.pz2, nb, floors ? nbin : 0.0, learn, sd.pg);
+		for (int j = 0; j < nb; j++)
+		{
+			int k = (k0 + j) & (N - 1);
+			sd.y[2 * k] *= sd.pg[j]; sd.y[2 * k + 1] *= sd.pg[j];
+		}
+	}
 	fftw_execute (sd.pr);
 	for (int i = 0; i < N; i++)
 	{
@@ -617,7 +643,7 @@ int xsecdiv (int nsamples, double **in, double *out)
 {
 	if (!sd_init) return 0;
 	EnterCriticalSection (&sd.cs);
-	if (sd.mode == 0 || sd.N == 0) { LeaveCriticalSection (&sd.cs); return 0; }
+	if ((sd.mode == 0 && !sd.pick) || sd.N == 0) { LeaveCriticalSection (&sd.cs); return 0; }
 	int base = sd.N - sd.hop;
 	for (int i = 0; i < nsamples; i++)
 	{
@@ -640,6 +666,7 @@ static void sd_reset (void)
 	sd.ocr = sd.oci = sd.o22 = sd.ocnt = sd.ofr = 0.0;
 	sd.settle = (int) (0.3 * sd.rate / sd.hop);
 	sd.mcnt = 0;
+	pick_reset (sd.pk);															// back to the slider phase
 }
 
 // the IQ centre moved: every bin now holds another stretch of the band and the NCO phases may have
@@ -769,8 +796,48 @@ void SetEXTDIVSections (int mode, int sections, double tau, int rate, int lo, in
 {
 	if (InterlockedCompareExchange (&sd_init, 1, 0) == 0) InitializeCriticalSectionAndSpinCount (&sd.cs, 2500);
 	EnterCriticalSection (&sd.cs);
-	if (mode != 0 && rate > 0 && rate != sd.rate) { sd_free (); sd_alloc (rate); }
+	if (rate > 0) sd.prate = rate;
+	if ((mode != 0 || sd.pick) && rate > 0 && rate != sd.rate) { sd_free (); sd_alloc (rate); }
 	if (mode != sd.mode) sd_reset ();										// fresh start: no stale weights
 	sd.mode = mode; sd.sections = max (1, sections); sd.tau = tau; sd.lo = lo; sd.hi = hi;
 	LeaveCriticalSection (&sd.cs);
+}
+
+// station pick (console: PICK + phase slider by RX1 Pan): on/off, phase deg = arg z1 conj(z2) in the panadapter frame
+// (Q + jI, as tools/divtest pick; the native frame here is its conjugate), depth dB the cells pointing elsewhere go down
+// by. Works with the section modes (on their output) and with mode 0 (RX1 alone, not the radar weight); needs the
+// diversity mix of RX1 + RX2 and the filter edges/rate pushed by the Diversity window.
+PORT
+void SetEXTDIVPick (int on, double phase_deg, double depth_db)
+{
+	if (InterlockedCompareExchange (&sd_init, 1, 0) == 0) InitializeCriticalSectionAndSpinCount (&sd.cs, 2500);
+	EnterCriticalSection (&sd.cs);
+	if (!sd.pk) sd.pk = pick_create ();
+	sd.pick = on != 0;
+	sd.pick_ph = -phase_deg * PI / 180.0;
+	sd.pick_depth = depth_db;
+	if (sd.pick && sd.N == 0 && sd.prate > 0) { sd_alloc (sd.prate); sd_reset (); }
+	LeaveCriticalSection (&sd.cs);
+}
+
+// the phase PICK follows now (the station as a whole, tracked from the slider), deg in the panadapter frame
+PORT
+double GetEXTDIVPickPhase (void)
+{
+	if (!sd_init) return 0.0;
+	EnterCriticalSection (&sd.cs);
+	double d = -pick_phase (sd.pk) * 180.0 / PI;
+	LeaveCriticalSection (&sd.cs);
+	return d;
+}
+
+// PICK: how steady the RX2-RX1 phase in the filter is (0..1) and whether the mask acts (*active 0: too random, stepped aside)
+PORT
+double GetEXTDIVPickSteady (int *active)
+{
+	if (!sd_init) { if (active) *active = 0; return 0.0; }
+	EnterCriticalSection (&sd.cs);
+	double s = pick_steady (sd.pk, active);
+	LeaveCriticalSection (&sd.cs);
+	return s;
 }

@@ -153,6 +153,7 @@
     <Compile Include="Setup.AnalogTone.cs" />
     <Compile Include="Setup.AGCAttack.cs" />
     <Compile Include="Console.DiversityMini.cs" />
+    <Compile Include="Console.PhasePick.cs" />
     <Compile Include="DiversityCross.cs" />
     <Compile Include="DiversityDecimator.cs" />
     <Compile Include="DiversityForm.Phase.cs" />

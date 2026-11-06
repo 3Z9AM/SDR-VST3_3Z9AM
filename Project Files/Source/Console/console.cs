@@ -19968,6 +19968,7 @@ namespace Thetis
             get { return m_RX1agcMode; }
             set
             {
+                if ((int)value < 0 || (int)value >= comboAGC.Items.Count) value = AGCMode.MED; // mode saved by a removed build (e.g. Transparent)
                 m_RX1agcMode = value;
                 comboAGC.SelectedIndex = (int)value;
                 lblAGCLabel.Text = "AGC: " + comboAGC.Text;
@@ -19982,6 +19983,7 @@ namespace Thetis
             }
             set
             {
+                if ((int)value < 0 || (int)value >= comboRX2AGC.Items.Count) value = AGCMode.MED; // mode saved by a removed build (e.g. Transparent)
                 m_RX2agcMode = value;
                 comboRX2AGC.SelectedIndex = (int)value;
                 lblRX2AGCLabel.Text = "AGC: " + comboRX2AGC.Text;
@@ -46330,6 +46332,7 @@ namespace Thetis
             loadActivationFeatures();   // extras of the tester's unlock code (Console.Activation.cs)
             initActivationMenu();
             initNewGui();
+            initPhasePick();            // PICK + phase slider next to RX1 Pan (Console.PhasePick.cs)
         }
 
         public bool TwoTone

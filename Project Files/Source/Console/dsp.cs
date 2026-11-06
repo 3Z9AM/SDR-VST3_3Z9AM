@@ -684,6 +684,14 @@ namespace Thetis
         [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsPass2", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetEXTDIVSectionsPass2(int on);
 
+        // station pick by the RX2-RX1 phase (Console.PhasePick.cs): phase deg in the panadapter frame, depth dB
+        [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVPick", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetEXTDIVPick(int on, double phase_deg, double depth_db);
+        [DllImport("wdsp.dll", EntryPoint = "GetEXTDIVPickPhase", CallingConvention = CallingConvention.Cdecl)]
+        public static extern double GetEXTDIVPickPhase();
+        [DllImport("wdsp.dll", EntryPoint = "GetEXTDIVPickSteady", CallingConvention = CallingConvention.Cdecl)]
+        public static extern double GetEXTDIVPickSteady(out int active);
+
         [DllImport("wdsp.dll", EntryPoint = "SetEXTDIVSectionsClean", CallingConvention = CallingConvention.Cdecl)]
         public static extern void SetEXTDIVSectionsClean(int pct);
 

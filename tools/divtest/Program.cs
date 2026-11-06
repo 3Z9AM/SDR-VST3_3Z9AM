@@ -59,6 +59,12 @@ static partial class Program
         if (args[0] == "decimate") return DecimateCheck(args[1]);
         if (args[0] == "dirs") return Dirs(args[1]);
         if (args[0] == "sfc") return Sfc(args.Skip(1).ToArray());
+        if (args[0] == "pick") return Pick(args.Skip(1).ToArray());
+        if (args[0] == "pickscan") return PickScan(args[1]);
+        if (args[0] == "picktune") return PickTune(args.Skip(1).ToArray());
+        if (args[0] == "pickdrift") return PickDrift(args.Skip(1).ToArray());
+        if (args[0] == "pickreal") return PickReal(args.Skip(1).ToArray());
+        if (args[0] == "picksteady") return PickSteady(args.Skip(1).ToArray());
         if (args[0] == "replay") return Replay(args[1], args.Skip(2).Select(int.Parse).ToArray());
         if (args[0] == "inject")
         {
