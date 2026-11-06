@@ -13544,6 +13544,15 @@ namespace Thetis
                 _frm3DPanadapter.BringToFront();
             }
         }
+        // the 3D settings form without showing it (Display drawer KULA / SFERA buttons)
+        public frm3DPanadapter Panadapter3DForm
+        {
+            get
+            {
+                if (_frm3DPanadapter == null || _frm3DPanadapter.IsDisposed) _frm3DPanadapter = new frm3DPanadapter();
+                return _frm3DPanadapter;
+            }
+        }
         private void btn3DSettings_Click(object sender, EventArgs e)
         {
             Show3DPanadapterSettings();

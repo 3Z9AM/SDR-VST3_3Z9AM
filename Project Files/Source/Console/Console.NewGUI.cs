@@ -46,6 +46,7 @@ namespace Thetis
         private Control[] _ngParked;
         private Control _ngFilterShape;     // RX1 filter shape in the DSP drawer (Console.FilterShape.cs)
         private Control _ngDivMode;         // diversity section mode in the DSP drawer (Console.DiversityMini.cs)
+        private Control _ngSphere;          // KULA / SFERA buttons in the Display drawer
         private CheckBoxTS _ngXpa;          // dock xPA: Red Pitaya only, shown while an Ext PA Control pin is set (as on the old console)
         private bool _ngActive, _ngLayoutQueued, _ngLayingOut;
 
@@ -124,9 +125,10 @@ namespace Thetis
 
                 _ngFilterShape = new FilterShapeView(this);
                 _ngDivMode = createDiversityModePanel();
+                _ngSphere = createSphereButtons();
                 _ngParked = new Control[]
                 {
-                    _ngFilterShape, _ngDivMode, lblAGC, comboAGC,
+                    _ngFilterShape, _ngDivMode, _ngSphere, lblAGC, comboAGC,
                     lblPAProfile, panelModeSpecificCW, panelModeSpecificPhone, panelModeSpecificFM, panelModeSpecificDigital,
                     chkRX2Preamp, chkRX1Preamp, chkDX, nudPwrTemp2, nudPwrTemp, chkFullDuplex, btnHidden,
                     grpMultimeter, grpMultimeterMenus, grpRX2Meter, grpDisplaySplit, grpVFOBetween,
@@ -145,7 +147,7 @@ namespace Thetis
                 ngTile("VFO", ngSlot(ngGroup(grpVFOBetween)), ngSlot(ngGroup(panelVFO)));
                 ngTile("Audio", ngSlot(ngGroup(panelSoundControls)), ngSlot(ngGroup(chkVAC1, chkMUT, chkVAC2, ucVAC1UnderOver, ucVAC2UnderOver)), ngSlot(ngGroup(chkSquelch, ptbSquelch, picSquelch)), ngSlot(ngGroup(panelMultiRX)));
                 ngTile("DSP", ngSlot(ngGroup(panelDSP)), ngSlot(ngGroup(lblAGC, comboAGC)), ngSlot(ngGroup(_ngDivMode, _ngFilterShape)));
-                ngTile("Display", ngSlot(ngGroup(panelDisplay2)), ngSlot(ngGroup(grpDisplaySplit)));
+                ngTile("Display", ngSlot(ngGroup(panelDisplay2)), ngSlot(ngGroup(_ngSphere)), ngSlot(ngGroup(grpDisplaySplit)));
                 ngTile("Meter", ngSlot(ngGroup(grpMultimeter)), ngSlot(ngGroup(grpMultimeterMenus)));
                 ngTile("TX", ngSlot(ngGroup(panelModeSpecificPhone), ngGroup(panelModeSpecificCW), ngGroup(panelModeSpecificDigital), ngGroup(panelModeSpecificFM)),
                     ngSlot(ngGroup(panelOptions)));
@@ -314,6 +316,41 @@ namespace Thetis
         }
 
         // Segoe Fluent Icons / MDL2 code points for the dock tiles
+        // KULA = waterfall sphere from outside, SFERA = inside view; both switch 3D on, a second click = flat 3D
+        private Control createSphereButtons()
+        {
+            var p = new Panel { Name = "ngSphere", Size = new Size(122, 23), BackColor = Color.Transparent };
+            CheckBoxTS mk(string text, int mode, int x, string tip)
+            {
+                var b = new CheckBoxTS { Name = "ngSphere" + mode, Text = text, Appearance = Appearance.Button, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleCenter,
+                    Font = ModernTheme.UiFont(7.5f, FontStyle.Bold), UseVisualStyleBackColor = false, TabStop = false, AutoCheck = false,
+                    Location = new Point(x, 0), Size = new Size(60, 23) };
+                b.FlatAppearance.BorderSize = 0;
+                ModernButtonPainter.Attach(b);
+                toolTip1.SetToolTip(b, tip);
+                b.Click += (s, e) =>
+                {
+                    if (IsSetupFormNull) return;
+                    bool off = b.Checked;
+                    if (!off) btnDisplay3DPan.Checked = true;
+                    SetupForm.Panadapter3DForm.SetSphereMode(off ? 0 : mode);
+                };
+                p.Controls.Add(b);
+                return b;
+            }
+            CheckBoxTS kula = mk("KULA", 1, 0, "3D waterfall sphere seen from outside (click again = flat 3D)");
+            CheckBoxTS sfera = mk("SFERA", 2, 62, "3D waterfall sphere seen from inside - planetarium view (click again = flat 3D)");
+            var t = new Timer { Interval = 300 };
+            t.Tick += (s, e) =>
+            {
+                bool on = Display.Pan3DEnabled && Display.Pan3DSphere;
+                kula.Checked = on && !Display.Pan3DSphereInside;
+                sfera.Checked = on && Display.Pan3DSphereInside;
+            };
+            t.Start();
+            return p;
+        }
+
         private static readonly Dictionary<string, string> NgTileGlyphs = new Dictionary<string, string>
         {
             { "Band", "\uEC05" }, { "Mode", "\uE8AB" }, { "Filter", "\uE71C" }, { "VFO", "\uE895" }, { "Audio", "\uE767" },
