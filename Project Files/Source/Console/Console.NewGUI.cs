@@ -194,10 +194,13 @@ namespace Thetis
                 foreach (Control c in new Control[] { lblTune, ptbTune, lblPreamp, comboPreamp, udRX1StepAttData, udTXStepAttData, pbAutoAttWarningRX1 })
                     c.Top -= upDy;
                 pbAutoAttWarningRX1.Left += wide;
-                comboPreamp.Bounds = new Rectangle(ptbTune.Left, comboPreamp.Top, comboPreamp.Width + wide, comboPreamp.Height);
+                // ATT list and S-ATT box side by side (user); the list keeps most of the width, 0..31 needs little
+                const int attUdW = 44;
+                comboPreamp.Bounds = new Rectangle(ptbTune.Left, comboPreamp.Top, comboPreamp.Width + wide - 10, comboPreamp.Height);
                 lblPreamp.Left = comboPreamp.Left + 1;
-                udRX1StepAttData.Bounds = new Rectangle(comboPreamp.Left, udRX1StepAttData.Top, comboPreamp.Width, udRX1StepAttData.Height);
-                udTXStepAttData.Width = comboPreamp.Width;
+                udRX1StepAttData.Bounds = new Rectangle(comboPreamp.Right + 6, comboPreamp.Top, attUdW, udRX1StepAttData.Height);
+                udTXStepAttData.Width = attUdW;
+                pbAutoAttWarningRX1.Left = Math.Max(pbAutoAttWarningRX1.Left, udRX1StepAttData.Right + 4);
                 comboPreamp.DropDownWidth = comboPreamp.Width;
                 panelSoundControls.Height -= upDy;
                 combo_agc_basis = comboAGC.Location;
@@ -229,6 +232,8 @@ namespace Thetis
                         if (xy.Length == 2 && int.TryParse(xy[0], out int px) && int.TryParse(xy[1], out int py))
                             _ngTopPos[kv.Key.Substring(NgPosKeyPrefix.Length)] = new Point(px, py);
                     }
+                if (st.TryGetValue(NgSMeterSmoothKey, out string sm) && int.TryParse(sm, out int smi) && smi >= 0 && smi < ModernSMeterPanel.SmoothSteps.Length)
+                    panelModernSMeter.SmoothIndex = smi;
                 // drawer see-through level (Shift + wheel); the classic loader only knows the native panels
                 if (st.TryGetValue(NativePanelOpacityKeyPrefix + _ngDrawer.Name, out string dop) && int.TryParse(dop, out int dpct))
                     _nativePanelOpacities[_ngDrawer.Name] = ClampNativePanelOpacity(dpct);
@@ -270,6 +275,7 @@ namespace Thetis
                 Resize += ngLayoutEvent;
 
                 _ngActive = true;
+                updateAttNudsCombos();
                 ngLayout();
 
                 // window chrome in the HUD colours, info panel refreshed in the top bar
@@ -746,12 +752,13 @@ namespace Thetis
             return true;
         }
 
-        private const string NgTileOrderKey = "NgTileOrder", NgActionOrderKey = "NgActionOrder";
+        private const string NgTileOrderKey = "NgTileOrder", NgActionOrderKey = "NgActionOrder", NgSMeterSmoothKey = "NgSMeterSmooth";
 
         private void ngAppendTopPos(List<string> state)
         {
             state.Add(NgTileOrderKey + "/" + string.Join("|", _ngTiles.Select(t => t.Button.Text)));
             state.Add(NgActionOrderKey + "/" + string.Join("|", _ngActions.Select(b => b.Text)));
+            state.Add(NgSMeterSmoothKey + "/" + panelModernSMeter.SmoothIndex);
             // a reset panel is written as empty: DB.SaveVars never deletes rows
             foreach (Control c in NgTopPanels)
                 state.Add(NgPosKeyPrefix + c.Name + "/" + (_ngTopPos.TryGetValue(c.Name, out Point p) ? p.X + "|" + p.Y : ""));

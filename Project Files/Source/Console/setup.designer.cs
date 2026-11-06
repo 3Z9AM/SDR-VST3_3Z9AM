@@ -35334,7 +35334,7 @@ namespace Thetis
             this.grpDisplaySpectrumGrid.Size = new System.Drawing.Size(304, 165);
             this.grpDisplaySpectrumGrid.TabIndex = 47;
             this.grpDisplaySpectrumGrid.TabStop = false;
-            this.grpDisplaySpectrumGrid.Text = "Spectrum Grid";
+            this.grpDisplaySpectrumGrid.Text = "Spectrum Grid / Waterfall 3D";
             // 
             // btnRX1CopyMinMaxSpectrumGrid
             // 
@@ -36513,7 +36513,7 @@ namespace Thetis
             this.grpRX2DisplaySpectrumGrid.Size = new System.Drawing.Size(304, 165);
             this.grpRX2DisplaySpectrumGrid.TabIndex = 49;
             this.grpRX2DisplaySpectrumGrid.TabStop = false;
-            this.grpRX2DisplaySpectrumGrid.Text = "Spectrum Grid";
+            this.grpRX2DisplaySpectrumGrid.Text = "Spectrum Grid / Waterfall 3D";
             // 
             // btnRX2CopyMinMaxSpectrumGrid
             // 
