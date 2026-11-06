@@ -31335,6 +31335,12 @@ namespace Thetis
                 udRX1StepAttData.BringToFront();
             else
                 comboPreamp.BringToFront();
+            if (_ngActive)
+            {
+                // new layout: S-ATT sits beside the ATT list (user), shown only when the step attenuator is enabled
+                udRX1StepAttData.Visible = _rx1_step_att_enabled;
+                comboPreamp.Visible = true;
+            }
             if (_rx2_step_att_enabled)
                 udRX2StepAttData.BringToFront();
             else
