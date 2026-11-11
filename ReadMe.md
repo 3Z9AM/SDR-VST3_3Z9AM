@@ -5,13 +5,40 @@ A fork of **SDR-VST3** by SQ4KOU (itself based on **Thetis**, the OpenHPSDR cons
 **Download:** [Releases](../../releases) – take the `.msi` (needs the .NET 10 Desktop Runtime x64; the installer says so if it is missing).
 Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, branch `sunsdr`), not tested by me on a radio – feedback welcome.
 
+**Test versions:** since 6.0.7.15 the releases contain installers only – the code in this repository and its tags correspond to 6.0.7.14. Source of a newer version is available on request (Issues) or after the tests end. / *Od 6.0.7.15 wydania zawierają same instalki – kod w repozytorium odpowiada wersji 6.0.7.14; kod nowszej wersji na żądanie (Issues) lub po zakończeniu testów.*
+
+*Zrzuty ekranu z wersji ANAN (ten sam interfejs; elementy diversity – radar, AUTO BIN – w tej wersji nie występują).*
+
+![SDR-VST3 3Z9AM – 3D LUNAR](docs/img/lunar.png)
+
 ## Zmiany / Changelog
 Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
+
+- **6.0.7.24** (11.11.2026, `-hl2` / `-sunsdr`) – 3Z Chat: odbiornik dekoduje **jednocześnie tryb zwykły (Slow) i Fast** – checkbox Fast wybiera już tylko tryb nadawania; przy odebranej wiadomości tryb, np. `(fast, +3 Hz, DT +0.2 s)`. Panorama 3D LUNAR: **CENTER** celuje kamerą między środkiem filtra RX1 a linią zero beat (65 % drogi do linii), więc linia zero beat jest widoczna z boku (USB i LSB).
+- **6.0.7.23** (11.11.2026, `-hl2` / `-sunsdr`) – panorama 3D **LUNAR** (nowy przycisk obok KULA / SFERA w szufladzie Display): historia wodospadu jako teren księżyca – horyzont = najnowszy wiersz, sygnały to góry z cieniami od słońca, lot nad terenem płynny, wiersze nadawania jako lawa. Panel w szufladzie: wysokość i pochylenie kamery, obrót, przesunięcie w bok, słońce (azymut / wysokość), góry, historia, perspektywa, prędkość lotu, szerokość linii; poziomy Min/Max dBm osobno dla każdego pasma albo **AUTO** (od szumu panoramy + zakres); **REVERSE** – odwrócony kierunek lotu (najnowsze przy kamerze), kamera podąża w bok za filtrem RX1, **CENTER** – filtr RX1 zawsze na środku. Filtr, VFO i linie TX/CW rysowane na terenie, klik i przeciąganie filtra po powierzchni. Nowa instalacja dostaje ustawienia Lunar 3Z9AM (REVERSE + CENTER + AUTO, cienie).
+
+  ![LUNAR – panel w szufladzie Display](docs/img/lunar-panel.png)
+
+- **6.0.7.22** (10.11.2026, `-hl2` / `-sunsdr`) – nowy kafelek menu **Audio Analyzer** – analizator widma audio tego, co wchodzi do WDSP i co z niego wychodzi (20 Hz–20 kHz, skala log, dBFS). Na odbiorze: **IN** = sygnał RX1 przed WDSP (IQ przeliczone na pasmo audio wg trybu: USB / LSB / obie wstęgi; wyrównany do wyjścia, napis „aligned +xx dB”), **OUT** = audio RX za WDSP i łańcuchem VST (przed głośnością AF – działa też przy słuchaniu przez VAC/SonoBus z AF = 0). Na nadawaniu: IN = audio TX wchodzące do WDSP (po VST / VAC / TCI / mikrofonie), OUT = sygnał TX z WDSP. **Window** – osobne okno z opcjami: PEAK (szczyty), FILL, **Δ OUT-IN** (co robi WDSP – filtr, NR, AGC; własna oś po prawej), **PINK** (krzywa różowego szumu -3 dB/okt., przesuwana myszą/kółkiem), AVG FAST/MED/SLOW, SMOOTH 1/12–1/3 oktawy, RANGE, wodospad audio, FREEZE, odczyt pod kursorem; Shift + przeciąganie/kółko = skala, Ctrl + kółko = zakres, dwuklik = reset; ustawienia zapamiętywane. **Background** – same krzywe delikatnie w tle panoramy RX1 (także nad kulą 3D), wg ustawień z okna.
+
+  ![Audio Analyzer – okno](docs/img/audio-analyzer.png)
+
+  ![Audio Analyzer – krzywe w tle panoramy](docs/img/audio-analyzer-background.png)
+
+- **6.0.7.21** (10.11.2026, `-hl2` / `-sunsdr`) – panorama 3D, widok z wnętrza kuli (SFERA): przełącznik **Gaze follows mouse** w oknie ustawień 3D – widok RX1 płynnie przesuwa się po częstotliwości w stronę myszy (do ok. 2,3 % szerokości; wodospad GPU liczy 3 % zapasu za krawędziami, więc bez pustych pasów; skala, znaczniki i kliknięcia idą za widokiem). Kula 3D: dolna połowa bez danych fazy (lustro) zanika w tło jak odbicie od mokrej podłogi. Tło ze znakiem: Setup > Appearance > General **Moving background** – migoczące gwiazdy (domyślnie) albo płynąca mgła, krycie i prędkość.
+- **6.0.7.20** (9.11.2026, `-hl2` / `-sunsdr`) – 3Z Chat: tryb **Fast** (ramka 8,9 s w slotach 12 s, 750 Hz, próg ok. -15,8 dB zamiast -18,9 dB w symulacji; obie stacje muszą mieć ten sam tryb), długie wiadomości dzielone na kolejne sloty (części kończą się znakiem ` +`), kafelek Chat miga na czerwono przy nowej wiadomości, wiadomości odebrane przed pierwszym otwarciem okna czatu nie przepadają, filtr TX czatu 1150–2150 Hz, **powtarzanie wiadomości** (checkbox Repeat: co 2–20 slotów, limit 1–240 min, domyślnie co 4 sloty przez 30 min; kończy się też po zwolnieniu MOX lub nieudanym nadawaniu), tryb Fast domyślnie włączony, domyślny QRG 3,708 MHz.
+- **6.0.7.18** (8.11.2026, `-hl2` / `-sunsdr`) – 3Z Chat: różnica zegarów stacji do **±1,5 s** (było ±0,5 s; tak jak w FT8), bez straty czułości w symulacji; przy odebranej wiadomości odchyłka czasu **DT**. Windows często nie koryguje błędu poniżej 1 s – trzeba to sprawdzić (`MaxAllowedPhaseOffset`). Poprawka: w 3Z bez CTUN czat i opisy panoramy były przesunięte o 12 kHz. Bez testu na radiu.
+- **6.0.7.17** (8.11.2026, `-hl2` / `-sunsdr`) – czat tekstowy **3Z Chat** (menu Chat) – krótkie wiadomości poniżej szumu: 64 tony MFSK co 5,86 Hz (375 Hz), ramka 17,75 s w slotach 20 s UTC jak FT8 (**zegar PC musi być zgodny z UTC do ok. 0,5 s**, NTP), próg ok. -17 dB SNR w 3 kHz na jednej antenie (symulacja). Stały nasłuch wybranego QRG wprost z IQ – można pracować gdzie indziej, byle QRG mieścił się w sample rate; moc w %, filtr TX dobrany do sygnału, MIC nie wbija ALC; maks. 38 znaków z własnym znakiem, wielkie litery bez polskich znaków, zawsze USB. Doszła też cyfrowa fonia **3Z** z wersji ANAN 6.0.7.16 (na jednej antenie).
+
+  ![Fonia 3Z (Loopback, tryb H) na tle SFERY 3D, szuflada MODE z przyciskiem 3Z](docs/img/3z-sfera.png)
 
 - **6.0.7.14** (6.11.2026)
   - Modern S-metr: **prawy klik = uśrednianie odczytu** (wył. / 0,5 / 1 / 2 / 4 s, zapamiętywane), cyfry i pasek nie skaczą; wybrany czas na napisie (np. `AVG 1s`). Lewy klik dalej MAX/AVG.
   - Szuflada Audio: lista **ATT** i pole **S-ATT** (tłumik krokowy 0–31 dB co 1 dB) obok siebie – S-ATT pojawia się po zaznaczeniu Setup > General > Hardware Config > Step Atten „Enable RX1”; usunięty pasek wystający spod listy ATT.
   - Setup: podświetlenie w drzewie kategorii pokazuje stronę faktycznie otwartą (także po kliknięciu kategorii i rozwinięciu gałęzi); ramka „Spectrum Grid” na stronach Display RX1/RX2 nazywa się „Spectrum Grid / Waterfall 3D” (tam ustawia się też poziomy 3D).
+
+  ![Szuflada Audio z ATT, S-metr z uśrednianiem, SFERA z gwiazdami](docs/img/att-sfera.png)
+
 - **6.0.7.13** (6.11.2026) – szuflada Display: przyciski **KULA** (kula wodospadu 3D oglądana z zewnątrz) i **SFERA** (widok z wnętrza kuli – planetarium); każdy włącza 3D, drugie kliknięcie wraca do płaskiego 3D; płaskie 3D i kula zachowują osobne ustawienia.
 - **6.0.7.12** (6.11.2026)
   - **PICK – wybór stacji po fazie RX2-RX1** (diversity, ANAN z dwoma odbiornikami) – przycisk PICK i kolorowy suwak fazy -180..180° obok RX1 Pan. Słychać stację, której faza między antenami zgadza się z suwakiem; silne sygnały o innej fazie są ściszane o 15 dB, a każdy z nich jest śledzony, gdy jego faza wędruje. Suwak sam podąża za wybraną stacją (chwycenie suwaka = nowa faza); kolor toru = kolory widoków fazy. Napis przy suwaku pokazuje stałość fazy w filtrze: „steady 0.34” = PICK działa, „random 0.19 – off” = faza losowa (tęcza w widokach fazy), PICK usuwa się wtedy z drogi, aż faza się ustabilizuje. Wymaga Diversity z RX1 + RX2 i otwartego (może być zminimalizowane) okna Diversity, najlepiej z „fine”. Najwięcej daje, gdy obie anteny słyszą stacje podobnie, a faza przeszkadzającej stacji różni się o ~90° lub więcej (w testach do ok. +8 dB względem samego miksu); przy fazie losowej (często 80 m) nie pomaga – wtedy lepszy jest filtr.
@@ -30,13 +57,20 @@ Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez di
 - **6.0.7.3** (31.10.2026) – MUT w 4 stanach (klik): zielony = cisza w głośniku, fioletowy = cisza na VAC1, czerwony = cisza wszędzie.
 - **6.0.7.2** (31.10.2026) – analizator TX bierze zakres częstotliwości z RX1.
 - **6.0.7.1** (31.10.2026) – Crystal filter, Warmth i tryb AGC „Tube” (Setup > DSP), cienie paneli.
-- **6.0.7.0** (31.10.2026) – jeden numer wersji dla wszystkich wariantów (ANAN / HL2 / SunSDR).
+- **6.0.7.6-hl2 / 6.0.7.7-hl2** (1–2.11.2026, tylko `-hl2`) – płynna regulacja mocy HL2 (suwak Drive w dB: sprzętowy krok 0,5 dB + reszta cyfrowo), na CW napis Drive = max(dB, -7,5), przycisk TUN zawsze „Tune”. Nie testowane na radiu.
+- **6.0.7.0** (31.10.2026) – jeden numer wersji dla wszystkich wariantów (ANAN / HL2 / SunSDR); **Analog tone** (Setup > DSP > Spatial / Tone) – łagodny spadek wysokich tonów jak w torze m.cz. odbiornika analogowego, punkt spadku może iść za górną krawędzią filtra RX; nowy układ: wklęsły górny pasek, panel nad panoramą przesuwany i przezroczysty jak VFO, głębia szkła (cienie, panele unoszą się pod myszą), górne menu jako kafelki HUD, kółko myszy nad otwartą szufladą nie stroi VFO.
+- **6.0.6.x** (30.10.2026)
+  - Sprawdzanie nowej wersji przy starcie – napis „Update available” na pasku stanu tylko, gdy na GitHubie jest nowsza wersja tego wariantu (klik = strona wydania).
+  - **VST TX – dwie równoległe ścieżki A / B** (przycisk „To B”, poziomy „A dB” / „B dB”, opóźnienia wtyczek wyrównywane), rack w dwóch kolumnach; **import sesji Waves** SuperRack (.sprk) / MultiRack (.mrdb) – przycisk Import w oknie łańcucha; okno VST Chains w stylu Modern Look.
+  - FM: przycisk MIC i TXVST / RXVST / VSTTEST widoczne także w FM; SonoBus: adaptacyjny bufor głosu, łańcuch RX / SonoBus nie przebudowuje się przy zmianie bloku (wcześniej SonoBus wypadał z grupy); kod aktywacji z poziomami; okno startowe z obrazkiem znaku; instalator .exe nie zatrzymuje się, gdy nowszy .NET 10 jest już zainstalowany.
+- **6.0.3.0 – 6.0.5.0** (28–29.10.2026) – ręczna korekta S-metra ±15 dB (Setup > General > Calibration); kontenery Meters / Gadgets nad panelami nowego układu; okno **SonoBus** – jedna instancja poza łańcuchami VST (RX → grupa, grupa → mikrofon TX); MUT w szufladzie Audio; instalator zawsze zastępuje zainstalowaną wersję; poprawny zapis stanu konsoli w nowym układzie; poprawka zawieszenia po POWER przy „Adjust Min to Noise Floor”.
 
 ## What is new in this fork
 - **New HUD-style interface** – full-window panadapter, top bar with VFOs and S-meter, dock with drawers for the original panels, movable panels (Shift + drag), accent colour.
 - **3D panadapter** on the GPU – depth history, floor marks, peak skyline, "waterfall sphere" and inside (planetarium) view.
 - **Diversity per section** (ANAN with two receivers) – max-SINR / MRC / co-phase / null per frequency section, "clean" AUTO, phase views (radar arrow, phase waterfall, 3D phase colours).
 - **WDSP 2.30** – WDSP 2.10 merged with PureSignal from 2.00, NR3/NR4/NR5, soft filter edges (high-tone and carrier side), BIN2 stereo/spatial audio, AGC attack and impulse recovery.
+- **3D LUNAR** (waterfall history as a lunar landscape), **3Z** digital voice (Opus over OFDM in 3 kHz) and **3Z Chat** (MFSK text below the noise, FT8-like slots), **RX translator** (Whisper), **Audio Analyzer**, Multiband AGC, RX peak limiter.
 - **GPU waterfall** with exact FFT, animated / callsign background, built-in CW Skimmer, SonoBus window (remote audio via VST), S-meter correction.
 
 ## Requirements
@@ -46,7 +80,7 @@ Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez di
 - Installs as its own program next to Thetis / SDR-VST3; the installer replaces any installed SDR-VST3 version.
 
 ## Source and licence
-GPL v2 or later. Each release has its source under the tag of the same name (e.g. `v6.0.6.0`). This public repository contains release snapshots only.
+GPL v2 or later. Releases up to 6.0.7.14 have their source under the tag of the same name (e.g. `v6.0.6.0`); for later test versions the source is available on request (Issues). This public repository contains release snapshots only.
 Original authors and credits are kept below and in the file headers (FlexRadio Systems, Doug Wigley W5WC, Richard Samphire MW0LGE, Warren Pratt NR0V, SQ4KOU, ChasingCoffee and others).
 
 ---
