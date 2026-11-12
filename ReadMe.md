@@ -7,10 +7,16 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 
 **Test versions:** since 6.0.7.15 the releases contain installers only – the code in this repository and its tags correspond to 6.0.7.14. Source of a newer version is available on request (Issues) or after the tests end. / *Od 6.0.7.15 wydania zawierają same instalki – kod w repozytorium odpowiada wersji 6.0.7.14; kod nowszej wersji na żądanie (Issues) lub po zakończeniu testów.*
 
-![SDR-VST3 3Z9AM – 3D LUNAR](docs/img/lunar.png)
+![SDR-VST3 3Z9AM – 3D LUNAR z niebem SKY](docs/img/lunar-sky.png)
 
 ## Zmiany / Changelog
 Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
+
+- **6.0.7.25** (12.11.2026) – panorama 3D **LUNAR**: niebo **SKY** – statyczna Droga Mleczna ze znakiem stacji w prawym górnym rogu zamiast tła skina; horyzont jak na małym globie – teren lekko opada na boki, a przy REVERSE stara historia od połowy głębokości łagodnie chowa się za krzywizną (najpierw podstawa, na końcu szczyt), ostatni odcinek przechodzi w niebo, a wzniesienia przy horyzoncie mają cienką poświatę krawędzi; cienie i oświetlenie terenu liczone raz na wiersz historii zamiast na każdy piksel w każdej klatce – wyraźnie mniejsze obciążenie karty graficznej (przycisk **SHADOWS** przełącza: SHADOWS → SHADOWS2 = stara metoda → wyłączone); suwak **History** do 1000 wierszy (gęściej ułożone wiersze = wolniejszy lot, dłuższa historia), niezależnie od Depth Lines 3D. Karta graficzna odpoczywa, gdy radio nie nadaje danych: przy wyłączonym POWER (przed pierwszym włączeniem i po wyłączeniu) i po utracie połączenia z radiem (także bez Network Watchdog – 3 s bez widma) panorama odświeża się raz na sekundę. Nowe okno startowe w stylu kosmicznym (Droga Mleczna, łuk planety ze wschodem słońca, srebrny znak, cienki pasek postępu).
+
+  ![LUNAR – niebo SKY, horyzont za krzywizną, History 1000](docs/img/lunar-horizon-1000.png)
+
+  ![Nowe okno startowe](docs/img/splash.png)
 
 - **6.0.7.24** (11.11.2026) – 3Z Chat: odbiornik dekoduje **jednocześnie tryb zwykły (Slow) i Fast** – checkbox Fast wybiera już tylko tryb nadawania; przy odebranej wiadomości tryb, np. `(fast, +3 Hz, DT +0.2 s)`. Panorama 3D LUNAR: **CENTER** celuje kamerą między środkiem filtra RX1 a linią zero beat (65 % drogi do linii), więc linia zero beat jest widoczna z boku (USB i LSB).
 - **6.0.7.23** (11.11.2026) – panorama 3D **LUNAR** (nowy przycisk obok KULA / SFERA w szufladzie Display): historia wodospadu jako teren księżyca – horyzont = najnowszy wiersz, sygnały to góry z cieniami od słońca, lot nad terenem płynny, wiersze nadawania jako lawa, faza RX2-RX1 barwi grunt (PHASE, przy otwartym oknie Diversity). Panel w szufladzie: wysokość i pochylenie kamery, obrót, przesunięcie w bok, słońce (azymut / wysokość), góry, historia, perspektywa, prędkość lotu, szerokość linii; poziomy Min/Max dBm osobno dla każdego pasma albo **AUTO** (od szumu panoramy + zakres); **REVERSE** – odwrócony kierunek lotu (najnowsze przy kamerze), kamera podąża w bok za filtrem RX1, **CENTER** – filtr RX1 zawsze na środku. Filtr, VFO i linie TX/CW rysowane na terenie, klik i przeciąganie filtra po powierzchni. Nowa instalacja dostaje ustawienia Lunar 3Z9AM (REVERSE + CENTER + AUTO, cienie, faza).
