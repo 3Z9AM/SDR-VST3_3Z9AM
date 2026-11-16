@@ -14,6 +14,10 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 ## Zmiany / Changelog
 Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
 
+- **6.0.7.26** (16.11.2026, `-hl2` / `-sunsdr`)
+  - Panorama 3D: widoki **OCEAN** (teren jako woda pod gwiezdnym niebem, sygnały świecą turkusem; panel Water) i **NEBULA** (sygnały jako świecąca mgławica; panel Nebula) obok LUNAR, każdy z własnymi nastawami; suwaki **TX floor / TX range** w panelu Lunar, bez uskoku tła na granicy TX/RX; SHADOWS = zwykły przełącznik.
+  - VSTTEST i okno SonoBus działają też przy różnych częstotliwościach próbkowania mikrofonu i audio RX (resampler zamiast ciszy). Czat 3Z mniej obciąża procesor. Kafelek Magnifier (lupa) usunięty.
+
 - **6.0.7.25** (12.11.2026, `-hl2` / `-sunsdr`) – panorama 3D **LUNAR**: niebo **SKY** – statyczna Droga Mleczna ze znakiem stacji w prawym górnym rogu zamiast tła skina; horyzont jak na małym globie – teren lekko opada na boki, a przy REVERSE stara historia od połowy głębokości łagodnie chowa się za krzywizną (najpierw podstawa, na końcu szczyt), ostatni odcinek przechodzi w niebo, a wzniesienia przy horyzoncie mają cienką poświatę krawędzi; cienie i oświetlenie terenu liczone raz na wiersz historii zamiast na każdy piksel w każdej klatce – wyraźnie mniejsze obciążenie karty graficznej (przycisk **SHADOWS** przełącza: SHADOWS → SHADOWS2 = stara metoda → wyłączone); suwak **History** do 1000 wierszy (gęściej ułożone wiersze = wolniejszy lot, dłuższa historia), niezależnie od Depth Lines 3D. Karta graficzna odpoczywa, gdy radio nie nadaje danych: przy wyłączonym POWER (przed pierwszym włączeniem i po wyłączeniu) i po utracie połączenia z radiem (także bez Network Watchdog – 3 s bez widma) panorama odświeża się raz na sekundę. Nowe okno startowe w stylu kosmicznym (Droga Mleczna, łuk planety ze wschodem słońca, srebrny znak, cienki pasek postępu).
 
   ![LUNAR – niebo SKY, horyzont za krzywizną, History 1000](docs/img/lunar-horizon-1000.png)
