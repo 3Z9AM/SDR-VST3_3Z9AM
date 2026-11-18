@@ -14,6 +14,14 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 ## Zmiany / Changelog
 Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
 
+- **6.0.7.28** (17.11.2026, ANAN, `-hl2` i `-sunsdr`) – poprawka: przycisk **PS-B** był niewidoczny przy wyłączonym xPA (zasłaniał go przycisk REC) – teraz stoi pod REC (z xPA: obok xPA), w szufladzie TX.
+
+- **6.0.7.27** (17.11.2026, `-sunsdr` w 6.0.7.28) – filtry **New Linear** jak w ANAN 6.0.7.27 poniżej (bez diversity; PureSignal na SunSDR wyłączony – przyciski PS-A / PS-B ukryte).
+- **6.0.7.27** (17.11.2026)
+  - **PureSignal – dwa przyciski**: **PS-A** = PureSignal jak w 6.0.7.25 (bez korekcji startowej, bez LS fit / Memory / Auto delay, dawny auto-tłumik) – dla tych, u których nowa metoda działała źle; nowy przycisk **PS-B** (szuflada TX, obok xPA) = nowa metoda z 6.0.7.26. Przyciski wykluczają się, wybór jest zapamiętywany; prawy klik na obu otwiera okno Linearity.
+  - **New Linear** – filtry Linear o mniejszym opóźnieniu (projekt najmniejszych kwadratów): ta sama stromość zboczy przy mniej więcej połowie opóźnienia (RX 4096 przy 48 kHz ok. 28 ms zamiast ok. 51), mniej dzwonienia przed dźwiękiem; także filtry TX i NR, wycięcia (notche) jednym projektem. Setup > DSP > Filters: typ **New Linear** (dawny Linear przechodzi na niego), Setup > DSP > Spatial / Tone ramka **New Linear filters**: opóźnienie RX / TX 50–125 % (domyślnie 50 %) i **CW shape** (łagodniejsze zbocza w CW – krócej dzwoni). Low Latency bez zmian.
+  - Diversity po binach (ANAN): w panelu między VFO **BG x / sufit** (ile tła da się w ogóle wyzerować przy tej parze anten) i obciążenie miksera **DSP % / LAG**.
+
 - **6.0.7.26** (16.11.2026, `-hl2` / `-sunsdr`)
   - Panorama 3D: widoki **OCEAN** (teren jako woda pod gwiezdnym niebem, sygnały świecą turkusem; panel Water) i **NEBULA** (sygnały jako świecąca mgławica; panel Nebula) obok LUNAR, każdy z własnymi nastawami; suwaki **TX floor / TX range** w panelu Lunar, bez uskoku tła na granicy TX/RX; SHADOWS = zwykły przełącznik.
   - VSTTEST i okno SonoBus działają też przy różnych częstotliwościach próbkowania mikrofonu i audio RX (resampler zamiast ciszy). Czat 3Z mniej obciąża procesor. Kafelek Magnifier (lupa) usunięty.
