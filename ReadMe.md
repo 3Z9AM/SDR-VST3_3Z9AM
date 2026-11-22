@@ -7,6 +7,10 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 
 **Test versions:** since 6.0.7.15 the releases contain installers only – the code in this repository and its tags correspond to 6.0.7.14. Source of a newer version is available on request (Issues) or after the tests end. / *Od 6.0.7.15 wydania zawierają same instalki – kod w repozytorium odpowiada wersji 6.0.7.14; kod nowszej wersji na żądanie (Issues) lub po zakończeniu testów.*
 
+**PS-B (PureSignal):** if your radio is not an ANAN-7000DLE / 8000DLE, untick **Memory** in the Linearity window when using PS-B. / *Jeżeli radio jest inne niż ANAN-7000 / 8000, przy używaniu PS-B odznacz **Memory** w oknie Linearity.*
+
+**Disclaimer:** you use this software at your own risk. / *Oprogramowania używasz na własną odpowiedzialność.*
+
 ![SDR-VST3 3Z9AM – 3D LUNAR z niebem SKY](docs/img/lunar-sky.png)
 
 ## Zmiany / Changelog
