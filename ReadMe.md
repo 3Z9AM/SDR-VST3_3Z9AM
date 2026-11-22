@@ -14,6 +14,15 @@ Separate builds: `-hl2` (Hermes Lite 2, branch `hl2`) and `-sunsdr` (SunSDR2, br
 ## Zmiany / Changelog
 Wersje ANAN (gałąź `main`); `-hl2` / `-sunsdr` dostają te same zmiany bez diversity, czasem z opóźnieniem.
 
+- **6.0.7.30 (final)** (22.11.2026, ANAN, `-hl2` i `-sunsdr`)
+  - **AGC Auto** – nowy tryb na liście AGC (RX1/RX2): wzmocnienie ustawiane wg poziomu stacji, nie sylab – szum w przerwach między słowami nie podjeżdża (w pomiarach +0,6..4 dB zamiast +4..31 dB przy MED/FAST), mniej „pompowania”, głośność jak LONG; słabsza stacja w QSO dostaje wzmocnienie po ok. 1–2 s.
+  - **Adaptacyjne zbocza filtra RX** (Setup > DSP > Spatial / Tone „Adaptive RX edges”, domyślnie wł.): zbocza miękkie (mniej dzwonienia), strome tylko wtedy, gdy silny sygnał za krawędzią by przeciekał; wykres filtra w szufladzie DSP pokazuje bieżące zbocza (adaptive soft/STEEP) oraz Analog tone, Crystal, CW shape i opóźnienie filtra.
+  - Filtr RX1 na panoramie, wodospadzie i w 3D rysowany wg prawdziwej odpowiedzi filtra (zbocza widać jako zanikający kolor).
+  - Filtr **Low Latency usunięty** – wszystkie tryby używają New Linear (stare ustawienia przechodzą same).
+  - Diversity po binach (ANAN): przycisk **75%** w szufladzie DSP (wagi liczone 2x częściej – mniej „bulgotania”, ok. 2x więcej CPU); poza filtrem RX sam RX1 (tło obok filtra nie skacze); **podgląd DIV** (akcja paska pod wodospadem, prawy klik na BLOBS/PEAK) – wodospad i 3D poza filtrem pokazują, jak tło wyglądałoby po diversity.
+  - CW Skimmer: bez fałszywych spotów stacji wołających na częstotliwości stacji RUN, sklejone CQ/TEST/DE i podwójne znaki rozdzielane, 5NN* odrzucane; klik w spot przy CWL/CWU nie zmienia trybu; spoty w LUNAR/OCEAN/NEBULA stoją na swoim miejscu przy przewijaniu.
+  - Panorama 3D LUNAR/OCEAN/NEBULA: wyraźnie mniejsze obciążenie procesora (historia wysyłana do karty tylko przy nowym wierszu); poprawka: na części kart graficznych tło pod 3D było narysowane tylko w połowie (po przekątnej).
+
 - **6.0.7.28** (17.11.2026, ANAN i `-hl2`) – poprawka: przycisk **PS-B** był niewidoczny przy wyłączonym xPA (zasłaniał go przycisk REC) – teraz stoi pod REC (z xPA: obok xPA), w szufladzie TX.
 
 - **6.0.7.27** (17.11.2026, `-hl2`) – PureSignal PS-A / PS-B i filtry New Linear jak w ANAN 6.0.7.27 poniżej (bez diversity); `-sunsdr` zostaje na 6.0.7.26.
