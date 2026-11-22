@@ -1,5 +1,9 @@
 # SDR-VST3 – 3Z9AM edition
 
+# ⚠️ Further development depends on modified radio firmware. Without it, some features (PureSignal, Diversity) will not work correctly.
+
+# ⚠️ *Dalszy rozwój oprogramowania jest uzależniony od modyfikacji firmware w radiu. Bez zmodyfikowanego firmware niektóre funkcje (PureSignal, Diversity) nie będą działać poprawnie.*
+
 A fork of **SDR-VST3** by SQ4KOU (itself based on **Thetis**, the OpenHPSDR console), developed and tested by **Daniel Poznański, 3Z9AM** on an ANAN-7000DLE (Protocol 2).
 
 **Download:** [Releases](../../releases) – take the `.msi` (needs the .NET 10 Desktop Runtime x64; the installer says so if it is missing).
